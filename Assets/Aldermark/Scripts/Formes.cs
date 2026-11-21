@@ -116,6 +116,31 @@ namespace Aldermark
             return k.Fin("Toit");
         }
 
+        /// <summary>Anneau de montagnes lointaines autour de la vallée.</summary>
+        public static Mesh Cordillere(float rInt, float rSommet, float rExt, float hBase, float hMin, float hMax, int seg, float graine)
+        {
+            var k = new Constructeur(1);
+            Vector3 P(float r, float ang, float h) => new Vector3(Mathf.Cos(ang) * r, h, Mathf.Sin(ang) * r);
+            float Pic(int i)
+            {
+                float ang = i * Mathf.PI * 2 / seg;
+                float n = Monde.Fbm(Mathf.Cos(ang) * 2.2f + graine, Mathf.Sin(ang) * 2.2f + graine);
+                float c = 1f - Mathf.Abs(Monde.Fbm(Mathf.Cos(ang) * 6f + graine, Mathf.Sin(ang) * 6f) * 2f - 1f);
+                return hMin + (hMax - hMin) * Mathf.Clamp01(Monde.Lisse(.25f, .75f, n) * .75f + c * .35f);
+            }
+            float Decal(int i) { float ang = i * Mathf.PI * 2 / seg; return (Monde.Fbm(Mathf.Cos(ang) * 4f + graine * 2, Mathf.Sin(ang) * 4f) - .5f) * (rExt - rInt) * .4f; }
+            for (int i = 0; i < seg; i++)
+            {
+                float a0 = i * Mathf.PI * 2 / seg, a1 = (i + 1) * Mathf.PI * 2 / seg;
+                Vector3 i0 = P(rInt, a0, hBase), i1 = P(rInt, a1, hBase);
+                Vector3 s0 = P(rSommet + Decal(i), a0, Pic(i)), s1 = P(rSommet + Decal(i + 1), a1, Pic(i + 1));
+                Vector3 e0 = P(rExt, a0, hBase), e1 = P(rExt, a1, hBase);
+                k.Quad(0, i0, i1, s1, s0);
+                k.Quad(0, e0, s0, s1, e1);
+            }
+            return k.Fin("Cordillere");
+        }
+
         public static Mesh Anneau(float r, float e, int seg = 18, int segTube = 6)
         {
             var k = new Constructeur(1);
