@@ -10,7 +10,7 @@ Shader "Aldermark/PeintPixel"
         _Peint ("Peint (0 = brut)", Range(0,1)) = 1
         _Sceau ("Sceau", Range(0,1)) = 0
         _Niveaux ("Niveaux de couleur", Float) = 9
-        _Tramage ("Tramage", Range(0,1)) = 0.12
+        _Tramage ("Tramage", Range(0,1)) = 0
         _Res ("Résolution", Vector) = (480,270,0,0)
         _SoleilPos ("Soleil (écran)", Vector) = (0.5,0.5,0,0)
         _SoleilVis ("Soleil visible", Range(0,1)) = 0
@@ -47,13 +47,14 @@ Shader "Aldermark/PeintPixel"
                 // Rayons de soleil (diffusion radiale depuis le soleil)
                 if (_SoleilVis > .01)
                 {
-                    float2 dv = (_SoleilPos.xy - i.uv) / 24.0, uu = i.uv;
+                    float2 dv = (_SoleilPos.xy - i.uv) / 24.0, uu = i.uv, asp = float2(_Res.x / _Res.y, 1);
                     float r = 0;
                     [unroll] for (int k = 0; k < 24; k++)
                     {
                         uu += dv;
                         float3 s = versPerceptuel(tex2D(_MainTex, uu).rgb);
-                        r += smoothstep(.84, 1., dot(s, float3(.333, .333, .333))) * (1. - k / 24.0);
+                        float pres = saturate(1. - length((uu - _SoleilPos.xy) * asp) * 4.);
+                        r += smoothstep(.9, 1., dot(s, float3(.333, .333, .333))) * pres * (1. - k / 24.0);
                     }
                     float2 d = (i.uv - _SoleilPos.xy) * float2(_Res.x / _Res.y, 1);
                     r = r / 24.0 * _SoleilVis * (1. - smoothstep(0., 1., length(d)));
@@ -65,7 +66,7 @@ Shader "Aldermark/PeintPixel"
 
                 float3 p = c;
                 p = lerp(p, p * float3(.9, .96, 1.1), 1. - smoothstep(.05, .45, l));
-                p = lerp(p, p * float3(1.06, 1.02, .92), smoothstep(.45, 1., l));
+                p = lerp(p, p * float3(1.04, 1.02, .95), smoothstep(.45, 1., l));
                 p = lerp(float3(l, l, l), p, 1.3);
                 float t = bayer(floor(i.uv * _Res.xy)) - .5;
                 p = floor(p * _Niveaux + t * _Tramage + .5) / _Niveaux;

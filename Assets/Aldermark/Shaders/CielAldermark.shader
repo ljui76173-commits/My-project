@@ -64,17 +64,18 @@ Shader "Aldermark/Ciel"
                 col = lerp(col, float3(1., .9, .84), smoothstep(.99945, .99958, b) * _Disques);
 
                 // Cumulus
-                float2 p = d.xz / (max(y, 0.) + .12) * .35 + float2(_AldTemps * .012, _AldTemps * .004);
+                float2 p = d.xz / (max(y, 0.) + .25) * .5 + float2(_AldTemps * .012, _AldTemps * .004);
                 float n = densite(p);
                 float seuil = 1. - _Couverture;
-                float dens = smoothstep(seuil, seuil + .06, n) * smoothstep(0., .06, y);
+                float bande = smoothstep(0., .06, y) * (1. - smoothstep(.3, .75, y) * .85);
+                float dens = smoothstep(seuil, seuil + .06, n) * bande;
                 float2 versSoleil = normalize(s1.xz + 1e-4) * .09;
                 float n2 = densite(p + versSoleil);
                 float eclaire = saturate((n - n2) * 7. + .5);
                 float epaisseur = smoothstep(seuil, seuil + .3, n);
                 float t = saturate(eclaire * .8 + (1. - epaisseur) * .35);
                 t = floor(t * 4.) / 3.;
-                float3 sombre = float3(.34, .37, .62), moyen = float3(.57, .60, .83), clair = float3(.82, .84, .96), blanc = float3(.98, .98, 1.);
+                float3 sombre = float3(.33, .36, .62), moyen = float3(.55, .58, .83), clair = float3(.80, .82, .96), blanc = float3(.95, .95, 1.);
                 float3 nuage = t < .34 ? lerp(sombre, moyen, t * 3.) : (t < .67 ? lerp(moyen, clair, (t - .34) * 3.) : lerp(clair, blanc, (t - .67) * 3.));
                 float bord = (1. - smoothstep(seuil + .01, seuil + .05, n)) * step(.5, eclaire);
                 nuage = lerp(nuage, blanc, bord * .8);

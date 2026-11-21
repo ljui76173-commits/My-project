@@ -46,6 +46,8 @@ namespace Aldermark.Editeur
                 var soleils = Lumieres();
                 Progres("Terrain et relief", .05f);
                 Terrain();
+                Progres("Arbres, haies et rochers", .55f);
+                Arbres();
                 Progres("Eau et village", .7f);
                 Eau();
                 Village();
@@ -90,6 +92,7 @@ namespace Aldermark.Editeur
             m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             m.SetColor("_BaseColor", Hex(hex));
             m.SetFloat("_Smoothness", lisse);
+            m.enableInstancing = true;
             materiaux[cle] = Sauver(m, $"Materiaux/Lit_{hex.TrimStart('#')}_{Mathf.RoundToInt(lisse * 100)}.mat");
             return m;
         }
@@ -142,7 +145,7 @@ namespace Aldermark.Editeur
             var s1 = new GameObject("Soleil").AddComponent<Light>();
             s1.type = LightType.Directional;
             s1.color = Hex("#ffe2a8");
-            s1.intensity = 1.35f;
+            s1.intensity = 1.5f;
             s1.shadows = LightShadows.Soft;
             s1.transform.rotation = Quaternion.LookRotation(-Soleil1.normalized);
 
@@ -159,9 +162,9 @@ namespace Aldermark.Editeur
             RenderSettings.skybox = Sauver(ciel, "Materiaux/Ciel.mat");
             RenderSettings.sun = s1;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = Hex("#9aa4d8");
-            RenderSettings.ambientEquatorColor = Hex("#a7a6b4");
-            RenderSettings.ambientGroundColor = Hex("#6f6038");
+            RenderSettings.ambientSkyColor = Hex("#8f99cc");
+            RenderSettings.ambientEquatorColor = Hex("#9c9aa8");
+            RenderSettings.ambientGroundColor = Hex("#5f5232");
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = Hex("#a3aad8");
@@ -248,8 +251,6 @@ namespace Aldermark.Editeur
 
             Progres("Herbe et fleurs", .4f);
             Herbe(td);
-            Progres("Arbres", .55f);
-            Arbres(td);
 
             EditorUtility.SetDirty(td);
             var go = UnityEngine.Terrain.CreateTerrainGameObject(td);
@@ -362,7 +363,7 @@ namespace Aldermark.Editeur
             return pf;
         }
 
-        static void Arbres(TerrainData td)
+        static void Arbres()
         {
             var sapin = Sauver(Formes.Sapin(), "Arbres/Sapin.asset");
             var dore = Sauver(Formes.ArbreDore(), "Arbres/ArbreDore.asset");
@@ -377,43 +378,65 @@ namespace Aldermark.Editeur
                 PrefabArbre("ArbreRoux", dore, new[] { tronc, Lit("#c7782a") }, true),
                 PrefabArbre("BuissonVert", buisson, new[] { Lit("#5f7f3a") }, false),
                 PrefabArbre("BuissonOlive", buisson, new[] { Lit("#8a9a44") }, false),
+                PrefabArbre("Haie", buisson, new[] { Lit("#4f6e34") }, false),
+                PrefabArbre("Rocher", buisson, new[] { Lit("#8a8794") }, false),
             };
-            var tp = new TreePrototype[protos.Length];
-            for (int i = 0; i < protos.Length; i++) tp[i] = new TreePrototype { prefab = protos[i] };
-            td.treePrototypes = tp;
+            var foret = Racine("Foret");
+            void Poser(int proto, float x, float z, float rot, Vector3 echelle, float enfonce = .3f)
+            {
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(protos[proto], foret);
+                go.transform.SetPositionAndRotation(new Vector3(x, Monde.Hauteur(x, z) - enfonce, z), Quaternion.Euler(0, rot, 0));
+                go.transform.localScale = echelle;
+            }
 
-            float T = Monde.Taille, demi = T / 2f;
-            var liste = new List<TreeInstance>();
             int np = 0, ng = 0, nb = 0;
             for (int i = 0; i < 16000 && (np < 1100 || ng < 260 || nb < 700); i++)
             {
                 float x = (Hash(i, 1.3f) - .5f) * 560, z = (Hash(i, 7.9f) - .5f) * 560, y = Monde.Hauteur(x, z), d = Mathf.Abs(x - Monde.Riviere(z));
                 float rd = Monde.DistanceRoute(x, z), r = Hash(i, 3.1f), dv = Vector2.Distance(new Vector2(x, z), Monde.Village);
-                int proto = -1; float s = .8f + Hash(i, 5.5f) * .7f;
+                float s = .8f + Hash(i, 5.5f) * .7f;
                 if (nb < 700 && r > .72f && r < .86f && d > Monde.Berge + 1 && y < 34 && rd > 3 && !Monde.DansChamp(x, z) && dv > 14)
-                { proto = 5 + nb % 2; s = .6f + Hash(i, 5.5f) * .8f; nb++; }
-                else
                 {
-                    var pos = new Vector2(x, z);
-                    if (d < Monde.Berge + 4 || y > 62 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
-                        Vector2.Distance(pos, Monde.Depart) < 9 || DistSegment(pos, Monde.Depart, new Vector2(Monde.PontX, 0)) < 26) continue;
-                    float f = Monde.Fbm(x * .013f + 5, z * .013f);
-                    if ((f > .5f || r < .05f) && np < 1100) { proto = r < .5f ? 0 : 1; np++; }
-                    else if (r > .93f && ng < 260 && y < 22) { proto = 2 + ng % 3; ng++; }
+                    float sb = .6f + Hash(i, 5.5f) * .8f;
+                    Poser(5 + nb % 2, x, z, r * 360f, Vector3.one * sb, .2f);
+                    nb++;
+                    continue;
                 }
-                if (proto < 0) continue;
-                liste.Add(new TreeInstance
-                {
-                    position = new Vector3((x + demi) / T, 0, (z + demi) / T),
-                    prototypeIndex = proto,
-                    widthScale = s,
-                    heightScale = s * (.9f + r * .4f),
-                    rotation = r * 6.28f,
-                    color = Color.white,
-                    lightmapColor = Color.white
-                });
+                var pos = new Vector2(x, z);
+                if (d < Monde.Berge + 4 || y > 62 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
+                    Vector2.Distance(pos, Monde.Depart) < 9 || DistSegment(pos, Monde.Depart, new Vector2(Monde.PontX, 0)) < 26) continue;
+                float f = Monde.Fbm(x * .013f + 5, z * .013f);
+                var e = new Vector3(s, s * (.9f + r * .4f), s);
+                if ((f > .5f || r < .05f) && np < 1100) { Poser(r < .5f ? 0 : 1, x, z, r * 360f, e); np++; }
+                else if (r > .93f && ng < 260 && y < 22) { Poser(2 + ng % 3, x, z, r * 360f, e); ng++; }
             }
-            td.SetTreeInstances(liste.ToArray(), true);
+
+            // Haies le long des bandes de champs (avec des trouées)
+            float n2 = .85f * .85f + .3f * .3f;
+            var dir = new Vector2(-.3f, .85f).normalized;
+            for (int k = 6; k <= 30; k++)
+            {
+                var basePt = new Vector2(.85f, .3f) * (7f * k / n2);
+                for (float t = -160; t <= 160; t += 1.4f)
+                {
+                    var p = basePt + dir * t;
+                    if (!Monde.DansChamp(p.x, p.y) || Monde.DistanceRoute(p.x, p.y) < 3f) continue;
+                    if (Monde.Fbm(p.x * .08f, p.y * .08f + k) < .38f) continue;
+                    float h = Hash(p.x * .7f, p.y * .3f);
+                    Poser(7, p.x, p.y, h * 360f, new Vector3(.75f + h * .35f, .6f + h * .4f, .75f + h * .35f), .15f);
+                    if (h > .985f) Poser(2 + (int)(h * 1000) % 3, p.x, p.y, h * 720f, Vector3.one * .9f);
+                }
+            }
+
+            // Rochers dans les prés et sur les pentes
+            for (int i = 0; i < 260; i++)
+            {
+                float x = (Hash(i, 61.3f) - .5f) * 520, z = (Hash(i, 67.9f) - .5f) * 520, y = Monde.Hauteur(x, z);
+                if (Mathf.Abs(x - Monde.Riviere(z)) < Monde.Berge + 2 || Monde.DistanceRoute(x, z) < 3 || Monde.DansChamp(x, z) ||
+                    Vector2.Distance(new Vector2(x, z), Monde.Village) < 30 || y > 70) continue;
+                float s = .4f + Hash(i, 63) * 1.4f;
+                Poser(8, x, z, Hash(i, 64) * 360f, new Vector3(s * 1.2f, s * .7f, s), s * .25f);
+            }
         }
 
         static float DistSegment(Vector2 p, Vector2 a, Vector2 b)
@@ -728,7 +751,7 @@ namespace Aldermark.Editeur
             var sn = s.AddComponent<SoleilNuages>();
             sn.soleil = soleils.Item1; sn.soleil2 = soleils.Item2; sn.rendu = rendu;
             sn.direction1 = Soleil1; sn.direction2 = Soleil2;
-            sn.intensiteSoleil = 1.35f; sn.intensiteSoleil2 = .15f;
+            sn.intensiteSoleil = 1.5f; sn.intensiteSoleil2 = .15f;
             var hud = s.AddComponent<HUD>();
             hud.joueur = joueur.GetComponent<JoueurAldric>(); hud.cam = cam;
             s.AddComponent<Oiseaux>();
