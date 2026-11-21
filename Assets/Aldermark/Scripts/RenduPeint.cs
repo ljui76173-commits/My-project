@@ -12,12 +12,12 @@ namespace Aldermark
     public class RenduPeint : MonoBehaviour
     {
         [Tooltip("Nombre de pixels sur le grand côté de l'image peinte.")]
-        public int resolutionLongue = 480;
+        public int resolutionLongue = 600;
         public Material materiauPeint;
         public string coucheSceau = "Sceau";
         public bool peint = true;
         [Range(0, 1)] public float sceau;
-        public Vector3 directionSoleil = new Vector3(-.28f, .34f, .9f);
+        public Vector3 directionSoleil = new Vector3(-.48f, .55f, -.68f);
         [Range(0, 1)] public float soleilDegage = 1f;
 
         Camera cam, camSceau, camEcran;

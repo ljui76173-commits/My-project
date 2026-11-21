@@ -34,6 +34,11 @@ namespace Aldermark
         bool bienvenueAffichee, sceauDejaUtilise;
         Transform brasDroit, brasGauche, jambeGauche, jambeDroite;
         Material matMarque;
+        LineRenderer[] ronds;
+        float[] ageRonds;
+        Vector3[] centreRonds;
+        int prochainRond;
+        float minuterieRonds;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
         static readonly Vector3 BrasDroitPos = new Vector3(.56f, -.56f, .95f);
@@ -45,6 +50,7 @@ namespace Aldermark
             Mana = manaMax;
             ConstruireCorps();
             ConstruireVue();
+            CreerRonds();
             Verrouiller(true);
         }
 
@@ -95,6 +101,7 @@ namespace Aldermark
             cc.Move(mouvement * dt);
             bool bouge = dep.sqrMagnitude > .01f;
             if (bouge) balancement += dt * vitesse * 1.6f;
+            MettreAJourRonds(dt, bouge && Monde.Hauteur(p.x, p.z) < -.15f, p);
 
             cam.transform.localPosition = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
             cam.transform.localRotation = Quaternion.Euler(tangage, 0f, 0f);
@@ -123,6 +130,70 @@ namespace Aldermark
             brasDroit.localPosition = BrasDroitPos + new Vector3(Mathf.Cos(balancement * .5f) * .012f, Mathf.Sin(balancement) * .012f, 0);
             brasGauche.localPosition = Vector3.Lerp(BrasGaucheRepos, BrasGaucheLeve, SceauNiveau);
             matMarque.SetColor("_BaseColor", Color.Lerp(new Color(.78f, .8f, .85f), new Color(.95f, .98f, 1f), SceauNiveau));
+        }
+
+        // ---------- ronds dans l'eau ----------
+
+        void CreerRonds()
+        {
+            var m = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            ronds = new LineRenderer[8];
+            ageRonds = new float[8];
+            centreRonds = new Vector3[8];
+            for (int i = 0; i < ronds.Length; i++)
+            {
+                var go = new GameObject("RondDansLEau");
+                go.transform.rotation = Quaternion.Euler(90f, 0, 0);
+                var lr = go.AddComponent<LineRenderer>();
+                lr.loop = true;
+                lr.positionCount = 24;
+                lr.useWorldSpace = true;
+                lr.widthMultiplier = .07f;
+                lr.sharedMaterial = m;
+                lr.shadowCastingMode = ShadowCastingMode.Off;
+                lr.receiveShadows = false;
+                lr.alignment = LineAlignment.TransformZ;
+                lr.enabled = false;
+                ronds[i] = lr;
+                ageRonds[i] = 1f;
+            }
+        }
+
+        void MettreAJourRonds(float dt, bool emettre, Vector3 p)
+        {
+            if (emettre)
+            {
+                minuterieRonds -= dt;
+                if (minuterieRonds <= 0f)
+                {
+                    minuterieRonds = .3f;
+                    int i = prochainRond++ % ronds.Length;
+                    ageRonds[i] = 0f;
+                    centreRonds[i] = new Vector3(p.x, -.06f, p.z);
+                }
+            }
+            for (int i = 0; i < ronds.Length; i++)
+            {
+                var lr = ronds[i];
+                if (ageRonds[i] >= 1f) { lr.enabled = false; continue; }
+                ageRonds[i] = Mathf.Min(1f, ageRonds[i] + dt * .75f);
+                float r = .5f + ageRonds[i] * 3.2f;
+                for (int k = 0; k < lr.positionCount; k++)
+                {
+                    float a = k * Mathf.PI * 2f / lr.positionCount;
+                    lr.SetPosition(k, centreRonds[i] + new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r));
+                }
+                var c = new Color(.92f, .95f, 1f, (1f - ageRonds[i]) * .75f);
+                lr.startColor = c; lr.endColor = c;
+                lr.enabled = true;
+            }
         }
 
         void BasculerSceau()

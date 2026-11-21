@@ -14,12 +14,13 @@ namespace Aldermark
         public Light soleil;
         public Light soleil2;
         public RenduPeint rendu;
-        public Vector3 direction1 = new Vector3(-.28f, .34f, .9f);
-        public Vector3 direction2 = new Vector3(-.18f, .38f, .92f);
-        public float intensiteSoleil = 2.2f;
-        public float intensiteSoleil2 = .35f;
+        public Vector3 direction1 = new Vector3(-.48f, .55f, -.68f);
+        public Vector3 direction2 = new Vector3(-.40f, .58f, -.71f);
+        public float intensiteSoleil = 1.35f;
+        public float intensiteSoleil2 = .15f;
         public float intensiteAmbiante = 1f;
-        public float tailleOmbresNuages = 220f;
+        public float tailleOmbresNuages = 260f;
+        [Range(.3f, .7f)] public float couvertureCiel = .5f;
         public Vector2 vent = new Vector2(7f, 2.5f);
 
         float temps, couverture;
@@ -44,10 +45,12 @@ namespace Aldermark
             Shader.SetGlobalFloat("_AldTemps", temps);
 
             // Nuage devant le soleil ? (même calcul que le shader du ciel)
+            Shader.SetGlobalFloat("_Couverture", couvertureCiel);
             Vector3 d = direction1.normalized;
-            float k = .55f / Mathf.Max(d.y + .08f, .04f);
-            float n = Monde.BruitNuages(d.x * k + temps * .02f, d.z * k + temps * .007f);
-            float cible = Monde.Lisse(.48f, .74f, n);
+            float k = .35f / (Mathf.Max(d.y, 0f) + .12f);
+            float n = Monde.DensiteNuages(d.x * k + temps * .012f, d.z * k + temps * .004f);
+            float seuil = 1f - couvertureCiel;
+            float cible = Monde.Lisse(seuil, seuil + .06f, n);
             couverture = Mathf.Lerp(couverture, cible, Mathf.Clamp01(Time.deltaTime * 2f));
 
             if (soleil != null) soleil.intensity = intensiteSoleil * (1f - .62f * couverture);

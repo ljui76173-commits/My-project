@@ -18,8 +18,8 @@ namespace Aldermark.Editeur
     {
         const string Dossier = "Assets/Aldermark/Genere";
         const float YMin = -5f, HauteurMax = 115f;
-        static readonly Vector3 Soleil1 = new Vector3(-.28f, .34f, .9f);
-        static readonly Vector3 Soleil2 = new Vector3(-.18f, .38f, .92f);
+        static readonly Vector3 Soleil1 = new Vector3(-.48f, .55f, -.68f);
+        static readonly Vector3 Soleil2 = new Vector3(-.40f, .58f, -.71f);
 
         static int coucheSceau;
         static Transform racineSceau;
@@ -141,15 +141,15 @@ namespace Aldermark.Editeur
         {
             var s1 = new GameObject("Soleil").AddComponent<Light>();
             s1.type = LightType.Directional;
-            s1.color = Hex("#ffdca6");
-            s1.intensity = 1.6f;
+            s1.color = Hex("#ffe2a8");
+            s1.intensity = 1.35f;
             s1.shadows = LightShadows.Soft;
             s1.transform.rotation = Quaternion.LookRotation(-Soleil1.normalized);
 
             var s2 = new GameObject("PetitSoleil").AddComponent<Light>();
             s2.type = LightType.Directional;
             s2.color = Hex("#ffc0c8");
-            s2.intensity = .3f;
+            s2.intensity = .15f;
             s2.shadows = LightShadows.None;
             s2.transform.rotation = Quaternion.LookRotation(-Soleil2.normalized);
 
@@ -159,14 +159,14 @@ namespace Aldermark.Editeur
             RenderSettings.skybox = Sauver(ciel, "Materiaux/Ciel.mat");
             RenderSettings.sun = s1;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = Hex("#b8b0e0");
-            RenderSettings.ambientEquatorColor = Hex("#a89cb8");
-            RenderSettings.ambientGroundColor = Hex("#6e5636");
+            RenderSettings.ambientSkyColor = Hex("#9aa4d8");
+            RenderSettings.ambientEquatorColor = Hex("#a7a6b4");
+            RenderSettings.ambientGroundColor = Hex("#6f6038");
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = Hex("#b7b0d6");
-            RenderSettings.fogStartDistance = 90f;
-            RenderSettings.fogEndDistance = 520f;
+            RenderSettings.fogColor = Hex("#a3aad8");
+            RenderSettings.fogStartDistance = 80f;
+            RenderSettings.fogEndDistance = 1100f;
             return (s1, s2);
         }
 
@@ -206,9 +206,10 @@ namespace Aldermark.Editeur
             // Couleurs du sol
             var couches = new[]
             {
-                Couche("Herbe", "#7d9a45"), Couche("HerbeDoree", "#caa44c"), Couche("HerbeSombre", "#5f7a3a"),
-                Couche("Ble", "#dcb557"), Couche("Culture", "#93a34a"), Couche("Labour", "#a8804a"),
-                Couche("Chemin", "#b8945e"), Couche("Roche", "#8b84a0"), Couche("Sable", "#c9b98e"), Couche("LitRiviere", "#6e6650"),
+                Couche("Herbe", "#6f9a3a"), Couche("HerbeDoree", "#d2a840"), Couche("HerbeSombre", "#4f7a34"),
+                Couche("Ble", "#ddb44c"), Couche("Culture", "#86a83e"), Couche("Labour", "#9c7444"),
+                Couche("Chemin", "#a88454"), Couche("Roche", "#6f7488"), Couche("Sable", "#c2b488"), Couche("LitRiviere", "#6e6650"),
+                Couche("Neige", "#e8eaf4"),
             };
             td.terrainLayers = couches;
             int a = td.alphamapResolution, nc = couches.Length;
@@ -234,6 +235,9 @@ namespace Aldermark.Editeur
                     float sable = Monde.Lisse(1.7f, .6f, y);
                     for (int k = 0; k < nc; k++) w[k] *= 1 - sable;
                     w[8] += sable;
+                    float neige = Monde.Lisse(52f, 64f, y);
+                    for (int k = 0; k < nc; k++) w[k] *= 1 - neige;
+                    w[10] += neige;
                     if (y < -.2f) { System.Array.Clear(w, 0, nc); w[9] = 1; }
                     float somme = 0;
                     for (int k = 0; k < nc; k++) somme += w[k];
@@ -298,12 +302,12 @@ namespace Aldermark.Editeur
             var herbe = new DetailPrototype
             {
                 prototypeTexture = TextureHerbe("TexHerbe", false), renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
-                healthyColor = Hex("#8fae4c"), dryColor = Hex("#cfae52"), minWidth = .5f, maxWidth = .9f, minHeight = .35f, maxHeight = .8f, noiseSpread = .3f
+                healthyColor = Hex("#7fb045"), dryColor = Hex("#a9b648"), minWidth = .45f, maxWidth = .8f, minHeight = .25f, maxHeight = .55f, noiseSpread = .3f
             };
             var ble = new DetailPrototype
             {
                 prototypeTexture = herbe.prototypeTexture, renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
-                healthyColor = Hex("#e8c45c"), dryColor = Hex("#d9a94a"), minWidth = .6f, maxWidth = 1f, minHeight = 1f, maxHeight = 1.4f, noiseSpread = .2f
+                healthyColor = Hex("#e8c454"), dryColor = Hex("#d6a744"), minWidth = .6f, maxWidth = 1f, minHeight = .9f, maxHeight = 1.25f, noiseSpread = .2f
             };
             var fleurs = new DetailPrototype
             {
@@ -329,8 +333,8 @@ namespace Aldermark.Editeur
                         else if (b == 1) c0[iz, ix] = 2;
                         continue;
                     }
-                    c0[iz, ix] = 3;
-                    if (Hash(ix * .37f, iz * .71f) < .05f) c2[iz, ix] = 1;
+                    c0[iz, ix] = 4;
+                    if (Hash(ix * .37f, iz * .71f) < .08f) c2[iz, ix] = 2;
                 }
             td.SetDetailLayer(0, 0, 0, c0);
             td.SetDetailLayer(0, 0, 1, c1);
@@ -391,7 +395,7 @@ namespace Aldermark.Editeur
                 else
                 {
                     var pos = new Vector2(x, z);
-                    if (d < Monde.Berge + 4 || y > 44 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
+                    if (d < Monde.Berge + 4 || y > 62 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
                         Vector2.Distance(pos, Monde.Depart) < 9 || DistSegment(pos, Monde.Depart, new Vector2(Monde.PontX, 0)) < 26) continue;
                     float f = Monde.Fbm(x * .013f + 5, z * .013f);
                     if ((f > .5f || r < .05f) && np < 1100) { proto = r < .5f ? 0 : 1; np++; }
@@ -423,8 +427,22 @@ namespace Aldermark.Editeur
 
         static void Eau()
         {
-            var eau = Bloc(PrimitiveType.Plane, null, new Vector3(0, -.1f, 0), new Vector3(62, 1, 62), Lit("#6f9fc4", .85f), default, false, "Riviere");
+            var eau = Bloc(PrimitiveType.Plane, null, new Vector3(0, -.1f, 0), new Vector3(62, 1, 62), Lit("#8fb4d8", .9f), default, false, "Riviere");
             eau.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+
+            // Montagnes lointaines (deux rangées) et sol au-delà du terrain
+            var lointain = Racine("MontagnesLointaines");
+            var c1 = new GameObject("Cordillere1");
+            c1.transform.SetParent(lointain, false);
+            c1.AddComponent<MeshFilter>().sharedMesh = Sauver(Formes.Cordillere(520, 700, 900, -6, 70, 190, 96, 1.7f), "Formes/Cordillere1.asset");
+            c1.AddComponent<MeshRenderer>().sharedMaterial = Lit("#6a7096");
+            var c2 = new GameObject("Cordillere2");
+            c2.transform.SetParent(lointain, false);
+            c2.transform.rotation = Quaternion.Euler(0, 11f, 0);
+            c2.AddComponent<MeshFilter>().sharedMesh = Sauver(Formes.Cordillere(850, 1050, 1250, -6, 120, 300, 80, 4.3f), "Formes/Cordillere2.asset");
+            c2.AddComponent<MeshRenderer>().sharedMaterial = Lit("#7c84aa");
+            var sol = Bloc(PrimitiveType.Plane, lointain, new Vector3(0, -6f, 0), new Vector3(260, 1, 260), Lit("#4f6a3a"), default, false, "SolLointain");
+            sol.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
         }
 
         static void Fumee(Transform parent, Vector3 pos)
@@ -435,14 +453,14 @@ namespace Aldermark.Editeur
             go.transform.rotation = Quaternion.Euler(-90f, 0, 0);
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
-            main.startLifetime = 7f;
-            main.startSpeed = .8f;
-            main.startSize = new ParticleSystem.MinMaxCurve(.7f, 1.5f);
-            main.startColor = new Color(.85f, .82f, .92f, .4f);
+            main.startLifetime = 6f;
+            main.startSpeed = .6f;
+            main.startSize = new ParticleSystem.MinMaxCurve(.35f, .8f);
+            main.startColor = new Color(.82f, .82f, .88f, .22f);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.maxParticles = 50;
             main.prewarm = true;
-            var em = ps.emission; em.rateOverTime = 4f;
+            var em = ps.emission; em.rateOverTime = 2f;
             var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Cone; sh.angle = 6f; sh.radius = .15f;
             var vel = ps.velocityOverLifetime;
             vel.enabled = true;
@@ -491,7 +509,7 @@ namespace Aldermark.Editeur
                 t.transform.localScale = new Vector3(w + 1f, rh, dp + .9f);
                 t.AddComponent<MeshFilter>().sharedMesh = toit;
                 t.AddComponent<MeshRenderer>().sharedMaterial = Lit(toits[essai % 5]);
-                if (Hash(essai, 8) > .4f)
+                if (Hash(essai, 8) > .65f)
                 {
                     Bloc(PrimitiveType.Cube, maison, new Vector3(w * .25f, h + 1f, 0), new Vector3(.7f, 2.4f, .7f), Lit("#6d6670"), default, false, "Cheminee");
                     Fumee(maison, new Vector3(w * .25f, h + 2.3f, 0));
@@ -693,7 +711,7 @@ namespace Aldermark.Editeur
             camGo.transform.SetParent(j.transform, false);
             camGo.transform.localPosition = new Vector3(0, 1.7f, 0);
             cam = camGo.AddComponent<Camera>();
-            cam.fieldOfView = 68f; cam.nearClipPlane = .05f; cam.farClipPlane = 1500f;
+            cam.fieldOfView = 68f; cam.nearClipPlane = .05f; cam.farClipPlane = 2000f;
             camGo.AddComponent<AudioListener>();
             rendu = camGo.AddComponent<RenduPeint>();
             rendu.materiauPeint = Sauver(new Material(Shader.Find("Aldermark/PeintPixel")), "Materiaux/PeintPixel.mat");
@@ -710,7 +728,7 @@ namespace Aldermark.Editeur
             var sn = s.AddComponent<SoleilNuages>();
             sn.soleil = soleils.Item1; sn.soleil2 = soleils.Item2; sn.rendu = rendu;
             sn.direction1 = Soleil1; sn.direction2 = Soleil2;
-            sn.intensiteSoleil = 1.6f; sn.intensiteSoleil2 = .3f;
+            sn.intensiteSoleil = 1.35f; sn.intensiteSoleil2 = .15f;
             var hud = s.AddComponent<HUD>();
             hud.joueur = joueur.GetComponent<JoueurAldric>(); hud.cam = cam;
             s.AddComponent<Oiseaux>();

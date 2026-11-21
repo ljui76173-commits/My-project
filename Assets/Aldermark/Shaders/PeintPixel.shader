@@ -9,8 +9,8 @@ Shader "Aldermark/PeintPixel"
         _SceauTex ("Sceau", 2D) = "black" {}
         _Peint ("Peint (0 = brut)", Range(0,1)) = 1
         _Sceau ("Sceau", Range(0,1)) = 0
-        _Niveaux ("Niveaux de couleur", Float) = 8
-        _Tramage ("Tramage", Range(0,1)) = 0.3
+        _Niveaux ("Niveaux de couleur", Float) = 9
+        _Tramage ("Tramage", Range(0,1)) = 0.12
         _Res ("Résolution", Vector) = (480,270,0,0)
         _SoleilPos ("Soleil (écran)", Vector) = (0.5,0.5,0,0)
         _SoleilVis ("Soleil visible", Range(0,1)) = 0
@@ -64,9 +64,9 @@ Shader "Aldermark/PeintPixel"
                 float3 brut = lerp(float3(l, l, l), c, .35) * float3(.92, .94, .98);
 
                 float3 p = c;
-                p = lerp(p, p * float3(.92, .9, 1.08), 1. - smoothstep(.05, .45, l));
-                p = lerp(p, p * float3(1.1, 1.02, .86), smoothstep(.4, 1., l));
-                p = lerp(float3(l, l, l), p, 1.35);
+                p = lerp(p, p * float3(.9, .96, 1.1), 1. - smoothstep(.05, .45, l));
+                p = lerp(p, p * float3(1.06, 1.02, .92), smoothstep(.45, 1., l));
+                p = lerp(float3(l, l, l), p, 1.3);
                 float t = bayer(floor(i.uv * _Res.xy)) - .5;
                 p = floor(p * _Niveaux + t * _Tramage + .5) / _Niveaux;
 

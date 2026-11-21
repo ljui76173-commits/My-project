@@ -64,7 +64,8 @@ namespace Aldermark
             if (d > Berge) y = 1.2f + (d - Berge) * .11f + Mathf.Pow(Mathf.Max(0, d - 70) / 40f, 2) * 7f;
             y += (Fbm(x * .02f, z * .02f) - .5f) * 11f * Lisse(Berge, Berge + 30, d);
             float r = Mathf.Sqrt(x * x + z * z);
-            y += Mathf.Pow(Mathf.Max(0, r - 175), 1.55f) * .13f * (.55f + Fbm(x * .012f + 3, z * .012f));
+            float crete = 1f - Mathf.Abs(Fbm(x * .01f + 3, z * .01f) * 2f - 1f);
+            y += Mathf.Pow(Mathf.Max(0, r - 185), 1.3f) * .11f * (.45f + .9f * crete);
             y += 15f * Mathf.Exp(-((x - Depart.x) * (x - Depart.x) + (z - Depart.y) * (z - Depart.y)) / (2 * 34 * 34));
             float k = Lisse(46, 24, Vector2.Distance(new Vector2(x, z), Village));
             y = y + (3.3f + (Fbm(x * .05f, z * .05f) - .5f) * .8f - y) * k;
@@ -115,6 +116,13 @@ namespace Aldermark
             float v = 0, a = .5f;
             for (int i = 0; i < 5; i++) { v += a * NN(x, y); x *= 2.03f; y *= 2.03f; a *= .5f; }
             return v;
+        }
+
+        /// <summary>Densité des cumulus, identique au shader Aldermark/Ciel.</summary>
+        public static float DensiteNuages(float px, float py)
+        {
+            float qx = BruitNuages(px * 1.1f, py * 1.1f), qy = BruitNuages(px * 1.1f + 5.2f, py * 1.1f + 5.2f);
+            return BruitNuages(px * 1.6f + qx * 1.2f, py * 1.6f + qy * 1.2f);
         }
     }
 }
