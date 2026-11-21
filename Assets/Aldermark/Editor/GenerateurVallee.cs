@@ -1,0 +1,766 @@
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+
+namespace Aldermark.Editeur
+{
+    /// <summary>
+    /// Menu « Aldermark > Générer la vallée de Varenne » : construit la scène complète
+    /// (terrain sculptable, herbe, arbres, village, pont effondré, vue du Sceau,
+    /// Aldric, lumières, ciel) et l'enregistre dans Assets/Scenes/Varenne.unity.
+    /// Le terrain reste modifiable ensuite avec les outils Terrain d'Unity.
+    /// </summary>
+    public static class GenerateurVallee
+    {
+        const string Dossier = "Assets/Aldermark/Genere";
+        const float YMin = -5f, HauteurMax = 115f;
+        static readonly Vector3 Soleil1 = new Vector3(-.28f, .34f, .9f);
+        static readonly Vector3 Soleil2 = new Vector3(-.18f, .38f, .92f);
+
+        static int coucheSceau;
+        static Transform racineSceau;
+        static readonly Dictionary<string, Material> materiaux = new Dictionary<string, Material>();
+
+        [MenuItem("Aldermark/Générer la vallée de Varenne")]
+        public static void Generer()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            coucheSceau = LayerMask.NameToLayer("Sceau");
+            if (coucheSceau < 0)
+            {
+                EditorUtility.DisplayDialog("Aldermark", "Le calque « Sceau » est introuvable. Ajoute-le dans Project Settings > Tags and Layers (calque 8).", "OK");
+                return;
+            }
+            materiaux.Clear();
+            foreach (var d in new[] { "", "/Materiaux", "/Terrain", "/Arbres", "/Formes" }) Directory.CreateDirectory(Dossier + d);
+            AssetDatabase.Refresh();
+
+            try
+            {
+                Progres("Nouvelle scène", 0f);
+                var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var soleils = Lumieres();
+                Progres("Terrain et relief", .05f);
+                Terrain();
+                Progres("Eau et village", .7f);
+                Eau();
+                Village();
+                Pont();
+                Progres("Vue du Sceau", .8f);
+                VueDuSceau();
+                Progres("Aldric", .9f);
+                var joueur = Joueur(out var cam, out var rendu);
+                Systemes(soleils, joueur, cam, rendu);
+                Habitants();
+                ReglagesURP();
+
+                const string chemin = "Assets/Scenes/Varenne.unity";
+                EditorSceneManager.SaveScene(scene, chemin);
+                EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(chemin, true) };
+                AssetDatabase.SaveAssets();
+                Debug.Log("Aldermark : vallée de Varenne générée dans " + chemin + ". Appuie sur Play.");
+            }
+            finally { EditorUtility.ClearProgressBar(); }
+        }
+
+        static void Progres(string etape, float f) => EditorUtility.DisplayProgressBar("Aldermark", etape, f);
+
+        // ---------- utilitaires ----------
+
+        static T Sauver<T>(T obj, string nom) where T : Object
+        {
+            string p = $"{Dossier}/{nom}";
+            AssetDatabase.DeleteAsset(p);
+            AssetDatabase.CreateAsset(obj, p);
+            return obj;
+        }
+
+        static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
+        static float Hash(float a, float b) => Monde.HashPublic(a, b);
+        static float H(float x, float z) => Mathf.Max(Monde.Hauteur(x, z), -1.2f);
+
+        static Material Lit(string hex, float lisse = .1f)
+        {
+            string cle = "Lit" + hex + lisse;
+            if (materiaux.TryGetValue(cle, out var m)) return m;
+            m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            m.SetColor("_BaseColor", Hex(hex));
+            m.SetFloat("_Smoothness", lisse);
+            materiaux[cle] = Sauver(m, $"Materiaux/Lit_{hex.TrimStart('#')}_{Mathf.RoundToInt(lisse * 100)}.mat");
+            return m;
+        }
+
+        static Material Unlit(string hex)
+        {
+            string cle = "Unlit" + hex;
+            if (materiaux.TryGetValue(cle, out var m)) return m;
+            m = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            m.SetColor("_BaseColor", Hex(hex));
+            materiaux[cle] = Sauver(m, $"Materiaux/Unlit_{hex.TrimStart('#')}.mat");
+            return m;
+        }
+
+        static Material Fumee()
+        {
+            if (materiaux.TryGetValue("Fumee", out var m)) return m;
+            m = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            m.SetColor("_BaseColor", Color.white);
+            materiaux["Fumee"] = Sauver(m, "Materiaux/Fumee.mat");
+            return m;
+        }
+
+        static GameObject Bloc(PrimitiveType type, Transform parent, Vector3 pos, Vector3 echelle, Material m, Vector3 rotation = default, bool collision = true, string nom = null)
+        {
+            var g = GameObject.CreatePrimitive(type);
+            if (nom != null) g.name = nom;
+            if (!collision) Object.DestroyImmediate(g.GetComponent<Collider>());
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = pos;
+            g.transform.localRotation = Quaternion.Euler(rotation);
+            g.transform.localScale = echelle;
+            g.GetComponent<MeshRenderer>().sharedMaterial = m;
+            return g;
+        }
+
+        static Transform Racine(string nom) => new GameObject(nom).transform;
+
+        // ---------- lumières et ciel ----------
+
+        static (Light, Light) Lumieres()
+        {
+            var s1 = new GameObject("Soleil").AddComponent<Light>();
+            s1.type = LightType.Directional;
+            s1.color = Hex("#ffdca6");
+            s1.intensity = 1.6f;
+            s1.shadows = LightShadows.Soft;
+            s1.transform.rotation = Quaternion.LookRotation(-Soleil1.normalized);
+
+            var s2 = new GameObject("PetitSoleil").AddComponent<Light>();
+            s2.type = LightType.Directional;
+            s2.color = Hex("#ffc0c8");
+            s2.intensity = .3f;
+            s2.shadows = LightShadows.None;
+            s2.transform.rotation = Quaternion.LookRotation(-Soleil2.normalized);
+
+            var ciel = new Material(Shader.Find("Aldermark/Ciel"));
+            ciel.SetVector("_Soleil1", Soleil1);
+            ciel.SetVector("_Soleil2", Soleil2);
+            RenderSettings.skybox = Sauver(ciel, "Materiaux/Ciel.mat");
+            RenderSettings.sun = s1;
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = Hex("#b8b0e0");
+            RenderSettings.ambientEquatorColor = Hex("#a89cb8");
+            RenderSettings.ambientGroundColor = Hex("#6e5636");
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = Hex("#b7b0d6");
+            RenderSettings.fogStartDistance = 90f;
+            RenderSettings.fogEndDistance = 520f;
+            return (s1, s2);
+        }
+
+        // ---------- terrain ----------
+
+        static TerrainLayer Couche(string nom, string hex)
+        {
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = nom };
+            var c = Hex(hex);
+            var px = new Color[16];
+            for (int i = 0; i < 16; i++) px[i] = c;
+            tex.SetPixels(px);
+            tex.Apply();
+            Sauver(tex, $"Terrain/{nom}_Couleur.asset");
+            var tl = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(4, 4), name = nom };
+            return Sauver(tl, $"Terrain/{nom}.terrainlayer");
+        }
+
+        static void Terrain()
+        {
+            float T = Monde.Taille, demi = T / 2f;
+            var td = new TerrainData();
+            td.heightmapResolution = 513;
+            td.size = new Vector3(T, HauteurMax, T);
+            td.alphamapResolution = 512;
+            Sauver(td, "Terrain/Varenne.asset");
+            int n = td.heightmapResolution;
+            var hauteurs = new float[n, n];
+            for (int iz = 0; iz < n; iz++)
+                for (int ix = 0; ix < n; ix++)
+                {
+                    float x = -demi + ix / (n - 1f) * T, z = -demi + iz / (n - 1f) * T;
+                    hauteurs[iz, ix] = Mathf.Clamp01((H(x, z) - YMin) / HauteurMax);
+                }
+            td.SetHeights(0, 0, hauteurs);
+
+            // Couleurs du sol
+            var couches = new[]
+            {
+                Couche("Herbe", "#7d9a45"), Couche("HerbeDoree", "#caa44c"), Couche("HerbeSombre", "#5f7a3a"),
+                Couche("Ble", "#dcb557"), Couche("Culture", "#93a34a"), Couche("Labour", "#a8804a"),
+                Couche("Chemin", "#b8945e"), Couche("Roche", "#8b84a0"), Couche("Sable", "#c9b98e"), Couche("LitRiviere", "#6e6650"),
+            };
+            td.terrainLayers = couches;
+            int a = td.alphamapResolution, nc = couches.Length;
+            var carte = new float[a, a, nc];
+            var w = new float[nc];
+            for (int iz = 0; iz < a; iz++)
+            {
+                if (iz % 32 == 0) Progres("Couleurs du sol", .1f + .25f * iz / a);
+                for (int ix = 0; ix < a; ix++)
+                {
+                    float x = -demi + (ix + .5f) / a * T, z = -demi + (iz + .5f) / a * T;
+                    float y = Monde.Hauteur(x, z);
+                    float pente = new Vector2(Monde.Hauteur(x + 1, z) - Monde.Hauteur(x - 1, z), Monde.Hauteur(x, z + 1) - Monde.Hauteur(x, z - 1)).magnitude * .5f;
+                    System.Array.Clear(w, 0, nc);
+                    float g = Monde.Lisse(.45f, .7f, Monde.Fbm(x * .03f + 9, z * .03f));
+                    float s = Monde.Lisse(.45f, .25f, Monde.Fbm(x * .015f, z * .015f + 4)) * .7f;
+                    w[0] = (1 - g) * (1 - s); w[1] = g * (1 - s); w[2] = s;
+                    if (Monde.DansChamp(x, z)) { System.Array.Clear(w, 0, nc); w[3 + Monde.BandeChamp(x, z)] = 1; }
+                    if (Vector2.Distance(new Vector2(x, z), Monde.Village) < 11 || Monde.DistanceRoute(x, z) < 2.3f) { System.Array.Clear(w, 0, nc); w[6] = 1; }
+                    float roche = Monde.Lisse(.6f, .95f, pente);
+                    for (int k = 0; k < nc; k++) w[k] *= 1 - roche;
+                    w[7] += roche;
+                    float sable = Monde.Lisse(1.7f, .6f, y);
+                    for (int k = 0; k < nc; k++) w[k] *= 1 - sable;
+                    w[8] += sable;
+                    if (y < -.2f) { System.Array.Clear(w, 0, nc); w[9] = 1; }
+                    float somme = 0;
+                    for (int k = 0; k < nc; k++) somme += w[k];
+                    for (int k = 0; k < nc; k++) carte[iz, ix, k] = somme > 0 ? w[k] / somme : (k == 0 ? 1 : 0);
+                }
+            }
+            td.SetAlphamaps(0, 0, carte);
+
+            Progres("Herbe et fleurs", .4f);
+            Herbe(td);
+            Progres("Arbres", .55f);
+            Arbres(td);
+
+            EditorUtility.SetDirty(td);
+            var go = UnityEngine.Terrain.CreateTerrainGameObject(td);
+            go.name = "Terrain";
+            go.transform.position = new Vector3(-demi, YMin, -demi);
+            var t = go.GetComponent<UnityEngine.Terrain>();
+            t.materialTemplate = Sauver(new Material(Shader.Find("Universal Render Pipeline/Terrain/Lit")), "Terrain/MateriauTerrain.mat");
+            t.treeDistance = 2000f;
+            t.treeBillboardDistance = 2000f;
+            t.treeMaximumFullLODCount = 5000;
+            t.detailObjectDistance = 90f;
+            t.detailObjectDensity = 1f;
+            t.heightmapPixelError = 3f;
+        }
+
+        static Texture2D TextureHerbe(string nom, bool fleurs)
+        {
+            const int S = 64;
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, true) { name = nom, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point };
+            var px = new Color[S * S];
+            var couleursFleurs = new[] { Hex("#f4f0ff"), Hex("#b9a2ff"), Hex("#ffd84a"), Hex("#ff8a8a"), Hex("#8fc4ff") };
+            for (int b = 0; b < 8; b++)
+            {
+                float x0 = 4 + Hash(b, fleurs ? 3 : 1) * (S - 8), haut = S * (.55f + Hash(b, 2) * .45f), sommet = x0 + (Hash(b, 5) - .5f) * 12, larg = 3.5f;
+                for (int y = 0; y < (int)haut; y++)
+                {
+                    float t = y / haut, cx = Mathf.Lerp(x0, sommet, t), demi = larg * (1 - t);
+                    for (int x = Mathf.Max(0, (int)(cx - demi)); x <= Mathf.Min(S - 1, (int)(cx + demi)); x++)
+                    {
+                        float v = Mathf.Lerp(.55f, 1.1f, t);
+                        px[y * S + x] = fleurs ? new Color(.45f * v, .62f * v, .3f * v, 1) : new Color(v, v, v, 1);
+                    }
+                }
+                if (fleurs)
+                {
+                    var cf = couleursFleurs[b % couleursFleurs.Length];
+                    int fx = (int)sommet, fy = (int)haut;
+                    for (int y = fy - 3; y <= fy + 3; y++)
+                        for (int x = fx - 3; x <= fx + 3; x++)
+                            if (x >= 0 && x < S && y >= 0 && y < S && (x - fx) * (x - fx) + (y - fy) * (y - fy) <= 9) px[y * S + x] = cf;
+                }
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            return Sauver(tex, $"Terrain/{nom}.asset");
+        }
+
+        static void Herbe(TerrainData td)
+        {
+            var herbe = new DetailPrototype
+            {
+                prototypeTexture = TextureHerbe("TexHerbe", false), renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
+                healthyColor = Hex("#8fae4c"), dryColor = Hex("#cfae52"), minWidth = .5f, maxWidth = .9f, minHeight = .35f, maxHeight = .8f, noiseSpread = .3f
+            };
+            var ble = new DetailPrototype
+            {
+                prototypeTexture = herbe.prototypeTexture, renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
+                healthyColor = Hex("#e8c45c"), dryColor = Hex("#d9a94a"), minWidth = .6f, maxWidth = 1f, minHeight = 1f, maxHeight = 1.4f, noiseSpread = .2f
+            };
+            var fleurs = new DetailPrototype
+            {
+                prototypeTexture = TextureHerbe("TexFleurs", true), renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
+                healthyColor = Color.white, dryColor = Hex("#e8e0d0"), minWidth = .4f, maxWidth = .6f, minHeight = .3f, maxHeight = .5f, noiseSpread = .5f
+            };
+            td.detailPrototypes = new[] { herbe, ble, fleurs };
+            td.SetDetailScatterMode(DetailScatterMode.InstanceCountMode);
+            td.SetDetailResolution(1024, 32);
+            int r = td.detailResolution;
+            float T = Monde.Taille, demi = T / 2f;
+            var c0 = new int[r, r]; var c1 = new int[r, r]; var c2 = new int[r, r];
+            for (int iz = 0; iz < r; iz++)
+                for (int ix = 0; ix < r; ix++)
+                {
+                    float x = -demi + (ix + .5f) / r * T, z = -demi + (iz + .5f) / r * T;
+                    float y = Monde.Hauteur(x, z);
+                    if (y < .9f || y > 44 || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f) continue;
+                    if (Monde.DansChamp(x, z))
+                    {
+                        int b = Monde.BandeChamp(x, z);
+                        if (b == 0) c1[iz, ix] = 4;
+                        else if (b == 1) c0[iz, ix] = 2;
+                        continue;
+                    }
+                    c0[iz, ix] = 3;
+                    if (Hash(ix * .37f, iz * .71f) < .05f) c2[iz, ix] = 1;
+                }
+            td.SetDetailLayer(0, 0, 0, c0);
+            td.SetDetailLayer(0, 0, 1, c1);
+            td.SetDetailLayer(0, 0, 2, c2);
+            td.wavingGrassStrength = .45f;
+            td.wavingGrassAmount = .5f;
+            td.wavingGrassSpeed = .6f;
+            td.wavingGrassTint = Color.white;
+        }
+
+        static GameObject PrefabArbre(string nom, Mesh mesh, Material[] mats, bool collision)
+        {
+            var go = new GameObject(nom);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+            if (collision)
+            {
+                var c = go.AddComponent<CapsuleCollider>();
+                c.center = new Vector3(0, 2, 0); c.radius = .45f; c.height = 4f;
+            }
+            string p = $"{Dossier}/Arbres/{nom}.prefab";
+            AssetDatabase.DeleteAsset(p);
+            var pf = PrefabUtility.SaveAsPrefabAsset(go, p);
+            Object.DestroyImmediate(go);
+            return pf;
+        }
+
+        static void Arbres(TerrainData td)
+        {
+            var sapin = Sauver(Formes.Sapin(), "Arbres/Sapin.asset");
+            var dore = Sauver(Formes.ArbreDore(), "Arbres/ArbreDore.asset");
+            var buisson = Sauver(Formes.Buisson(), "Arbres/Buisson.asset");
+            var tronc = Lit("#5b4030");
+            var protos = new[]
+            {
+                PrefabArbre("SapinSombre", sapin, new[] { tronc, Lit("#3d5a2e") }, true),
+                PrefabArbre("SapinClair", sapin, new[] { tronc, Lit("#4c7040") }, true),
+                PrefabArbre("ArbreJaune", dore, new[] { tronc, Lit("#e3ad3c") }, true),
+                PrefabArbre("ArbreOrange", dore, new[] { tronc, Lit("#d9922e") }, true),
+                PrefabArbre("ArbreRoux", dore, new[] { tronc, Lit("#c7782a") }, true),
+                PrefabArbre("BuissonVert", buisson, new[] { Lit("#5f7f3a") }, false),
+                PrefabArbre("BuissonOlive", buisson, new[] { Lit("#8a9a44") }, false),
+            };
+            var tp = new TreePrototype[protos.Length];
+            for (int i = 0; i < protos.Length; i++) tp[i] = new TreePrototype { prefab = protos[i] };
+            td.treePrototypes = tp;
+
+            float T = Monde.Taille, demi = T / 2f;
+            var liste = new List<TreeInstance>();
+            int np = 0, ng = 0, nb = 0;
+            for (int i = 0; i < 16000 && (np < 1100 || ng < 260 || nb < 700); i++)
+            {
+                float x = (Hash(i, 1.3f) - .5f) * 560, z = (Hash(i, 7.9f) - .5f) * 560, y = Monde.Hauteur(x, z), d = Mathf.Abs(x - Monde.Riviere(z));
+                float rd = Monde.DistanceRoute(x, z), r = Hash(i, 3.1f), dv = Vector2.Distance(new Vector2(x, z), Monde.Village);
+                int proto = -1; float s = .8f + Hash(i, 5.5f) * .7f;
+                if (nb < 700 && r > .72f && r < .86f && d > Monde.Berge + 1 && y < 34 && rd > 3 && !Monde.DansChamp(x, z) && dv > 14)
+                { proto = 5 + nb % 2; s = .6f + Hash(i, 5.5f) * .8f; nb++; }
+                else
+                {
+                    var pos = new Vector2(x, z);
+                    if (d < Monde.Berge + 4 || y > 44 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
+                        Vector2.Distance(pos, Monde.Depart) < 9 || DistSegment(pos, Monde.Depart, new Vector2(Monde.PontX, 0)) < 26) continue;
+                    float f = Monde.Fbm(x * .013f + 5, z * .013f);
+                    if ((f > .5f || r < .05f) && np < 1100) { proto = r < .5f ? 0 : 1; np++; }
+                    else if (r > .93f && ng < 260 && y < 22) { proto = 2 + ng % 3; ng++; }
+                }
+                if (proto < 0) continue;
+                liste.Add(new TreeInstance
+                {
+                    position = new Vector3((x + demi) / T, 0, (z + demi) / T),
+                    prototypeIndex = proto,
+                    widthScale = s,
+                    heightScale = s * (.9f + r * .4f),
+                    rotation = r * 6.28f,
+                    color = Color.white,
+                    lightmapColor = Color.white
+                });
+            }
+            td.SetTreeInstances(liste.ToArray(), true);
+        }
+
+        static float DistSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude);
+            return Vector2.Distance(p, a + t * ab);
+        }
+
+        // ---------- eau, village, pont ----------
+
+        static void Eau()
+        {
+            var eau = Bloc(PrimitiveType.Plane, null, new Vector3(0, -.1f, 0), new Vector3(62, 1, 62), Lit("#6f9fc4", .85f), default, false, "Riviere");
+            eau.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        static void Fumee(Transform parent, Vector3 pos)
+        {
+            var go = new GameObject("Fumee");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.rotation = Quaternion.Euler(-90f, 0, 0);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 7f;
+            main.startSpeed = .8f;
+            main.startSize = new ParticleSystem.MinMaxCurve(.7f, 1.5f);
+            main.startColor = new Color(.85f, .82f, .92f, .4f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 50;
+            main.prewarm = true;
+            var em = ps.emission; em.rateOverTime = 4f;
+            var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Cone; sh.angle = 6f; sh.radius = .15f;
+            var vel = ps.velocityOverLifetime;
+            vel.enabled = true;
+            vel.space = ParticleSystemSimulationSpace.World;
+            vel.x = new ParticleSystem.MinMaxCurve(.6f);
+            vel.y = new ParticleSystem.MinMaxCurve(.3f);
+            vel.z = new ParticleSystem.MinMaxCurve(.2f);
+            var col = ps.colorOverLifetime;
+            col.enabled = true;
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+                      new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(1, .15f), new GradientAlphaKey(0, 1) });
+            col.color = g;
+            var sz = ps.sizeOverLifetime;
+            sz.enabled = true;
+            sz.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, .6f, 1, 1.8f));
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = Fumee();
+            r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        static void Village()
+        {
+            var racine = Racine("Village");
+            var toit = Sauver(Formes.Toit(), "Formes/Toit.asset");
+            string[] murs = { "#eadfc6", "#e2d3b4", "#d9c9a8", "#8d6b4b" }, toits = { "#b4523a", "#3f5a8c", "#7a4a33", "#94403a", "#4f6b8f" };
+            var V = Monde.Village;
+            var places = new List<Vector2>();
+            int essai = 0;
+            while (places.Count < 28 && essai++ < 900)
+            {
+                float a = Hash(essai, 2.2f) * 6.283f, r = 9 + Hash(essai, 4.4f) * 30, x = V.x + Mathf.Cos(a) * r, z = V.y + Mathf.Sin(a) * r;
+                var p = new Vector2(x, z);
+                if (Monde.DistanceRoute(x, z) < 4.5f || places.Exists(q => Vector2.Distance(q, p) < 9)) continue;
+                places.Add(p);
+                float w = 4.5f + Hash(essai, 1) * 2.5f, dp = 4 + Hash(essai, 2) * 2, h = 3 + Hash(essai, 3) * 1.5f, rh = 2 + Hash(essai, 6) * 1.4f;
+                float ry = Mathf.Atan2(V.x - x, V.y - z) * Mathf.Rad2Deg + (Hash(essai, 9) - .5f) * 23f;
+                var maison = new GameObject("Maison" + places.Count).transform;
+                maison.SetParent(racine, false);
+                maison.position = new Vector3(x, H(x, z), z);
+                maison.rotation = Quaternion.Euler(0, ry, 0);
+                Bloc(PrimitiveType.Cube, maison, new Vector3(0, h / 2 - .3f, 0), new Vector3(w, h, dp), Lit(murs[essai % 4]), default, true, "Murs");
+                var t = new GameObject("Toit");
+                t.transform.SetParent(maison, false);
+                t.transform.localPosition = new Vector3(0, h - .3f, 0);
+                t.transform.localScale = new Vector3(w + 1f, rh, dp + .9f);
+                t.AddComponent<MeshFilter>().sharedMesh = toit;
+                t.AddComponent<MeshRenderer>().sharedMaterial = Lit(toits[essai % 5]);
+                if (Hash(essai, 8) > .4f)
+                {
+                    Bloc(PrimitiveType.Cube, maison, new Vector3(w * .25f, h + 1f, 0), new Vector3(.7f, 2.4f, .7f), Lit("#6d6670"), default, false, "Cheminee");
+                    Fumee(maison, new Vector3(w * .25f, h + 2.3f, 0));
+                }
+            }
+
+            // Puits
+            var puits = new GameObject("Puits").transform;
+            puits.SetParent(racine, false);
+            puits.position = new Vector3(V.x, H(V.x, V.y), V.y);
+            Bloc(PrimitiveType.Cylinder, puits, new Vector3(0, .4f, 0), new Vector3(2.7f, .55f, 2.7f), Lit("#8d8796"));
+            Bloc(PrimitiveType.Cube, puits, new Vector3(-1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
+            Bloc(PrimitiveType.Cube, puits, new Vector3(1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
+            var tp = new GameObject("ToitPuits");
+            tp.transform.SetParent(puits, false);
+            tp.transform.localPosition = new Vector3(0, 2.7f, 0);
+            tp.transform.localScale = new Vector3(3f, 1.1f, 2.6f);
+            tp.AddComponent<MeshFilter>().sharedMesh = toit;
+            tp.AddComponent<MeshRenderer>().sharedMaterial = Lit("#7a4a33");
+
+            // Four à chaux
+            var K = Monde.Four;
+            var four = new GameObject("FourAChaux").transform;
+            four.SetParent(racine, false);
+            four.position = new Vector3(K.x, H(K.x, K.y), K.y);
+            Bloc(PrimitiveType.Cylinder, four, new Vector3(0, 2.9f, 0), new Vector3(7.5f, 3.25f, 7.5f), Lit("#a49d92"));
+            Bloc(PrimitiveType.Cube, four, new Vector3(0, 1f, 3.7f), new Vector3(2f, 2.2f, 1f), Lit("#2b2530"), default, false, "Foyer");
+
+            // Maison de Corvin et sa barque
+            var C = Monde.Corvin;
+            var corvin = new GameObject("MaisonCorvin").transform;
+            corvin.SetParent(racine, false);
+            corvin.position = new Vector3(C.x, H(C.x, C.y), C.y);
+            corvin.rotation = Quaternion.Euler(0, 17f, 0);
+            Bloc(PrimitiveType.Cube, corvin, new Vector3(0, 1.4f, 0), new Vector3(6f, 3.4f, 5f), Lit("#7d6047"), default, true, "Murs");
+            var tc = new GameObject("Toit");
+            tc.transform.SetParent(corvin, false);
+            tc.transform.localPosition = new Vector3(0, 3.1f, 0);
+            tc.transform.localScale = new Vector3(7f, 2.4f, 5.9f);
+            tc.AddComponent<MeshFilter>().sharedMesh = toit;
+            tc.AddComponent<MeshRenderer>().sharedMaterial = Lit("#5a3a2b");
+            Fumee(corvin, new Vector3(1.5f, 5.2f, 0));
+            Bloc(PrimitiveType.Cube, racine, new Vector3(Monde.Riviere(22) + 6, .1f, 22), new Vector3(5f, .7f, 1.8f), Lit("#5b4030"), new Vector3(0, 23f, 0), false, "Barque");
+
+            // Meules de foin
+            for (int i = 0; i < 9; i++)
+            {
+                float x = 80 + Hash(i, 11) * 55, z = -18 + Hash(i, 12) * 75;
+                if (!Monde.DansChamp(x, z)) continue;
+                var m = new GameObject("Meule").transform;
+                m.SetParent(racine, false);
+                m.position = new Vector3(x, H(x, z), z);
+                Bloc(PrimitiveType.Cylinder, m, new Vector3(0, .6f, 0), new Vector3(3f, .8f, 3f), Lit("#d6b052"));
+                Bloc(PrimitiveType.Sphere, m, new Vector3(0, 1.5f, 0), new Vector3(3f, 1.6f, 3f), Lit("#c49c45"), default, false);
+            }
+
+            // Charrettes du Comte, bloquées sur l'autre rive
+            for (int i = 0; i < 3; i++)
+            {
+                float x = Monde.PontX - 26 - i * 7, z = -4 - i * 2.5f;
+                var c = new GameObject("Charrette").transform;
+                c.SetParent(racine, false);
+                c.position = new Vector3(x, H(x, z), z);
+                c.rotation = Quaternion.Euler(0, 9f, 0);
+                Bloc(PrimitiveType.Cube, c, new Vector3(0, 1.3f, 0), new Vector3(4f, 1.2f, 2.2f), Lit("#7a5a3c"));
+                Bloc(PrimitiveType.Cube, c, new Vector3(0, 2.3f, 0), new Vector3(3.2f, 1f, 1.8f), Lit("#d8c9a0"), default, false, "Sacs");
+                Bloc(PrimitiveType.Cylinder, c, new Vector3(0, .75f, 1.2f), new Vector3(1.5f, .12f, 1.5f), Lit("#4a3626"), new Vector3(90, 0, 0), false, "Roue");
+                Bloc(PrimitiveType.Cylinder, c, new Vector3(0, .75f, -1.2f), new Vector3(1.5f, .12f, 1.5f), Lit("#4a3626"), new Vector3(90, 0, 0), false, "Roue");
+            }
+        }
+
+        static void Pont()
+        {
+            var racine = Racine("PontDeVarenne");
+            var pierre = Lit("#a29a8e");
+            var sombre = Lit("#8e867c");
+            float BX = Monde.PontX, Y = 4.6f;
+            foreach (int s in new[] { -1, 1 })
+            {
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX + s * 11, Y, 0), new Vector3(14, 1.3f, 5), pierre, default, true, "Tablier");
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX + s * 9.5f, Y - 5, 0), new Vector3(3.2f, 9, 4.6f), sombre, default, true, "Pile");
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX + s * 17.5f, Y - 4, 0), new Vector3(3.6f, 7, 5.2f), sombre, default, true, "Culee");
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX + s * 11, Y + 1.1f, -2.3f), new Vector3(14, .9f, .4f), pierre, default, true, "Parapet");
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX + s * 11, Y + 1.1f, 2.3f), new Vector3(14, .9f, .4f), pierre, default, true, "Parapet");
+            }
+            Bloc(PrimitiveType.Cube, racine, new Vector3(BX - 2.6f, .6f, .6f), new Vector3(6, 1.2f, 4.6f), pierre, new Vector3(0, 17f, 31f), true, "DalleEffondree");
+            for (int i = 0; i < 7; i++)
+                Bloc(PrimitiveType.Cube, racine, new Vector3(BX - 3 + Hash(i, 4) * 7, -.2f + Hash(i, 5) * .6f, -3 + Hash(i, 6) * 7),
+                    new Vector3(1.4f, 1f, 1.2f), sombre, new Vector3(0, Hash(i, 7) * 170f, 0), true, "Bloc");
+        }
+
+        // ---------- vue du Sceau ----------
+
+        static void Couche(GameObject g) { g.layer = coucheSceau; foreach (Transform c in g.transform) Couche(c.gameObject); }
+
+        static void Ligne(string nom, List<Vector3> pts, float largeur, Material m)
+        {
+            var go = new GameObject(nom) { layer = coucheSceau };
+            go.transform.SetParent(racineSceau, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = pts.Count;
+            lr.SetPositions(pts.ToArray());
+            lr.widthMultiplier = largeur;
+            lr.sharedMaterial = m;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.numCornerVertices = 2;
+            lr.alignment = LineAlignment.View;
+        }
+
+        static List<Vector3> SurRoute(Vector2[] pts, float hauteur)
+        {
+            var res = new List<Vector3>();
+            for (int i = 0; i < pts.Length - 1; i++)
+            {
+                var a = pts[i]; var b = pts[i + 1];
+                int n = Mathf.Max(2, Mathf.CeilToInt(Vector2.Distance(a, b) / 3f));
+                for (int k = 0; k < n; k++)
+                {
+                    var p = Vector2.Lerp(a, b, k / (float)n);
+                    res.Add(new Vector3(p.x, Mathf.Max(Monde.Hauteur(p.x, p.y), 0) + hauteur, p.y));
+                }
+            }
+            var l = pts[pts.Length - 1];
+            res.Add(new Vector3(l.x, Mathf.Max(Monde.Hauteur(l.x, l.y), 0) + hauteur, l.y));
+            return res;
+        }
+
+        static List<Vector3> Courbe(Vector3[] c, int parSegment)
+        {
+            var res = new List<Vector3>();
+            for (int i = 0; i < c.Length - 1; i++)
+            {
+                Vector3 p0 = c[Mathf.Max(i - 1, 0)], p1 = c[i], p2 = c[i + 1], p3 = c[Mathf.Min(i + 2, c.Length - 1)];
+                for (int k = 0; k < parSegment; k++)
+                {
+                    float t = k / (float)parSegment;
+                    res.Add(.5f * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t));
+                }
+            }
+            res.Add(c[c.Length - 1]);
+            return res;
+        }
+
+        static void Etiquette(string texte, Vector3 pos, string hex)
+        {
+            var go = new GameObject("Etiquette_" + texte.Split(' ')[0]);
+            go.transform.SetParent(racineSceau, false);
+            go.transform.position = pos;
+            var e = go.AddComponent<EtiquetteSceau>();
+            e.texte = texte;
+            e.couleur = Hex(hex);
+        }
+
+        static void VueDuSceau()
+        {
+            racineSceau = Racine("VueDuSceau");
+            racineSceau.gameObject.layer = coucheSceau;
+            var ambre = Unlit("#ffb23a"); var rouge = Unlit("#ff3b30"); var frais = Unlit("#fff0c0"); var bleu = Unlit("#2f7dff");
+            float BX = Monde.PontX;
+            foreach (var r in Monde.Routes) Ligne("FluxRoute", SurRoute(r, .9f), .7f, ambre);
+            Ligne("FluxPontOuest", new List<Vector3> { new Vector3(BX - 17, 5.6f, 0), new Vector3(BX - 4.5f, 5.6f, 0) }, .8f, ambre);
+            Ligne("FluxRompu", new List<Vector3> { new Vector3(BX - 4.5f, 5.6f, 0), new Vector3(BX + 4.5f, 5.6f, 0) }, 1.1f, rouge);
+            Ligne("FluxPontEst", new List<Vector3> { new Vector3(BX + 4.5f, 5.6f, 0), new Vector3(BX + 17, 5.6f, 0) }, .8f, ambre);
+            var K = Monde.Four; var C = Monde.Corvin;
+            Ligne("FluxCache", SurRoute(new[] { K, new Vector2(70, -20), new Vector2(50, 6), new Vector2(C.x + 4, C.y - 6), C }, 1.4f), .45f, frais);
+
+            var noeud = new Vector3(BX, -7, 8);
+            foreach (var fin in new[] { new Vector3(BX - 30, -7, -270), new Vector3(BX + 20, -7, 270), new Vector3(270, -7, -60) })
+            {
+                Vector3 m1 = Vector3.Lerp(noeud, fin, .33f) + new Vector3(18, -3, 12), m2 = Vector3.Lerp(noeud, fin, .66f) + new Vector3(-16, 2, -10);
+                Ligne("VeineMana", Courbe(new[] { noeud, m1, m2, fin }, 16), 2.4f, bleu);
+            }
+            var n = Bloc(PrimitiveType.Sphere, racineSceau, noeud, Vector3.one * 9f, Unlit("#9fd4ff"), default, false, "NoeudDeMana");
+            n.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+            Couche(racineSceau.gameObject);
+
+            Etiquette("Pont de Varenne — flux rompu", new Vector3(BX, 8.5f, 0), "#ff4d4d");
+            Etiquette("Four à chaux — inactif. Remise en état possible.", new Vector3(K.x, H(K.x, K.y) + 9, K.y), "#ffbf4a");
+            Etiquette("Nœud de mana — classe : majeur", noeud + Vector3.up * 7, "#6fb4ff");
+            Etiquette("Maison de Corvin — flux récent", new Vector3(C.x, H(C.x, C.y) + 8, C.y), "#ffbf4a");
+            Etiquette("Charrettes du Comte — en attente", new Vector3(BX - 33, H(BX - 33, -6) + 5, -6), "#ffbf4a");
+        }
+
+        // ---------- Aldric, systèmes, habitants ----------
+
+        static GameObject Joueur(out Camera cam, out RenduPeint rendu)
+        {
+            var D = Monde.Depart;
+            var j = new GameObject("Aldric");
+            j.transform.position = new Vector3(D.x, H(D.x, D.y) + .2f, D.y);
+            j.transform.rotation = Quaternion.Euler(0, Mathf.Atan2(Monde.PontX - D.x, 0 - D.y) * Mathf.Rad2Deg, 0);
+            var cc = j.AddComponent<CharacterController>();
+            cc.height = 1.8f; cc.radius = .35f; cc.center = new Vector3(0, .9f, 0);
+            cc.slopeLimit = 50f; cc.stepOffset = .4f;
+
+            var camGo = new GameObject("Camera") { tag = "MainCamera" };
+            camGo.transform.SetParent(j.transform, false);
+            camGo.transform.localPosition = new Vector3(0, 1.7f, 0);
+            cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 68f; cam.nearClipPlane = .05f; cam.farClipPlane = 1500f;
+            camGo.AddComponent<AudioListener>();
+            rendu = camGo.AddComponent<RenduPeint>();
+            rendu.materiauPeint = Sauver(new Material(Shader.Find("Aldermark/PeintPixel")), "Materiaux/PeintPixel.mat");
+            rendu.directionSoleil = Soleil1;
+
+            var ja = j.AddComponent<JoueurAldric>();
+            ja.cam = cam; ja.rendu = rendu;
+            return j;
+        }
+
+        static void Systemes((Light, Light) soleils, GameObject joueur, Camera cam, RenduPeint rendu)
+        {
+            var s = new GameObject("Systemes");
+            var sn = s.AddComponent<SoleilNuages>();
+            sn.soleil = soleils.Item1; sn.soleil2 = soleils.Item2; sn.rendu = rendu;
+            sn.direction1 = Soleil1; sn.direction2 = Soleil2;
+            sn.intensiteSoleil = 1.6f; sn.intensiteSoleil2 = .3f;
+            var hud = s.AddComponent<HUD>();
+            hud.joueur = joueur.GetComponent<JoueurAldric>(); hud.cam = cam;
+            s.AddComponent<Oiseaux>();
+        }
+
+        static void Habitants()
+        {
+            var racine = Racine("Habitants");
+            string[] tuniques = { "#8c5a3c", "#5b6e8c", "#7a8c4a", "#a0484a", "#d8c9a0", "#6a4c7a" };
+            var V = Monde.Village;
+            for (int i = 0; i < 11; i++)
+            {
+                float a = Hash(i, 9) * 6.283f, r = 6 + Hash(i, 10) * 22;
+                var go = new GameObject("Villageois" + (i + 1));
+                go.transform.SetParent(racine, false);
+                go.transform.position = new Vector3(V.x + Mathf.Cos(a) * r, 0, V.y + Mathf.Sin(a) * r);
+                var h = go.AddComponent<Habitant>();
+                h.tunique = Hex(tuniques[i % tuniques.Length]);
+                h.cheveux = Hex(i % 3 == 0 ? "#2a2020" : "#4a3020");
+                h.taille = .95f + Hash(i, 8) * .15f;
+                h.centre = V;
+            }
+
+            var L = new Vector2(106.8f, -48.4f);
+            var lise = new GameObject("Lise");
+            lise.transform.SetParent(racine, false);
+            lise.transform.position = new Vector3(L.x, 0, L.y);
+            lise.transform.rotation = Quaternion.Euler(0, Mathf.Atan2(Monde.Depart.x - L.x, Monde.Depart.y - L.y) * Mathf.Rad2Deg, 0);
+            var hl = lise.AddComponent<Habitant>();
+            hl.tunique = Hex("#c98a8a"); hl.cheveux = Hex("#7a4a2a"); hl.taille = .68f; hl.promeneur = false; hl.panier = true;
+
+            for (int i = 0; i < 2; i++)
+            {
+                float x = Monde.PontX - 24 - i * 9, z = -6.5f - i * 2.5f;
+                var go = new GameObject("Charretier" + (i + 1));
+                go.transform.SetParent(racine, false);
+                go.transform.position = new Vector3(x, 0, z);
+                go.transform.rotation = Quaternion.Euler(0, 90, 0);
+                var h = go.AddComponent<Habitant>();
+                h.tunique = Hex(i == 0 ? "#7a5a3c" : "#5b6e8c"); h.promeneur = false;
+            }
+        }
+
+        static void ReglagesURP()
+        {
+            if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)
+            {
+                urp.shadowDistance = 160f;
+                EditorUtility.SetDirty(urp);
+            }
+        }
+    }
+}
