@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -137,6 +138,59 @@ namespace Aldermark.Editeur
         }
 
         static Transform Racine(string nom) => new GameObject(nom).transform;
+
+        // ---------- modèles importés (Meshy, packs…) ----------
+
+        static readonly string[] DossiersModeles = { "Assets/Aldermark/Models", "Assets/Aldermark/Modeles" };
+
+        /// <summary>
+        /// Cherche dans Assets/Aldermark/Models (ou Modeles) un modèle dont le nom contient
+        /// l'un des mots-clés (sans tenir compte des majuscules). Renvoie null s'il n'y en a pas.
+        /// </summary>
+        static GameObject TrouverModele(params string[] motsCles)
+        {
+            var dossiers = DossiersModeles.Where(AssetDatabase.IsValidFolder).ToArray();
+            if (dossiers.Length == 0) return null;
+            foreach (var guid in AssetDatabase.FindAssets("t:GameObject", dossiers))
+            {
+                string chemin = AssetDatabase.GUIDToAssetPath(guid);
+                string nom = Path.GetFileNameWithoutExtension(chemin).ToLowerInvariant();
+                if (motsCles.Any(m => nom.Contains(m)))
+                {
+                    Debug.Log($"Aldermark : modèle utilisé pour « {motsCles[0]} » → {chemin}");
+                    return AssetDatabase.LoadAssetAtPath<GameObject>(chemin);
+                }
+            }
+            return null;
+        }
+
+        static Bounds Bornes(GameObject g)
+        {
+            var rs = g.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) return new Bounds(g.transform.position, Vector3.zero);
+            var b = rs[0].bounds;
+            foreach (var r in rs) b.Encapsulate(r.bounds);
+            return b;
+        }
+
+        /// <summary>
+        /// Pose un modèle importé : mis à la hauteur voulue, centré sur le point au sol,
+        /// légèrement enfoncé, avec des collisions sur chaque maillage.
+        /// </summary>
+        static GameObject PoserModele(GameObject modele, Transform parent, Vector3 sol, float hauteur, float rotY, float enfonce = .2f)
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(modele, parent);
+            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0));
+            go.transform.localScale = Vector3.one;
+            var b = Bornes(go);
+            if (b.size.y > 1e-4f) go.transform.localScale = Vector3.one * (hauteur / b.size.y);
+            b = Bornes(go);
+            go.transform.position += new Vector3(sol.x - b.center.x, sol.y - enfonce - b.min.y, sol.z - b.center.z);
+            foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
+                if (mf.sharedMesh != null) mf.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+            foreach (var r in go.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.On;
+            return go;
+        }
 
         // ---------- lumières et ciel ----------
 
@@ -543,6 +597,10 @@ namespace Aldermark.Editeur
             var puits = new GameObject("Puits").transform;
             puits.SetParent(racine, false);
             puits.position = new Vector3(V.x, H(V.x, V.y), V.y);
+            var modelePuits = TrouverModele("puits", "well");
+            if (modelePuits != null) PoserModele(modelePuits, puits, puits.position, 3.4f, 0f);
+            else
+            {
             Bloc(PrimitiveType.Cylinder, puits, new Vector3(0, .4f, 0), new Vector3(2.7f, .55f, 2.7f), Lit("#8d8796"));
             Bloc(PrimitiveType.Cube, puits, new Vector3(-1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
             Bloc(PrimitiveType.Cube, puits, new Vector3(1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
@@ -552,14 +610,24 @@ namespace Aldermark.Editeur
             tp.transform.localScale = new Vector3(3f, 1.1f, 2.6f);
             tp.AddComponent<MeshFilter>().sharedMesh = toit;
             tp.AddComponent<MeshRenderer>().sharedMaterial = Lit("#7a4a33");
+            }
 
             // Four à chaux
             var K = Monde.Four;
             var four = new GameObject("FourAChaux").transform;
             four.SetParent(racine, false);
             four.position = new Vector3(K.x, H(K.x, K.y), K.y);
-            Bloc(PrimitiveType.Cylinder, four, new Vector3(0, 2.9f, 0), new Vector3(7.5f, 3.25f, 7.5f), Lit("#a49d92"));
-            Bloc(PrimitiveType.Cube, four, new Vector3(0, 1f, 3.7f), new Vector3(2f, 2.2f, 1f), Lit("#2b2530"), default, false, "Foyer");
+            var modeleFour = TrouverModele("four", "kiln", "chaux");
+            if (modeleFour != null)
+            {
+                float versVillage = Mathf.Atan2(Monde.Village.x - K.x, Monde.Village.y - K.y) * Mathf.Rad2Deg;
+                PoserModele(modeleFour, four, four.position, 6.5f, versVillage);
+            }
+            else
+            {
+                Bloc(PrimitiveType.Cylinder, four, new Vector3(0, 2.9f, 0), new Vector3(7.5f, 3.25f, 7.5f), Lit("#a49d92"));
+                Bloc(PrimitiveType.Cube, four, new Vector3(0, 1f, 3.7f), new Vector3(2f, 2.2f, 1f), Lit("#2b2530"), default, false, "Foyer");
+            }
 
             // Maison de Corvin et sa barque
             var C = Monde.Corvin;

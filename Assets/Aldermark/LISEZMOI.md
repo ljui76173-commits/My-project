@@ -40,3 +40,16 @@ Les retouches faites à la main dans la scène sont alors perdues.
 - `RenduPeint` (sur la caméra d'Aldric) : `resolutionLongue` = taille des pixels (plus petit = pixels plus gros).
 - Matériau `Genere/Materiaux/PeintPixel` : `_Niveaux` (nombre de teintes), `_Tramage`.
 - Le terrain se sculpte et se peint avec les outils Terrain d'Unity (herbe, arbres, couleurs du sol).
+
+## Modèles importés (Meshy, packs…)
+
+Dépose tes modèles (FBX de préférence) dans `Assets/Aldermark/Models`.
+Le générateur les reconnaît à leur nom de fichier et remplace les formes de base :
+
+| Objet | Mots reconnus dans le nom du fichier |
+| --- | --- |
+| Four à chaux | `four`, `kiln`, `chaux` |
+| Puits | `puits`, `well` |
+
+Le modèle est mis automatiquement à la bonne taille, posé au sol et reçoit des collisions.
+La console indique quel fichier a été utilisé. Relance le générateur après chaque ajout.
