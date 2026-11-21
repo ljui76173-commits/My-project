@@ -47,10 +47,11 @@ namespace Aldermark
             // Nuage devant le soleil ? (même calcul que le shader du ciel)
             Shader.SetGlobalFloat("_Couverture", couvertureCiel);
             Vector3 d = direction1.normalized;
-            float k = .35f / (Mathf.Max(d.y, 0f) + .12f);
+            float k = .5f / (Mathf.Max(d.y, 0f) + .25f);
             float n = Monde.DensiteNuages(d.x * k + temps * .012f, d.z * k + temps * .004f);
             float seuil = 1f - couvertureCiel;
-            float cible = Monde.Lisse(seuil, seuil + .06f, n);
+            float bande = Monde.Lisse(0f, .06f, d.y) * (1f - Monde.Lisse(.3f, .75f, d.y) * .85f);
+            float cible = Monde.Lisse(seuil, seuil + .06f, n) * bande;
             couverture = Mathf.Lerp(couverture, cible, Mathf.Clamp01(Time.deltaTime * 2f));
 
             if (soleil != null) soleil.intensity = intensiteSoleil * (1f - .62f * couverture);
