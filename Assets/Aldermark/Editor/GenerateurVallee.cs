@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -137,6 +138,59 @@ namespace Aldermark.Editeur
         }
 
         static Transform Racine(string nom) => new GameObject(nom).transform;
+
+        // ---------- modèles importés (Meshy, packs…) ----------
+
+        static readonly string[] DossiersModeles = { "Assets/Aldermark/Models", "Assets/Aldermark/Modeles" };
+
+        /// <summary>
+        /// Cherche dans Assets/Aldermark/Models (ou Modeles) un modèle dont le nom contient
+        /// l'un des mots-clés (sans tenir compte des majuscules). Renvoie null s'il n'y en a pas.
+        /// </summary>
+        static GameObject TrouverModele(params string[] motsCles)
+        {
+            var dossiers = DossiersModeles.Where(AssetDatabase.IsValidFolder).ToArray();
+            if (dossiers.Length == 0) return null;
+            foreach (var guid in AssetDatabase.FindAssets("t:GameObject", dossiers))
+            {
+                string chemin = AssetDatabase.GUIDToAssetPath(guid);
+                string nom = Path.GetFileNameWithoutExtension(chemin).ToLowerInvariant();
+                if (motsCles.Any(m => nom.Contains(m)))
+                {
+                    Debug.Log($"Aldermark : modèle utilisé pour « {motsCles[0]} » → {chemin}");
+                    return AssetDatabase.LoadAssetAtPath<GameObject>(chemin);
+                }
+            }
+            return null;
+        }
+
+        static Bounds Bornes(GameObject g)
+        {
+            var rs = g.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) return new Bounds(g.transform.position, Vector3.zero);
+            var b = rs[0].bounds;
+            foreach (var r in rs) b.Encapsulate(r.bounds);
+            return b;
+        }
+
+        /// <summary>
+        /// Pose un modèle importé : mis à la hauteur voulue, centré sur le point au sol,
+        /// légèrement enfoncé, avec des collisions sur chaque maillage.
+        /// </summary>
+        static GameObject PoserModele(GameObject modele, Transform parent, Vector3 sol, float hauteur, float rotY, float enfonce = .2f)
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(modele, parent);
+            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0));
+            go.transform.localScale = Vector3.one;
+            var b = Bornes(go);
+            if (b.size.y > 1e-4f) go.transform.localScale = Vector3.one * (hauteur / b.size.y);
+            b = Bornes(go);
+            go.transform.position += new Vector3(sol.x - b.center.x, sol.y - enfonce - b.min.y, sol.z - b.center.z);
+            foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
+                if (mf.sharedMesh != null) mf.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+            foreach (var r in go.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.On;
+            return go;
+        }
 
         // ---------- lumières et ciel ----------
 
@@ -303,12 +357,12 @@ namespace Aldermark.Editeur
             var herbe = new DetailPrototype
             {
                 prototypeTexture = TextureHerbe("TexHerbe", false), renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
-                healthyColor = Hex("#7fb045"), dryColor = Hex("#a9b648"), minWidth = .45f, maxWidth = .8f, minHeight = .25f, maxHeight = .55f, noiseSpread = .3f
+                healthyColor = Hex("#7fb045"), dryColor = Hex("#a9b648"), minWidth = .3f, maxWidth = .55f, minHeight = .2f, maxHeight = .42f, noiseSpread = .3f
             };
             var ble = new DetailPrototype
             {
                 prototypeTexture = herbe.prototypeTexture, renderMode = DetailRenderMode.Grass, usePrototypeMesh = false,
-                healthyColor = Hex("#e8c454"), dryColor = Hex("#d6a744"), minWidth = .6f, maxWidth = 1f, minHeight = .9f, maxHeight = 1.25f, noiseSpread = .2f
+                healthyColor = Hex("#e8c454"), dryColor = Hex("#d6a744"), minWidth = .4f, maxWidth = .7f, minHeight = .7f, maxHeight = 1f, noiseSpread = .2f
             };
             var fleurs = new DetailPrototype
             {
@@ -330,19 +384,19 @@ namespace Aldermark.Editeur
                     if (Monde.DansChamp(x, z))
                     {
                         int b = Monde.BandeChamp(x, z);
-                        if (b == 0) c1[iz, ix] = 4;
+                        if (b == 0) c1[iz, ix] = 3;
                         else if (b == 1) c0[iz, ix] = 2;
                         continue;
                     }
-                    c0[iz, ix] = 4;
+                    c0[iz, ix] = 3;
                     if (Hash(ix * .37f, iz * .71f) < .08f) c2[iz, ix] = 2;
                 }
             td.SetDetailLayer(0, 0, 0, c0);
             td.SetDetailLayer(0, 0, 1, c1);
             td.SetDetailLayer(0, 0, 2, c2);
-            td.wavingGrassStrength = .45f;
-            td.wavingGrassAmount = .5f;
-            td.wavingGrassSpeed = .6f;
+            td.wavingGrassStrength = .15f;
+            td.wavingGrassAmount = .25f;
+            td.wavingGrassSpeed = .5f;
             td.wavingGrassTint = Color.white;
         }
 
@@ -543,6 +597,10 @@ namespace Aldermark.Editeur
             var puits = new GameObject("Puits").transform;
             puits.SetParent(racine, false);
             puits.position = new Vector3(V.x, H(V.x, V.y), V.y);
+            var modelePuits = TrouverModele("puits", "well");
+            if (modelePuits != null) PoserModele(modelePuits, puits, puits.position, 3.4f, 0f);
+            else
+            {
             Bloc(PrimitiveType.Cylinder, puits, new Vector3(0, .4f, 0), new Vector3(2.7f, .55f, 2.7f), Lit("#8d8796"));
             Bloc(PrimitiveType.Cube, puits, new Vector3(-1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
             Bloc(PrimitiveType.Cube, puits, new Vector3(1.1f, 1.6f, 0), new Vector3(.2f, 2.4f, .2f), Lit("#5b4030"), default, false);
@@ -552,14 +610,24 @@ namespace Aldermark.Editeur
             tp.transform.localScale = new Vector3(3f, 1.1f, 2.6f);
             tp.AddComponent<MeshFilter>().sharedMesh = toit;
             tp.AddComponent<MeshRenderer>().sharedMaterial = Lit("#7a4a33");
+            }
 
             // Four à chaux
             var K = Monde.Four;
             var four = new GameObject("FourAChaux").transform;
             four.SetParent(racine, false);
             four.position = new Vector3(K.x, H(K.x, K.y), K.y);
-            Bloc(PrimitiveType.Cylinder, four, new Vector3(0, 2.9f, 0), new Vector3(7.5f, 3.25f, 7.5f), Lit("#a49d92"));
-            Bloc(PrimitiveType.Cube, four, new Vector3(0, 1f, 3.7f), new Vector3(2f, 2.2f, 1f), Lit("#2b2530"), default, false, "Foyer");
+            var modeleFour = TrouverModele("four", "kiln", "chaux");
+            if (modeleFour != null)
+            {
+                float versVillage = Mathf.Atan2(Monde.Village.x - K.x, Monde.Village.y - K.y) * Mathf.Rad2Deg;
+                PoserModele(modeleFour, four, four.position, 6.5f, versVillage);
+            }
+            else
+            {
+                Bloc(PrimitiveType.Cylinder, four, new Vector3(0, 2.9f, 0), new Vector3(7.5f, 3.25f, 7.5f), Lit("#a49d92"));
+                Bloc(PrimitiveType.Cube, four, new Vector3(0, 1f, 3.7f), new Vector3(2f, 2.2f, 1f), Lit("#2b2530"), default, false, "Foyer");
+            }
 
             // Maison de Corvin et sa barque
             var C = Monde.Corvin;
