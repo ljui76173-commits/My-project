@@ -65,6 +65,7 @@ namespace Aldermark.Editeur
                 EditorSceneManager.SaveScene(scene, chemin);
                 EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(chemin, true) };
                 AssetDatabase.SaveAssets();
+                GameplayPont.Ajouter();
                 Debug.Log("Aldermark : vallée de Varenne générée dans " + chemin + ". Appuie sur Play.");
             }
             finally { EditorUtility.ClearProgressBar(); }
