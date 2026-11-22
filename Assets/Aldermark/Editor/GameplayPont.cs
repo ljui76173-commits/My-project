@@ -114,6 +114,8 @@ namespace Aldermark.Editeur
 
             ConstruireChantier(racine);
             Attelages(racine);
+            ConstruireVillage(racine);
+            ConstruireConvoi(racine);
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -172,6 +174,7 @@ namespace Aldermark.Editeur
             ch.SetParent(racine, false);
             var chantier = ch.gameObject.AddComponent<Chantier>();
             ch.gameObject.AddComponent<PlanRegistre>().chantier = chantier;
+            ch.gameObject.AddComponent<NuitDesSonnailles>();
 
             // Le pont provisoire, en aval des ruines, là où ses deux abords sont libres (pas de maison)
             Physics.SyncTransforms();
@@ -240,6 +243,11 @@ namespace Aldermark.Editeur
             tab.size = new Vector3(L + 2f, .3f, 4.4f);
             tab.enabled = false;
             chantier.tablier = tab;
+            chantier.centrePont = new Vector3(cx, Y + .1f, zp);
+            chantier.longueurPont = L;
+
+            // Paillasse chez Odon : la maison du village la plus proche de lui
+            Paillasse(ch);
 
             // Villageois : Odon et Bram, puis Joss, Pell, Marthe ; trois de plus quand le four est relancé
             var V = Monde.Village;
@@ -270,6 +278,7 @@ namespace Aldermark.Editeur
         /// <summary>Le point voulu s'il est libre, sinon le plus proche point libre autour.</summary>
         static Vector2 PlaceLibre(Vector2 voulu, float rayon)
         {
+            Physics.SyncTransforms();
             if (Libre(voulu, rayon)) return voulu;
             for (int anneau = 1; anneau <= 14; anneau++)
                 for (int k = 0; k < 12; k++)
@@ -341,6 +350,34 @@ namespace Aldermark.Editeur
             if (n == 0) Debug.Log("Aldermark : aucune charrette trouvée dans la scène.");
         }
 
+        static void ConstruireConvoi(Transform racine)
+        {
+            var charrettes = new System.Collections.Generic.List<Transform>();
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None)) if (t.name == "Charrette") charrettes.Add(t);
+            charrettes.Sort((a, b) => b.position.x.CompareTo(a.position.x));   // la plus proche du pont part en premier
+            var attelages = new Transform[charrettes.Count];
+            var groupe = racine.Find("Attelages");
+            for (int i = 0; i < charrettes.Count && groupe != null; i++)
+            {
+                float best = float.MaxValue;
+                foreach (Transform a in groupe)
+                {
+                    float d = Vector3.Distance(a.position, charrettes[i].TransformPoint(new Vector3(4.6f, 0, 0)));
+                    if (d < best) { best = d; attelages[i] = a; }
+                }
+            }
+            var charretiers = new System.Collections.Generic.List<Habitant>();
+            foreach (var h in Object.FindObjectsByType<Habitant>(FindObjectsSortMode.None)) if (h.name.StartsWith("Charretier")) charretiers.Add(h);
+            charretiers.Sort((a, b) => b.transform.position.x.CompareTo(a.transform.position.x));
+            var c = racine.gameObject.AddComponent<Convoi>();
+            c.charrettes = charrettes.ToArray();
+            c.attelages = attelages;
+            c.charretiers = charretiers.ToArray();
+            c.chantier = Object.FindFirstObjectByType<Chantier>();
+            var marche = racine.Find("VillageVivant/Marche");
+            c.arrivee = marche;
+        }
+
         static void Boeuf(Transform a, string robe)
         {
             void P(PrimitiveType t, Vector3 pos, Vector3 taille, string hex, Vector3 rot = default)
@@ -377,6 +414,259 @@ namespace Aldermark.Editeur
                 }
             }
             return null;
+        }
+
+        // ---------- village vivant ----------
+
+        static Mesh toit;
+
+        static Transform Batiment(Transform parent, string nom, Vector2 pos, Vector2 versCentre, Vector3 taille, string murs, string toiture, float hautToit)
+        {
+            var b = new GameObject(nom).transform;
+            b.SetParent(parent, false);
+            b.position = new Vector3(pos.x, Sol(pos.x, pos.y), pos.y);
+            b.rotation = Quaternion.LookRotation(new Vector3(versCentre.x, 0, versCentre.y));
+            Local(b, PrimitiveType.Cube, new Vector3(0, taille.y / 2f - .3f, 0), taille, murs, true);
+            if (toit == null) toit = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Aldermark/Genere/Formes/Toit.asset");
+            var t = new GameObject("Toit");
+            t.transform.SetParent(b, false);
+            t.transform.localPosition = new Vector3(0, taille.y - .3f, 0);
+            t.transform.localScale = new Vector3(taille.x + .8f, hautToit, taille.z + .8f);
+            if (toit != null) { t.AddComponent<MeshFilter>().sharedMesh = toit; t.AddComponent<MeshRenderer>().sharedMaterial = Mat(toiture); }
+            // Porte
+            Local(b, PrimitiveType.Cube, new Vector3(0, .8f, taille.z / 2f + .02f), new Vector3(1.1f, 1.9f, .08f), "#4a3020", false);
+            return b;
+        }
+
+        /// <summary>Pièce en coordonnées locales du parent (avec collision si demandé).</summary>
+        static Transform Local(Transform parent, PrimitiveType type, Vector3 pos, Vector3 echelle, string hex, bool collision, Vector3 rot = default)
+        {
+            var g = GameObject.CreatePrimitive(type);
+            if (!collision) Object.DestroyImmediate(g.GetComponent<Collider>());
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = pos;
+            g.transform.localRotation = Quaternion.Euler(rot);
+            g.transform.localScale = echelle;
+            g.GetComponent<MeshRenderer>().sharedMaterial = Mat(hex);
+            return g.transform;
+        }
+
+        static GameObject Fenetre(Transform b, Vector3 pos)
+        {
+            var f = Local(b, PrimitiveType.Cube, pos, new Vector3(.8f, .7f, .06f), "#2a2430", false);
+            var lum = Local(b, PrimitiveType.Cube, pos + new Vector3(0, 0, .01f), new Vector3(.7f, .6f, .06f), "#ffcf7a", false);
+            string chemin = "Assets/Aldermark/Genere/Materiaux/Gameplay_FenetreAllumee.mat";
+            var ex = AssetDatabase.LoadAssetAtPath<Material>(chemin);
+            if (ex == null)
+            {
+                ex = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                ex.SetColor("_BaseColor", new Color(1f, .78f, .4f));
+                AssetDatabase.CreateAsset(ex, chemin);
+            }
+            lum.GetComponent<MeshRenderer>().sharedMaterial = ex;
+            return lum.gameObject;
+        }
+
+        static void ConstruireVillage(Transform racine)
+        {
+            var v = new GameObject("VillageVivant").transform;
+            v.SetParent(racine, false);
+            var vie = v.gameObject.AddComponent<VillageVivant>();
+            var V = Monde.Village;
+            var lumieres = new System.Collections.Generic.List<GameObject>();
+            Vector2 Vers(Vector2 p) => (V - p).sqrMagnitude > .1f ? (V - p).normalized : Vector2.up;
+
+            // Marché : trois étals au cœur du village
+            var marche = new GameObject("Marche").transform;
+            marche.SetParent(v, false);
+            Vector2 pm = PlaceLibre(V + new Vector2(4f, 8f), 6f);
+            marche.position = new Vector3(pm.x, Sol(pm.x, pm.y), pm.y);
+            vie.marche = marche;
+            string[] toiles = { "#b4523a", "#3f5a8c", "#c9a23a" };
+            var lots = new Transform[3];
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 2.1f;
+                var e = new GameObject("Etal" + (i + 1)).transform;
+                e.SetParent(marche, false);
+                e.localPosition = new Vector3(Mathf.Cos(a) * 4f, 0, Mathf.Sin(a) * 4f);
+                e.localRotation = Quaternion.LookRotation(-e.localPosition);
+                Local(e, PrimitiveType.Cube, new Vector3(0, .8f, 0), new Vector3(2.4f, .1f, 1.1f), "#7a5636", true);
+                foreach (float x in new[] { -1.1f, 1.1f })
+                {
+                    Local(e, PrimitiveType.Cube, new Vector3(x, .4f, .45f), new Vector3(.1f, .8f, .1f), "#5a3e26", false);
+                    Local(e, PrimitiveType.Cube, new Vector3(x, 1.1f, -.45f), new Vector3(.1f, 2.2f, .1f), "#5a3e26", false);
+                }
+                Local(e, PrimitiveType.Cube, new Vector3(0, 2.2f, 0), new Vector3(2.7f, .06f, 1.5f), toiles[i], false, new Vector3(-14f, 0, 0));
+                var lot = new GameObject("Marchandises").transform;
+                lot.SetParent(e, false);
+                string[] couleurs = { "#d8b04a", "#9a3a2a", "#6a8a3a", "#e0d0a0", "#b06a2a" };
+                for (int k = 0; k < 7; k++)
+                    Local(lot, k % 2 == 0 ? PrimitiveType.Sphere : PrimitiveType.Cube, new Vector3(-.9f + k * .3f, .98f, Monde.HashPublic(i, k) * .4f - .2f), Vector3.one * (.22f + Monde.HashPublic(k, i) * .12f), couleurs[(k + i) % 5], false);
+                lots[i] = lot;
+            }
+            vie.marchandises = lots;
+
+            // Fanions entre les étals, pour l'ouverture du pont
+            var fan = new GameObject("Fanions").transform;
+            fan.SetParent(marche, false);
+            for (int k = 0; k < 18; k++)
+            {
+                float a = k / 18f * Mathf.PI * 2f;
+                Local(fan, PrimitiveType.Cube, new Vector3(Mathf.Cos(a) * 5f, 3.2f + Mathf.Sin(k) * .1f, Mathf.Sin(a) * 5f), new Vector3(.3f, .35f, .02f), toiles[k % 3], false, new Vector3(0, -a * Mathf.Rad2Deg, 0));
+            }
+            vie.fanions = fan.gameObject;
+
+            // Auberge (avec enseigne et fenêtres qui s'allument la nuit)
+            Vector2 pa = PlaceLibre(V + new Vector2(15f, -9f), 6f);
+            var aub = Batiment(v, "Auberge", pa, Vers(pa), new Vector3(8f, 4.2f, 6f), "#d9c9a8", "#7a4a33", 3f);
+            Local(aub, PrimitiveType.Cube, new Vector3(3.4f, 2.4f, 3.6f), new Vector3(.08f, 2.6f, .08f), "#5a3e26", false);
+            Local(aub, PrimitiveType.Cube, new Vector3(3.4f, 3.2f, 4.1f), new Vector3(.06f, .6f, 1f), "#8a6440", false);
+            lumieres.Add(Fenetre(aub, new Vector3(-2.2f, 1.9f, 3.04f)));
+            lumieres.Add(Fenetre(aub, new Vector3(2f, 1.9f, 3.04f)));
+            foreach (float x in new[] { -2.5f, 2.5f })
+                Local(aub, PrimitiveType.Cube, new Vector3(x, .35f, 4.4f), new Vector3(1.8f, .12f, .45f), "#7a5636", true);
+            vie.auberge = aub;
+
+            // Forge : un appentis ouvert, l'enclume et le foyer
+            Vector2 pf = PlaceLibre(V + new Vector2(18f, 13f), 5f);
+            var forge = new GameObject("Forge").transform;
+            forge.SetParent(v, false);
+            forge.position = new Vector3(pf.x, Sol(pf.x, pf.y), pf.y);
+            forge.rotation = Quaternion.LookRotation(new Vector3(Vers(pf).x, 0, Vers(pf).y));
+            foreach (var (x, z) in new[] { (-2f, -1.5f), (2f, -1.5f), (-2f, 1.5f), (2f, 1.5f) })
+                Local(forge, PrimitiveType.Cube, new Vector3(x, 1.4f, z), new Vector3(.18f, 2.8f, .18f), "#5a3e26", true);
+            Local(forge, PrimitiveType.Cube, new Vector3(0, 2.9f, 0), new Vector3(4.8f, .12f, 3.8f), "#6b4a2e", false, new Vector3(-10f, 0, 0));
+            Local(forge, PrimitiveType.Cube, new Vector3(-1f, .6f, -.9f), new Vector3(1.4f, 1.2f, 1f), "#6d6670", true);
+            var braise = Local(forge, PrimitiveType.Cube, new Vector3(-1f, 1.22f, -.9f), new Vector3(.9f, .05f, .6f), "#ff7a2a", false);
+            var mb = new Material(Shader.Find("Universal Render Pipeline/Unlit")); mb.SetColor("_BaseColor", new Color(1f, .45f, .15f));
+            string cmb = "Assets/Aldermark/Genere/Materiaux/Gameplay_Braise.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(cmb) == null) AssetDatabase.CreateAsset(mb, cmb);
+            braise.GetComponent<MeshRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(cmb);
+            Local(forge, PrimitiveType.Cube, new Vector3(.9f, .45f, .2f), new Vector3(.6f, .9f, .4f), "#4a3626", true);
+            Local(forge, PrimitiveType.Cube, new Vector3(.9f, .95f, .2f), new Vector3(.8f, .2f, .35f), "#3a3a42", false);
+            var fumee = new GameObject("Fumee").AddComponent<ParticleSystem>();
+            fumee.transform.SetParent(forge, false);
+            fumee.transform.localPosition = new Vector3(-1f, 3.2f, -.9f);
+            var pm2 = fumee.main; pm2.startLifetime = 4f; pm2.startSpeed = .8f; pm2.startSize = 1.2f; pm2.startColor = new Color(.75f, .75f, .78f, .5f); pm2.playOnAwake = false;
+            var em = fumee.emission; em.rateOverTime = 3f;
+            var sh = fumee.shape; sh.shapeType = ParticleSystemShapeType.Cone; sh.angle = 8f; sh.radius = .2f;
+            fumee.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
+            vie.fumeeForge = fumee;
+            var forgeron = Personnage(v, "Forgeron", "forgeron", pf + Vers(pf) * 1.2f, "#4a3a2a", "#2a2020", 1.05f);
+            forgeron.GetComponent<Interlocuteur>().nom = "Garin, le forgeron";
+            vie.forgeron = forgeron.GetComponent<Habitant>();
+            vie.enclume = forge;
+
+            // Chapelle et son clocher
+            Vector2 pc = PlaceLibre(V + new Vector2(-22f, 16f), 7f);
+            var chap = Batiment(v, "Chapelle", pc, Vers(pc), new Vector3(5.5f, 5f, 9f), "#cfc6b4", "#5a5a66", 3.5f);
+            Local(chap, PrimitiveType.Cube, new Vector3(0, 4.5f, -4.4f), new Vector3(2.4f, 9f, 2.4f), "#c4bba8", true);
+            Local(chap, PrimitiveType.Cube, new Vector3(0, 9.4f, -4.4f), new Vector3(1.6f, 1.6f, 1.6f), "#5a5a66", false, new Vector3(0, 45f, 0));
+            Local(chap, PrimitiveType.Cube, new Vector3(0, 7.4f, -3.18f), new Vector3(.7f, .9f, .06f), "#2a2430", false);
+            lumieres.Add(Fenetre(chap, new Vector3(0, 2.6f, 4.54f)));
+
+            // Lavoir : un toit sur quatre poteaux, au-dessus d'un bassin
+            Vector2 pl = PlaceLibre(V + new Vector2(-13f, -11f), 4f);
+            var lav = new GameObject("Lavoir").transform;
+            lav.SetParent(v, false);
+            lav.position = new Vector3(pl.x, Sol(pl.x, pl.y), pl.y);
+            foreach (var (x, z) in new[] { (-1.8f, -1.3f), (1.8f, -1.3f), (-1.8f, 1.3f), (1.8f, 1.3f) })
+                Local(lav, PrimitiveType.Cube, new Vector3(x, 1.2f, z), new Vector3(.16f, 2.4f, .16f), "#5a3e26", true);
+            Local(lav, PrimitiveType.Cube, new Vector3(0, 2.5f, 0), new Vector3(4.6f, .1f, 3.4f), "#94403a", false, new Vector3(0, 0, 8f));
+            Local(lav, PrimitiveType.Cube, new Vector3(0, .3f, 0), new Vector3(3f, .6f, 2f), "#9a948a", true);
+            Local(lav, PrimitiveType.Cube, new Vector3(0, .55f, 0), new Vector3(2.6f, .05f, 1.6f), "#7aa8c8", false);
+
+            // Moulin à eau sur la rivière, en amont du village
+            float zm = 38f, xm = Monde.Riviere(zm) + 15.5f;
+            Vector2 pmo = PlaceLibre(new Vector2(xm, zm), 5f);
+            var moulin = Batiment(v, "Moulin", pmo, new Vector2(1f, 0f), new Vector3(6f, 6f, 6f), "#a29a8e", "#6b4a2e", 3f);
+            var roue = new GameObject("Roue").transform;
+            roue.SetParent(moulin, false);
+            roue.localPosition = new Vector3(-3.6f, 2.4f, 0);   // côté rivière
+            roue.localRotation = Quaternion.Euler(0, 90f, 0);
+            Local(roue, PrimitiveType.Cylinder, Vector3.zero, new Vector3(4.2f, .25f, 4.2f), "#6b4a2e", false, new Vector3(0, 0, 90f));
+            for (int k = 0; k < 8; k++)
+                Local(roue, PrimitiveType.Cube, Quaternion.Euler(k * 45f, 0, 0) * new Vector3(0, 2.1f, 0), new Vector3(.6f, .15f, .9f), "#5a3e26", false, new Vector3(k * 45f, 0, 0));
+            vie.roueMoulin = roue;
+
+            // Enclos à moutons et poules
+            Vector2 pe = PlaceLibre(V + new Vector2(26f, 30f), 7f);
+            var enclos = new GameObject("Enclos").transform;
+            enclos.SetParent(v, false);
+            enclos.position = new Vector3(pe.x, Sol(pe.x, pe.y), pe.y);
+            for (int k = 0; k < 20; k++)
+            {
+                float a = k / 20f * Mathf.PI * 2f, a2 = (k + 1) / 20f * Mathf.PI * 2f;
+                Vector3 p1 = new Vector3(Mathf.Cos(a) * 6f, 0, Mathf.Sin(a) * 6f), p2 = new Vector3(Mathf.Cos(a2) * 6f, 0, Mathf.Sin(a2) * 6f);
+                Local(enclos, PrimitiveType.Cube, p1 + Vector3.up * .5f, new Vector3(.12f, 1f, .12f), "#5a3e26", true);
+                Local(enclos, PrimitiveType.Cube, (p1 + p2) / 2f + Vector3.up * .7f, new Vector3(.06f, .08f, (p2 - p1).magnitude), "#6b4a2e", false, new Vector3(0, Mathf.Atan2(p2.x - p1.x, p2.z - p1.z) * Mathf.Rad2Deg, 0));
+            }
+            for (int k = 0; k < 6; k++) Mouton(v, pe + new Vector2(Mathf.Cos(k) * 3f, Mathf.Sin(k) * 3f), pe);
+            for (int k = 0; k < 7; k++)
+            {
+                var pp = PlaceLibre(V + new Vector2(Mathf.Cos(k * 1.3f) * 12f, Mathf.Sin(k * 1.3f) * 12f), .6f);
+                Poule(v, pp, k);
+            }
+            vie.lumieresNuit = lumieres.ToArray();
+        }
+
+        static void Mouton(Transform parent, Vector2 pos, Vector2 centre)
+        {
+            var m = new GameObject("Mouton").transform;
+            m.SetParent(parent, false);
+            m.position = new Vector3(pos.x, Sol(pos.x, pos.y), pos.y);
+            Local(m, PrimitiveType.Cube, new Vector3(0, .55f, 0), new Vector3(.6f, .5f, .9f), "#ece6d6", false);
+            foreach (var (x, z) in new[] { (-.2f, .3f), (.2f, .3f), (-.2f, -.3f), (.2f, -.3f) })
+                Local(m, PrimitiveType.Cube, new Vector3(x, .17f, z), new Vector3(.1f, .34f, .1f), "#2a2420", false);
+            var tete = new GameObject("Tete").transform;
+            tete.SetParent(m, false); tete.localPosition = new Vector3(0, .65f, .45f);
+            Local(tete, PrimitiveType.Cube, new Vector3(0, -.05f, .12f), new Vector3(.25f, .28f, .32f), "#2a2420", false);
+            var a = m.gameObject.AddComponent<Animal>();
+            a.centre = centre; a.rayon = 4.5f; a.vitesse = .5f; a.tete = tete;
+        }
+
+        static void Poule(Transform parent, Vector2 pos, int k)
+        {
+            var m = new GameObject("Poule").transform;
+            m.SetParent(parent, false);
+            m.position = new Vector3(pos.x, Sol(pos.x, pos.y), pos.y);
+            Local(m, PrimitiveType.Cube, new Vector3(0, .22f, 0), new Vector3(.22f, .22f, .3f), k % 3 == 0 ? "#8a5a2a" : "#ece6d6", false);
+            Local(m, PrimitiveType.Cube, new Vector3(0, .05f, 0), new Vector3(.05f, .1f, .05f), "#d8a03a", false);
+            var tete = new GameObject("Tete").transform;
+            tete.SetParent(m, false); tete.localPosition = new Vector3(0, .34f, .12f);
+            Local(tete, PrimitiveType.Cube, new Vector3(0, .02f, .04f), new Vector3(.11f, .13f, .11f), k % 3 == 0 ? "#8a5a2a" : "#ece6d6", false);
+            Local(tete, PrimitiveType.Cube, new Vector3(0, .1f, .04f), new Vector3(.03f, .06f, .07f), "#c8322a", false);
+            var a = m.gameObject.AddComponent<Animal>();
+            a.centre = pos; a.rayon = 3f; a.vitesse = .6f; a.poule = true; a.tete = tete;
+        }
+
+        static void Paillasse(Transform parent)
+        {
+            var V = Monde.Village;
+            Vector2 odon = new Vector2(V.x + 3f, V.y - 2.5f);
+            Transform maison = null; float best = float.MaxValue;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                if (t.name.StartsWith("Maison") && t.name != "MaisonCorvin" && t.parent != null && t.parent.name == "Village")
+                {
+                    float d = Vector2.Distance(new Vector2(t.position.x, t.position.z), odon);
+                    if (d < best) { best = d; maison = t; }
+                }
+            Vector2 c = maison != null ? new Vector2(maison.position.x, maison.position.z) : odon + new Vector2(6, 0);
+            Vector2 versCentre = (V - c).sqrMagnitude > .01f ? (V - c).normalized : Vector2.right;
+            Vector2 p = PlaceLibre(c + versCentre * 5.5f, 1.4f);
+            var go = new GameObject("PaillasseOdon");
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(p.x, Sol(p.x, p.y), p.y);
+            go.transform.rotation = Quaternion.LookRotation(new Vector3(versCentre.x, 0, versCentre.y));
+            Piece(go.transform, PrimitiveType.Cube, go.transform.position + Vector3.up * .2f, new Vector3(1.1f, .35f, 2f), new Vector3(0, go.transform.eulerAngles.y, 0), "#d9bf6a");
+            Piece(go.transform, PrimitiveType.Cube, go.transform.position + Vector3.up * .45f + go.transform.forward * -.7f, new Vector3(.8f, .18f, .45f), new Vector3(0, go.transform.eulerAngles.y, 0), "#e8dcc0");
+            // Petit auvent de bois au-dessus
+            foreach (float s in new[] { -.7f, .7f })
+                Piece(go.transform, PrimitiveType.Cube, go.transform.position + go.transform.right * s + Vector3.up * 1.1f - go.transform.forward * .9f, new Vector3(.1f, 2.2f, .1f), Vector3.zero, "#5a3e26");
+            Piece(go.transform, PrimitiveType.Cube, go.transform.position + Vector3.up * 2.2f - go.transform.forward * .4f, new Vector3(1.8f, .1f, 1.6f), new Vector3(-12f, go.transform.eulerAngles.y, 0), "#7a5636");
+            var i = go.AddComponent<Interlocuteur>();
+            i.id = "lit"; i.nom = "la paillasse d'Odon"; i.verbe = "Se coucher dans";
         }
 
         static Poste CreerPoste(Transform parent, string id, string nom, Ressource produit, float rendement, int max, float reserve, string requis, Vector2 pos)

@@ -7,38 +7,41 @@ using UI = UnityEngine.UI;
 namespace Aldermark
 {
     /// <summary>
-    /// Carte du chantier (touche Tab) : la vraie vallée vue d'en haut, en pixels, avec les postes,
-    /// leur recette, les flèches de transport et les villageois en direct.
-    /// On glisse un portrait sur un poste (il y travaille) ou sur une flèche (il devient porteur).
-    /// Odon donne en haut le blocage du moment.
+    /// Carte du chantier (touche Tab) : la vraie vallée vue d'en haut, en pixels.
+    /// Molette : zoom vers le curseur. Glisser le fond (clic gauche ou droit) : déplacer la carte.
+    /// Sur la carte : de petites étiquettes ; le détail d'un poste au survol, ou à droite une fois cliqué.
+    /// Glisser un portrait (ou une pastille) sur un poste : il y travaille ; sur une flèche : il devient porteur.
     /// </summary>
     public class CarteChantier : MonoBehaviour
     {
         const float TailleCarte = 860f;
-        static readonly Color Fond = new Color(.045f, .05f, .1f, .96f), Argent = new Color(.78f, .82f, .92f),
+        static readonly Color Fond = new Color(.045f, .05f, .1f, .97f), Argent = new Color(.78f, .82f, .92f),
             Ambre = new Color(1f, .78f, .35f), Rouge = new Color(1f, .42f, .42f), Gris = new Color(.62f, .62f, .72f);
 
-        class Noeud { public Poste poste; public RectTransform carte, marqueur, attache; public UI.Text texte; public UI.Image cadre; public Vector2 pos, posCarte; }
+        class Noeud { public Poste poste; public RectTransform marqueur, etiquette; public UI.Text texte; public UI.Outline contour; public UI.Image fond; public Vector2 pos; }
         class Lien { public Poste source, dest; public RectTransform ligne, fleche; public UI.Image img, imgFleche; public UI.Text badge; public Vector2 a, b; }
-        class Portrait { public Ouvrier o; public RectTransform rect; public UI.Image rond, anneau; public UI.Text legende; }
+        class Portrait { public Ouvrier o; public RectTransform rect; public UI.Image anneau; public UI.Text legende; }
 
         Font police;
         Sprite rond;
-        RectTransform panneau, carte, calqueLiens, calqueNoeuds, calqueOuvriers, barre, jeton;
-        UI.Text titre, conseil, textePont, survol, texteJeton;
+        RectTransform panneau, carte, calqueLiens, calqueNoeuds, calqueOuvriers, barre, jeton, bulle;
+        UI.Text titre, conseil, textePont, texteSelection, survol, texteJeton, texteBulle;
         UI.RawImage fondCarte;
         Camera camCarte;
         RenderTexture rt;
-        Vector2 minMonde;
-        float tailleMonde = 200f;
+        Vector2 minMonde, centreVue;
+        float tailleMonde = 200f, tailleVue = 200f;
         bool construite, fogSauve;
         readonly List<Noeud> noeuds = new List<Noeud>();
         readonly List<Lien> liens = new List<Lien>();
-        readonly List<Portrait> portraits = new List<Portrait>();
+        readonly Dictionary<Ouvrier, Portrait> portraits = new Dictionary<Ouvrier, Portrait>();
         readonly Dictionary<Ouvrier, RectTransform> jetons = new Dictionary<Ouvrier, RectTransform>();
         RectTransform repereAldric;
         Ouvrier glisse;
-        int selection;
+        Poste selection;
+        bool deplacement;
+        Vector2 sourisAvant;
+        int choixClavier;
 
         public bool Ouverte => panneau != null && panneau.gameObject.activeSelf;
 
@@ -49,10 +52,12 @@ namespace Aldermark
             police = p;
             rond = SpriteRond();
             panneau = Bloc("CarteChantier", toile, new Vector2(.5f, .5f), new Vector2(1740, 960), Vector2.zero, Fond);
-            Bloc("Cadre", panneau, new Vector2(.5f, .5f), new Vector2(1748, 968), Vector2.zero, new Color(Argent.r, Argent.g, Argent.b, .35f)).SetAsFirstSibling();
+            var cadre = panneau.gameObject.AddComponent<UI.Outline>();
+            cadre.effectColor = new Color(Argent.r, Argent.g, Argent.b, .55f); cadre.effectDistance = new Vector2(3, -3);
 
             // La carte (à gauche)
-            Bloc("CadreCarte", panneau, new Vector2(0, .5f), new Vector2(TailleCarte + 8, TailleCarte + 8), new Vector2(28 + TailleCarte / 2f, -14), Argent);
+            var bord = Bloc("CadreCarte", panneau, new Vector2(0, .5f), new Vector2(TailleCarte + 6, TailleCarte + 6), new Vector2(28 + TailleCarte / 2f, -14), Argent);
+            bord.GetComponent<UI.Image>().color = new Color(Argent.r, Argent.g, Argent.b, .7f);
             carte = new GameObject("Carte", typeof(RectTransform)).GetComponent<RectTransform>();
             carte.SetParent(panneau, false);
             carte.anchorMin = carte.anchorMax = new Vector2(0, .5f);
@@ -61,48 +66,56 @@ namespace Aldermark
             carte.anchoredPosition = new Vector2(28 + TailleCarte / 2f, -14);
             fondCarte = carte.gameObject.AddComponent<UI.RawImage>();
             fondCarte.raycastTarget = false;
-            fondCarte.color = new Color(.9f, .9f, 1f);
+            fondCarte.color = new Color(.92f, .92f, 1f);
+            carte.gameObject.AddComponent<UI.RectMask2D>();
             calqueLiens = Calque("Liens", carte);
             calqueNoeuds = Calque("Noeuds", carte);
             calqueOuvriers = Calque("Ouvriers", carte);
+            Texte("AideCarte", carte, 13, new Color(1, 1, 1, .8f), TextAnchor.LowerLeft, new Vector2(10, -TailleCarte + 26), new Vector2(600, 20))
+                .text = "Molette : zoom · glisser le fond : déplacer · clic sur un poste : détail";
 
             // Colonne de droite
             float xd = 28 + TailleCarte + 34;
-            titre = Texte("Titre", panneau, 26, Ambre, TextAnchor.UpperLeft, new Vector2(xd, -26), new Vector2(780, 40));
+            titre = Texte("Titre", panneau, 24, Ambre, TextAnchor.UpperLeft, new Vector2(xd, -24), new Vector2(780, 36));
             titre.fontStyle = FontStyle.Bold;
 
-            var boite = Bloc("Conseil", panneau, new Vector2(0, 1), new Vector2(790, 138), new Vector2(xd + 395, -138), new Color(.1f, .12f, .22f, .95f));
-            var portraitOdon = Bloc("Odon", boite, new Vector2(0, .5f), new Vector2(76, 76), new Vector2(54, 0), new Color(.48f, .42f, .35f));
+            var boite = Bloc("Conseil", panneau, new Vector2(0, 1), new Vector2(790, 104), new Vector2(xd + 395, -118), new Color(.1f, .12f, .22f, 1f));
+            var portraitOdon = Bloc("Odon", boite, new Vector2(0, .5f), new Vector2(62, 62), new Vector2(44, 0), new Color(.48f, .42f, .35f));
             portraitOdon.GetComponent<UI.Image>().sprite = rond;
-            Texte("O", portraitOdon, 32, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(76, 76), true).fontStyle = FontStyle.Bold;
-            conseil = Texte("Texte", boite, 19, Color.white, TextAnchor.MiddleLeft, new Vector2(104, -14), new Vector2(670, 110));
+            Texte("O", portraitOdon, 28, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(62, 62), true).fontStyle = FontStyle.Bold;
+            conseil = Texte("Texte", boite, 17, Color.white, TextAnchor.MiddleLeft, new Vector2(88, -8), new Vector2(690, 88));
 
-            textePont = Texte("Pont", panneau, 18, Color.white, TextAnchor.UpperLeft, new Vector2(xd, -228), new Vector2(790, 300));
+            textePont = Texte("Pont", panneau, 16, Color.white, TextAnchor.UpperLeft, new Vector2(xd, -186), new Vector2(790, 190));
+            texteSelection = Texte("Selection", panneau, 16, Color.white, TextAnchor.UpperLeft, new Vector2(xd, -384), new Vector2(790, 190));
 
-            var legende = Texte("Legende", panneau, 15, Gris, TextAnchor.UpperLeft, new Vector2(xd, -540), new Vector2(790, 60));
-            legende.text = "<color=#ffc85a>━━ porteurs au travail</color>    <color=#ff6b6b>━━ il manque un porteur</color>    <color=#9a9ab4>── liaison possible</color>\n" +
-                           "Pastilles sur la carte : les villageois, en direct. ▲ : toi.";
+            var legende = Texte("Legende", panneau, 14, Color.white, TextAnchor.UpperLeft, new Vector2(xd, -590), new Vector2(790, 44));
+            legende.text = "<color=#ffc85a>━━ porteurs au travail</color>     <color=#ff7070>━━ il manque un porteur</color>     <color=#c8c8dc>── liaison possible</color>\n" +
+                           "<color=#c8c8dc>Pastilles : les villageois, en direct  ·  ◆ blanc : toi</color>";
 
-            barre = Bloc("Villageois", panneau, new Vector2(0, 0), new Vector2(790, 200), new Vector2(xd + 395, 160), new Color(.1f, .12f, .22f, .95f));
-            Texte("TitreBarre", barre, 16, Ambre, TextAnchor.UpperLeft, new Vector2(14, -8), new Vector2(760, 24)).text = "<b>VILLAGEOIS</b> — glisse un portrait sur la carte";
+            barre = Bloc("Villageois", panneau, new Vector2(0, 0), new Vector2(790, 196), new Vector2(xd + 395, 156), new Color(.1f, .12f, .22f, 1f));
+            Texte("TitreBarre", barre, 15, Ambre, TextAnchor.UpperLeft, new Vector2(14, -8), new Vector2(760, 22)).text = "<b>VILLAGEOIS</b> — glisse un portrait sur un poste ou sur une flèche";
 
-            Texte("Aide", panneau, 16, Gris, TextAnchor.LowerLeft, new Vector2(xd, -900), new Vector2(790, 44)).text =
-                "Sur un poste : il y travaille.  Sur une flèche : il devient porteur.  Dans cette barre : il se repose.\nTab : fermer   ·   manette : croix pour choisir, gauche / droite pour changer";
+            Texte("Aide", panneau, 14, new Color(.8f, .8f, .9f), TextAnchor.LowerLeft, new Vector2(xd, -902), new Vector2(790, 40)).text =
+                "Dans la barre : il se repose.  G : donner 10 mana au poste choisi.  Tab : fermer.\nManette : gauche / droite pour choisir, haut / bas pour changer l'affectation.";
 
-            survol = Texte("Survol", panneau, 17, Color.white, TextAnchor.LowerLeft, Vector2.zero, new Vector2(520, 60));
-            jeton = Bloc("Jeton", panneau, new Vector2(0, 1), new Vector2(54, 54), Vector2.zero, Color.white);
+            bulle = Bloc("Bulle", panneau, new Vector2(0, 1), new Vector2(330, 120), Vector2.zero, new Color(.04f, .05f, .1f, .95f));
+            bulle.pivot = new Vector2(0, 1);
+            var cb = bulle.gameObject.AddComponent<UI.Outline>(); cb.effectColor = new Color(Ambre.r, Ambre.g, Ambre.b, .6f);
+            texteBulle = Texte("Texte", bulle, 14, Color.white, TextAnchor.UpperLeft, new Vector2(10, -8), new Vector2(310, 110));
+            survol = Texte("Survol", panneau, 16, Color.white, TextAnchor.LowerLeft, Vector2.zero, new Vector2(520, 50));
+            jeton = Bloc("Jeton", panneau, new Vector2(0, 1), new Vector2(50, 50), Vector2.zero, Color.white);
             jeton.GetComponent<UI.Image>().sprite = rond;
-            texteJeton = Texte("Initiale", jeton, 22, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(54, 54), true);
+            texteJeton = Texte("Initiale", jeton, 20, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(50, 50), true);
             texteJeton.fontStyle = FontStyle.Bold;
             jeton.gameObject.SetActive(false);
             survol.gameObject.SetActive(false);
+            bulle.gameObject.SetActive(false);
             panneau.gameObject.SetActive(false);
         }
 
         void PremiereOuverture()
         {
             construite = true;
-            // Cadrage : tous les postes, avec une marge, dans un carré
             Vector2 mn = new Vector2(float.MaxValue, float.MaxValue), mx = new Vector2(float.MinValue, float.MinValue);
             foreach (var p in Poste.Tous)
             {
@@ -110,18 +123,17 @@ namespace Aldermark
                 mn = Vector2.Min(mn, v); mx = Vector2.Max(mx, v);
             }
             if (Poste.Tous.Count == 0) { mn = Monde.Village - Vector2.one * 80; mx = Monde.Village + Vector2.one * 80; }
-            Vector2 centre = (mn + mx) / 2f;
-            tailleMonde = Mathf.Max(mx.x - mn.x, mx.y - mn.y) + 60f;
-            minMonde = centre - Vector2.one * tailleMonde / 2f;
+            centreVue = (mn + mx) / 2f;
+            tailleMonde = Mathf.Max(mx.x - mn.x, mx.y - mn.y) + 70f;
+            tailleVue = tailleMonde;
+            minMonde = centreVue - Vector2.one * tailleMonde / 2f;
 
-            // Caméra du dessus, rendu en basse définition (pixels nets)
-            rt = new RenderTexture(380, 380, 24) { filterMode = FilterMode.Point, name = "CarteChantier" };
+            rt = new RenderTexture(400, 400, 24) { filterMode = FilterMode.Point, name = "CarteChantier" };
             var go = new GameObject("CameraCarte");
             camCarte = go.AddComponent<Camera>();
             camCarte.orthographic = true;
-            camCarte.orthographicSize = tailleMonde / 2f;
-            camCarte.transform.SetPositionAndRotation(new Vector3(centre.x, 220f, centre.y), Quaternion.Euler(90f, 0f, 0f));
-            camCarte.nearClipPlane = 10f; camCarte.farClipPlane = 1200f;
+            camCarte.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            camCarte.nearClipPlane = 10f; camCarte.farClipPlane = 900f;
             int sceau = LayerMask.NameToLayer("Sceau");
             camCarte.cullingMask = ~((sceau >= 0 ? 1 << sceau : 0) | (1 << 5));
             camCarte.clearFlags = CameraClearFlags.SolidColor;
@@ -130,32 +142,20 @@ namespace Aldermark
             camCarte.enabled = false;
             fondCarte.texture = rt;
 
-            // Postes : un repère sur la carte et une fiche à côté
             foreach (var p in Poste.Tous)
             {
-                var n = new Noeud { poste = p, pos = VersCarte(p.transform.position) };
-                n.marqueur = Bloc("Repere_" + p.id, calqueNoeuds, new Vector2(.5f, .5f), new Vector2(18, 18), n.pos, Ambre);
+                var n = new Noeud { poste = p };
+                n.marqueur = Bloc("Repere_" + p.id, calqueNoeuds, new Vector2(.5f, .5f), new Vector2(16, 16), Vector2.zero, Ambre);
                 n.marqueur.localRotation = Quaternion.Euler(0, 0, 45f);
-                n.attache = Bloc("Attache", calqueNoeuds, new Vector2(.5f, .5f), new Vector2(2, 2), n.pos, new Color(Argent.r, Argent.g, Argent.b, .6f));
-                n.attache.pivot = new Vector2(0, .5f);
-                n.carte = Bloc("Fiche_" + p.id, calqueNoeuds, new Vector2(.5f, .5f), new Vector2(236, 112), n.pos, new Color(.06f, .07f, .14f, .9f));
-                n.cadre = n.carte.GetComponent<UI.Image>();
-                n.texte = Texte("Texte", n.carte, 15, Color.white, TextAnchor.UpperLeft, new Vector2(10, -6), new Vector2(216, 104));
-                n.posCarte = n.pos + new Vector2(0, 76);
+                n.etiquette = Bloc("Etiquette_" + p.id, calqueNoeuds, new Vector2(.5f, .5f), new Vector2(120, 24), Vector2.zero, new Color(.05f, .06f, .12f, .88f));
+                n.etiquette.pivot = new Vector2(.5f, 0);
+                n.fond = n.etiquette.GetComponent<UI.Image>();
+                n.contour = n.etiquette.gameObject.AddComponent<UI.Outline>();
+                n.contour.effectDistance = new Vector2(2, -2);
+                n.texte = Texte("Texte", n.etiquette, 14, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 24), true);
                 noeuds.Add(n);
             }
-            Ecarter();
-            foreach (var n in noeuds)
-            {
-                n.carte.anchoredPosition = n.posCarte;
-                Vector2 d = n.posCarte - n.pos;
-                n.attache.anchoredPosition = n.pos;
-                n.attache.sizeDelta = new Vector2(d.magnitude, 2);
-                n.attache.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
-                n.attache.SetAsFirstSibling();
-            }
 
-            // Toutes les liaisons possibles
             foreach (var s in Poste.Tous)
                 foreach (var d in Poste.Tous)
                 {
@@ -164,70 +164,39 @@ namespace Aldermark
                                     (d.Accepte(s.EstFour ? Ressource.Chaux : s.produit) || (s.EstFour && d.EstChantier));
                     if (!possible) continue;
                     var l = new Lien { source = s, dest = d };
-                    Vector2 a = VersCarte(s.transform.position), b = VersCarte(d.transform.position), u = (b - a).normalized;
-                    Vector2 decal = new Vector2(-u.y, u.x) * 5f;   // aller et retour côte à côte
-                    l.a = a + u * 12f + decal; l.b = b - u * 14f + decal;
-                    l.ligne = Bloc("Lien", calqueLiens, new Vector2(.5f, .5f), new Vector2((l.b - l.a).magnitude, 3), l.a, Gris);
+                    l.ligne = Bloc("Lien", calqueLiens, new Vector2(.5f, .5f), new Vector2(10, 3), Vector2.zero, Gris);
                     l.ligne.pivot = new Vector2(0, .5f);
-                    l.ligne.anchoredPosition = l.a;
-                    l.ligne.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(u.y, u.x) * Mathf.Rad2Deg);
                     l.img = l.ligne.GetComponent<UI.Image>();
-                    l.fleche = Bloc("Fleche", calqueLiens, new Vector2(.5f, .5f), new Vector2(12, 12), Vector2.Lerp(l.a, l.b, .62f), Gris);
-                    l.fleche.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(u.y, u.x) * Mathf.Rad2Deg + 45f);
+                    l.fleche = Bloc("Fleche", calqueLiens, new Vector2(.5f, .5f), new Vector2(12, 12), Vector2.zero, Gris);
                     l.imgFleche = l.fleche.GetComponent<UI.Image>();
-                    l.badge = Texte("Badge", calqueLiens, 14, Ambre, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(200, 22), true);
-                    ((RectTransform)l.badge.transform).anchoredPosition = Vector2.Lerp(l.a, l.b, .5f) + decal * 3.2f;
+                    l.badge = Texte("Badge", calqueLiens, 12, Ambre, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(200, 20), true);
                     liens.Add(l);
                 }
 
-            // Toi
             repereAldric = Bloc("Aldric", calqueOuvriers, new Vector2(.5f, .5f), new Vector2(14, 14), Vector2.zero, Color.white);
             repereAldric.localRotation = Quaternion.Euler(0, 0, 45f);
-
-            // Portraits
-            int i = 0;
-            foreach (var o in Ouvrier.Tous)
-            {
-                var h = o.GetComponent<Habitant>();
-                var pr = new Portrait { o = o };
-                pr.rect = Bloc("Portrait_" + o.nom, barre, new Vector2(0, 1), new Vector2(84, 150), new Vector2(54 + i * 86, -110), new Color(0, 0, 0, 0));
-                pr.anneau = Bloc("Anneau", pr.rect, new Vector2(.5f, 1), new Vector2(66, 66), new Vector2(0, -40), Ambre).GetComponent<UI.Image>();
-                pr.anneau.sprite = rond;
-                pr.rond = Bloc("Rond", pr.rect, new Vector2(.5f, 1), new Vector2(58, 58), new Vector2(0, -40), h != null ? h.tunique : Gris).GetComponent<UI.Image>();
-                pr.rond.sprite = rond;
-                var ini = Texte("Initiale", pr.rond.rectTransform, 24, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(58, 58), true);
-                ini.text = o.nom.Substring(0, 1); ini.fontStyle = FontStyle.Bold;
-                pr.legende = Texte("Legende", pr.rect, 13, Color.white, TextAnchor.UpperCenter, new Vector2(-4, -74), new Vector2(92, 74));
-                portraits.Add(pr);
-
-                var j = Bloc("Jeton_" + o.nom, calqueOuvriers, new Vector2(.5f, .5f), new Vector2(22, 22), Vector2.zero, h != null ? h.tunique : Gris);
-                j.GetComponent<UI.Image>().sprite = rond;
-                var tj = Texte("I", j, 13, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(22, 22), true);
-                tj.text = o.nom.Substring(0, 1); tj.fontStyle = FontStyle.Bold;
-                jetons[o] = j;
-                i++;
-            }
         }
 
-        /// <summary>Écarte les fiches qui se chevauchent, en les gardant dans la carte.</summary>
-        void Ecarter()
+        void CreerPortrait(Ouvrier o)
         {
-            Vector2 taille = new Vector2(244, 120);
-            for (int it = 0; it < 60; it++)
-            {
-                for (int a = 0; a < noeuds.Count; a++)
-                    for (int b = a + 1; b < noeuds.Count; b++)
-                    {
-                        Vector2 d = noeuds[b].posCarte - noeuds[a].posCarte;
-                        float ox = taille.x - Mathf.Abs(d.x), oy = taille.y - Mathf.Abs(d.y);
-                        if (ox <= 0 || oy <= 0) continue;
-                        Vector2 pousse = ox < oy ? new Vector2(Mathf.Sign(d.x == 0 ? 1 : d.x) * ox / 2f, 0) : new Vector2(0, Mathf.Sign(d.y == 0 ? 1 : d.y) * oy / 2f);
-                        noeuds[a].posCarte -= pousse; noeuds[b].posCarte += pousse;
-                    }
-                float lim = TailleCarte / 2f;
-                foreach (var n in noeuds)
-                    n.posCarte = new Vector2(Mathf.Clamp(n.posCarte.x, -lim + 122, lim - 122), Mathf.Clamp(n.posCarte.y, -lim + 60, lim - 60));
-            }
+            var h = o.GetComponent<Habitant>();
+            Color c = h != null ? h.tunique : Gris;
+            var pr = new Portrait { o = o };
+            pr.rect = Bloc("Portrait_" + o.nom, barre, new Vector2(0, 1), new Vector2(80, 150), Vector2.zero, new Color(0, 0, 0, 0));
+            pr.anneau = Bloc("Anneau", pr.rect, new Vector2(.5f, 1), new Vector2(62, 62), new Vector2(0, -38), new Color(0, 0, 0, 0)).GetComponent<UI.Image>();
+            pr.anneau.sprite = rond;
+            var r = Bloc("Rond", pr.rect, new Vector2(.5f, 1), new Vector2(54, 54), new Vector2(0, -38), c);
+            r.GetComponent<UI.Image>().sprite = rond;
+            var ini = Texte("Initiale", r, 22, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(54, 54), true);
+            ini.text = o.nom.Substring(0, 1); ini.fontStyle = FontStyle.Bold;
+            pr.legende = Texte("Legende", pr.rect, 12, Color.white, TextAnchor.UpperCenter, new Vector2(-6, -68), new Vector2(92, 80));
+            portraits[o] = pr;
+
+            var j = Bloc("Jeton_" + o.nom, calqueOuvriers, new Vector2(.5f, .5f), new Vector2(20, 20), Vector2.zero, c);
+            j.GetComponent<UI.Image>().sprite = rond;
+            var tj = Texte("I", j, 12, Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(20, 20), true);
+            tj.text = o.nom.Substring(0, 1); tj.fontStyle = FontStyle.Bold;
+            jetons[o] = j;
         }
 
         // ---------- ouverture ----------
@@ -245,7 +214,7 @@ namespace Aldermark
         {
             if (panneau != null) panneau.gameObject.SetActive(false);
             if (camCarte != null) camCarte.enabled = false;
-            glisse = null;
+            glisse = null; deplacement = false;
             if (jeton != null) jeton.gameObject.SetActive(false);
             if (!verrouiller) return;
             Cursor.lockState = CursorLockMode.Locked;
@@ -268,59 +237,98 @@ namespace Aldermark
         void AvantRendu(ScriptableRenderContext c, Camera cam) { if (cam == camCarte) { fogSauve = RenderSettings.fog; RenderSettings.fog = false; } }
         void ApresRendu(ScriptableRenderContext c, Camera cam) { if (cam == camCarte) RenderSettings.fog = fogSauve; }
 
+        // ---------- vue : zoom et déplacement ----------
+
+        Vector2 VersCarte(Vector3 w) =>
+            new Vector2((w.x - centreVue.x) / tailleVue, (w.z - centreVue.y) / tailleVue) * TailleCarte;
+
+        Vector2 VersMonde(Vector2 c) => centreVue + c / TailleCarte * tailleVue;
+
+        void Vue(Vector2 souris)
+        {
+            var m = Mouse.current;
+            if (m != null && Dedans(carte) && glisse == null)
+            {
+                float molette = m.scroll.ReadValue().y;
+                if (Mathf.Abs(molette) > .01f)
+                {
+                    Vector2 avant = VersMonde(souris);
+                    tailleVue = Mathf.Clamp(tailleVue * (molette > 0 ? .82f : 1.22f), 35f, tailleMonde);
+                    centreVue += avant - VersMonde(souris);   // le point sous le curseur ne bouge pas
+                }
+                if (m.rightButton.wasPressedThisFrame || m.middleButton.wasPressedThisFrame) { deplacement = true; sourisAvant = souris; }
+            }
+            if (m != null && deplacement)
+            {
+                bool tenu = m.rightButton.isPressed || m.middleButton.isPressed || m.leftButton.isPressed;
+                if (!tenu) deplacement = false;
+                else { centreVue -= (souris - sourisAvant) / TailleCarte * tailleVue; sourisAvant = souris; }
+            }
+            float marge = tailleMonde / 2f - tailleVue / 2f + 20f;
+            Vector2 milieu = minMonde + Vector2.one * tailleMonde / 2f;
+            centreVue = new Vector2(Mathf.Clamp(centreVue.x, milieu.x - marge, milieu.x + marge), Mathf.Clamp(centreVue.y, milieu.y - marge, milieu.y + marge));
+            camCarte.orthographicSize = tailleVue / 2f;
+            camCarte.transform.position = new Vector3(centreVue.x, 220f, centreVue.y);
+        }
+
         // ---------- mise à jour ----------
 
         void Update()
         {
             if (!Ouverte) return;
-            titre.text = $"REGISTRE DU CHANTIER   ·   Jour {Chantier.Jour}";
-            conseil.text = $"<color=#ffd27a><b>Odon</b></color>\n« {Chantier.Conseil()} »";
+            foreach (var o in Ouvrier.Tous) if (!portraits.ContainsKey(o)) CreerPortrait(o);
+
+            Vector2 souris = Souris(carte);
+            Vector2 sourisPanneau = Souris(panneau);
+            Vue(souris);
+
+            titre.text = $"REGISTRE DU CHANTIER   ·   Jour {Chantier.Jour}, {(int)Chantier.Heure:00} h" + (Chantier.EstNuit ? "   ·   la nuit, on dort" : "");
+            conseil.text = $"<color=#ffd27a><b>Odon</b></color>   « {Chantier.Conseil()} »";
             textePont.text = HUD.TextePont();
 
             var besoin = Chantier.LiaisonsManquantes();
-            Vector2 souris = Souris(carte);
-            Vector2 sourisPanneau = Souris(panneau);
-
-            // Cible survolée pendant un glisser
-            Affectation? cible = null;
             Noeud noeudSurvol = null; Lien lienSurvol = null;
-            bool surBarre = false;
-            if (glisse != null)
-            {
-                surBarre = Dedans(barre);
-                if (!surBarre)
-                {
-                    foreach (var n in noeuds)
-                        if (Dedans(n.carte) || Vector2.Distance(souris, n.pos) < 18f) { noeudSurvol = n; break; }
-                    if (noeudSurvol == null)
-                    {
-                        float meilleur = 16f;
-                        foreach (var l in liens)
-                        {
-                            float d = DistanceSegment(souris, l.a, l.b);
-                            if (d < meilleur && l.source.Disponible && l.dest.Disponible) { meilleur = d; lienSurvol = l; }
-                        }
-                    }
-                }
-                if (noeudSurvol != null) cible = new Affectation { type = TypeAffectation.Poste, poste = noeudSurvol.poste };
-                else if (lienSurvol != null) cible = new Affectation { type = TypeAffectation.Porteur, source = lienSurvol.source, destination = lienSurvol.dest };
-                else if (surBarre) cible = new Affectation { type = TypeAffectation.Aucune };
-            }
+            bool surBarre = glisse != null && Dedans(barre);
 
-            // Fiches des postes
+            // Postes
             foreach (var n in noeuds)
             {
                 var p = n.poste;
+                n.pos = VersCarte(p.transform.position);
+                n.marqueur.anchoredPosition = n.pos;
+                n.etiquette.anchoredPosition = n.pos + new Vector2(0, 12);
                 bool dispo = p.Disponible;
                 bool alerte = dispo && p.blocage != "" && p.blocage != "Épuisé";
-                n.texte.text = TexteFiche(p);
-                n.cadre.color = n == noeudSurvol ? new Color(.2f, .24f, .4f, .95f) : new Color(.06f, .07f, .14f, dispo ? .9f : .6f);
-                n.marqueur.GetComponent<UI.Image>().color = !dispo ? Gris : alerte ? Color.Lerp(Rouge, Color.white, Mathf.PingPong(Time.unscaledTime * 2f, 1f) * .4f) : Ambre;
+                n.texte.text = Etiquette(p);
+                n.etiquette.sizeDelta = new Vector2(n.texte.preferredWidth + 16, 24);
+                if (!surBarre && noeudSurvol == null && (Dedans(n.etiquette) || Vector2.Distance(souris, n.pos) < 14f)) noeudSurvol = n;
+                n.contour.effectColor = n.poste == selection ? Ambre : alerte ? Color.Lerp(Rouge, Color.white, Mathf.PingPong(Time.unscaledTime * 2f, 1f) * .3f) : new Color(0, 0, 0, 0);
+                n.marqueur.GetComponent<UI.Image>().color = !dispo ? Gris : alerte ? Rouge : p.boost > 0 ? new Color(.55f, .82f, 1f) : Ambre;
+                n.fond.color = new Color(.05f, .06f, .12f, dispo ? .9f : .6f);
+            }
+            if (glisse != null && noeudSurvol == null && !surBarre)
+            {
+                float meilleur = 14f;
+                foreach (var l in liens)
+                {
+                    if (!l.source.Disponible || !l.dest.Disponible) continue;
+                    float d = DistanceSegment(souris, l.a, l.b);
+                    if (d < meilleur) { meilleur = d; lienSurvol = l; }
+                }
             }
 
             // Flèches
             foreach (var l in liens)
             {
+                Vector2 a = VersCarte(l.source.transform.position), b = VersCarte(l.dest.transform.position), u = (b - a).normalized;
+                Vector2 decal = new Vector2(-u.y, u.x) * 4f;
+                l.a = a + u * 10f + decal; l.b = b - u * 12f + decal;
+                l.ligne.anchoredPosition = l.a;
+                l.ligne.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(u.y, u.x) * Mathf.Rad2Deg);
+                l.fleche.anchoredPosition = Vector2.Lerp(l.a, l.b, .62f);
+                l.fleche.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(u.y, u.x) * Mathf.Rad2Deg + 45f);
+                ((RectTransform)l.badge.transform).anchoredPosition = Vector2.Lerp(l.a, l.b, .5f) + decal * 3.5f;
+
                 int porteurs = 0;
                 foreach (var o in Ouvrier.Tous)
                     if (o.Disponible && o.affectation.type == TypeAffectation.Porteur && o.affectation.source == l.source && o.affectation.destination == l.dest) porteurs++;
@@ -329,17 +337,18 @@ namespace Aldermark
                 Color c; float ep;
                 if (!visible) { c = new Color(0, 0, 0, 0); ep = 0; }
                 else if (l == lienSurvol) { c = Color.white; ep = 6; }
-                else if (porteurs > 0) { c = Ambre; ep = 3 + 2 * porteurs; }
-                else if (manque) { c = new Color(Rouge.r, Rouge.g, Rouge.b, .55f + .45f * Mathf.PingPong(Time.unscaledTime * 1.6f, 1f)); ep = 4; }
-                else { c = new Color(Gris.r, Gris.g, Gris.b, glisse != null ? .6f : .22f); ep = 2; }
+                else if (porteurs > 0) { c = Ambre; ep = 2 + 2 * porteurs; }
+                else if (manque) { c = new Color(Rouge.r, Rouge.g, Rouge.b, .55f + .45f * Mathf.PingPong(Time.unscaledTime * 1.6f, 1f)); ep = 3; }
+                else { c = new Color(Gris.r, Gris.g, Gris.b, glisse != null ? .65f : .25f); ep = 1.5f; }
                 l.img.color = c; l.imgFleche.color = c;
-                l.ligne.sizeDelta = new Vector2(l.ligne.sizeDelta.x, ep);
-                l.fleche.sizeDelta = Vector2.one * (8 + ep * 1.5f);
+                l.ligne.sizeDelta = new Vector2((l.b - l.a).magnitude, ep);
+                l.fleche.sizeDelta = Vector2.one * (7 + ep * 1.4f);
                 Ressource r = l.source.EstFour ? Ressource.Chaux : l.source.produit;
-                l.badge.text = !visible ? "" : porteurs > 0 ? $"{porteurs} × {Ouvrier.NomRessource(r, 2)}" : manque ? $"<color=#ff8a8a>porteur de {Ouvrier.NomRessource(r, 2)} ?</color>" : "";
+                bool proche = tailleVue < tailleMonde * .75f || porteurs > 0 || manque;
+                l.badge.text = !visible || !proche ? "" : porteurs > 0 ? $"{porteurs} × {Ouvrier.NomRessource(r, 2)}" : manque ? "<color=#ff9a9a>porteur ?</color>" : "";
             }
 
-            // Villageois sur la carte, en direct
+            // Villageois et toi, en direct
             foreach (var kv in jetons)
             {
                 bool dispo = kv.Key.Disponible;
@@ -351,22 +360,51 @@ namespace Aldermark
 
             // Portraits
             var dispos = new List<Portrait>();
-            foreach (var pr in portraits)
+            foreach (var pr in portraits.Values)
             {
                 bool d = pr.o.Disponible;
                 pr.rect.gameObject.SetActive(d);
                 if (!d) continue;
-                pr.rect.anchoredPosition = new Vector2(54 + dispos.Count * 86, -110);
+                pr.rect.anchoredPosition = new Vector2(50 + dispos.Count * 86, -104);
                 dispos.Add(pr);
                 bool attente = pr.o.Etat.StartsWith("attend") || pr.o.Etat.StartsWith("rien");
-                pr.legende.text = $"<b>{pr.o.nom}</b>\n<size=12>{Court(pr.o.affectation)}</size>" + (attente ? "\n<size=12><color=#ff8a8a>bloqué</color></size>" : "");
+                pr.legende.text = $"<b>{pr.o.nom}</b>\n{Court(pr.o.affectation)}" + (attente ? "\n<color=#ff8a8a>bloqué</color>" : "");
+            }
+
+            // Affectation ciblée pendant un glisser
+            Affectation? cible = null;
+            if (glisse != null)
+            {
+                if (noeudSurvol != null) cible = new Affectation { type = TypeAffectation.Poste, poste = noeudSurvol.poste };
+                else if (lienSurvol != null) cible = new Affectation { type = TypeAffectation.Porteur, source = lienSurvol.source, destination = lienSurvol.dest };
+                else if (surBarre) cible = new Affectation { type = TypeAffectation.Aucune };
             }
 
             Clavier(dispos);
-            Glisser(dispos, cible, sourisPanneau);
+            Glisser(dispos, cible, sourisPanneau, noeudSurvol);
+
+            // Bulle de détail au survol, et poste choisi à droite
+            bulle.gameObject.SetActive(glisse == null && !deplacement && noeudSurvol != null);
+            if (bulle.gameObject.activeSelf)
+            {
+                texteBulle.text = TexteFiche(noeudSurvol.poste);
+                bulle.sizeDelta = new Vector2(330, texteBulle.preferredHeight + 18);
+                bulle.anchoredPosition = sourisPanneau + new Vector2(panneau.rect.width / 2f + 18f, -panneau.rect.height / 2f - 18f);
+            }
+            texteSelection.text = selection == null
+                ? "<color=#9a9ab4>Clique sur un poste de la carte pour voir sa recette et lui donner du mana.</color>"
+                : $"<color=#ffd27a><b>POSTE CHOISI</b></color>\n{TexteFiche(selection)}\n" + (selection.boost > 0
+                    ? $"<color=#8fd0ff>Mana donné : travail ×2 encore {selection.boost:0} s</color>"
+                    : $"<color=#8fd0ff>G : donner {Poste.DonMana:0} mana à cette équipe (×2 pendant une demi-journée)</color>");
+            var kb = Keyboard.current;
+            if (selection != null && kb != null && kb.gKey.wasPressedThisFrame)
+            {
+                var j = FindFirstObjectByType<JoueurAldric>();
+                if (j != null) j.DonnerMana(selection);
+            }
         }
 
-        void Glisser(List<Portrait> dispos, Affectation? cible, Vector2 sourisPanneau)
+        void Glisser(List<Portrait> dispos, Affectation? cible, Vector2 sourisPanneau, Noeud noeudSurvol)
         {
             var m = Mouse.current;
             if (m == null) return;
@@ -382,13 +420,15 @@ namespace Aldermark
                     texteJeton.text = glisse.nom.Substring(0, 1);
                     Sons.Jouer("clic", .4f, 1.3f);
                 }
+                else if (noeudSurvol != null) { selection = noeudSurvol.poste; Sons.Jouer("clic", .4f, 1.1f); }
+                else if (Dedans(carte)) { deplacement = true; sourisAvant = Souris(carte); }
             }
             jeton.gameObject.SetActive(glisse != null);
             survol.gameObject.SetActive(glisse != null);
             if (glisse == null) return;
 
             jeton.anchoredPosition = sourisPanneau + new Vector2(panneau.rect.width / 2f, -panneau.rect.height / 2f);
-            ((RectTransform)survol.transform).anchoredPosition = sourisPanneau + new Vector2(panneau.rect.width / 2f + 34f, -panneau.rect.height / 2f + 70f);
+            ((RectTransform)survol.transform).anchoredPosition = sourisPanneau + new Vector2(panneau.rect.width / 2f + 34f, -panneau.rect.height / 2f + 64f);
 
             bool valide = false;
             string message = $"{glisse.nom} : lâche-le sur un poste ou une flèche";
@@ -410,13 +450,13 @@ namespace Aldermark
         {
             if (dispos.Count == 0) return;
             var kb = Keyboard.current; var pad = Gamepad.current;
-            bool Appui(Key a, Key b, System.Func<Gamepad, UnityEngine.InputSystem.Controls.ButtonControl> g) =>
-                (kb != null && (kb[a].wasPressedThisFrame || kb[b].wasPressedThisFrame)) || (pad != null && g(pad).wasPressedThisFrame);
-            if (Appui(Key.LeftArrow, Key.A, g => g.dpad.left)) selection--;
-            if (Appui(Key.RightArrow, Key.D, g => g.dpad.right)) selection++;
-            selection = (selection % dispos.Count + dispos.Count) % dispos.Count;
-            int sens = Appui(Key.UpArrow, Key.W, g => g.dpad.up) ? -1 : Appui(Key.DownArrow, Key.S, g => g.dpad.down) ? 1 : 0;
-            var choisi = dispos[selection].o;
+            bool Appui(Key a, System.Func<Gamepad, UnityEngine.InputSystem.Controls.ButtonControl> g) =>
+                (kb != null && kb[a].wasPressedThisFrame) || (pad != null && g(pad).wasPressedThisFrame);
+            if (Appui(Key.LeftArrow, g => g.dpad.left)) choixClavier--;
+            if (Appui(Key.RightArrow, g => g.dpad.right)) choixClavier++;
+            choixClavier = (choixClavier % dispos.Count + dispos.Count) % dispos.Count;
+            int sens = Appui(Key.UpArrow, g => g.dpad.up) ? -1 : Appui(Key.DownArrow, g => g.dpad.down) ? 1 : 0;
+            var choisi = dispos[choixClavier].o;
             if (sens != 0)
             {
                 var options = choisi.Options();
@@ -425,34 +465,56 @@ namespace Aldermark
                 Sons.Jouer("clic", .5f);
             }
             for (int k = 0; k < dispos.Count; k++)
-                dispos[k].anneau.color = k == selection ? Ambre : new Color(0, 0, 0, 0);
+                dispos[k].anneau.color = new Color(Ambre.r, Ambre.g, Ambre.b, k == choixClavier ? .6f : 0f);
         }
 
         // ---------- textes ----------
 
+        /// <summary>Étiquette courte sur la carte : nom, stock principal, ouvriers.</summary>
+        static string Etiquette(Poste p)
+        {
+            if (!p.Disponible) return $"<color=#9a9ab4>{p.nom} ?</color>";
+            string stock;
+            if (p.EstChantier) stock = Chantier.Etape >= 3 ? "ouvert" : $"étape {Chantier.Etape + 1}/3";
+            else if (p.EstFour && !Chantier.FourRepare) stock = $"réparation {Chantier.ReparationFour / Chantier.FourJours * 100f:0} %";
+            else if (p.EstFour) stock = $"{Mathf.Floor(p.Stock(Ressource.Chaux)):0} chaux";
+            else stock = $"{Mathf.Floor(p.Stock(p.produit)):0} {Court(p.produit)}";
+            string alerte = p.blocage != "" && p.blocage != "Épuisé" ? " <color=#ff8a8a>!</color>" : "";
+            string mana = p.boost > 0 ? " <color=#8fd0ff>×2</color>" : "";
+            return $"<b>{p.nom.Replace("Chantier du pont", "Pont")}</b> · {stock} · {p.personnes:0.#}/{p.maxPersonnes}{mana}{alerte}";
+        }
+
+        static string Court(Ressource r) => r switch
+        {
+            Ressource.Pierre => "blocs",
+            Ressource.Bois => "poutres",
+            Ressource.Calcaire => "calcaire",
+            Ressource.Chaux => "chaux",
+            _ => "",
+        };
+
         static string TexteFiche(Poste p)
         {
             if (!p.Disponible)
-                return $"<b>{p.nom}</b>\n<color=#9a9ab4>À découvrir avec le Sceau (E)</color>";
+                return $"<b>{p.nom}</b>\n<color=#9a9ab4>À découvrir avec le Sceau (E).</color>";
             string recette = p.id switch
             {
-                "riviere" => "Sortir les blocs de l'eau\n→ 4 blocs par personne et par jour",
-                "carriere" => "Tailler la roche, loin du pont\n→ 2 blocs par personne et par jour",
-                "foret" => "Abattre et ébrancher\n→ 5 poutres par personne et par jour",
-                "talus" => "Casser le calcaire\n→ 4 calcaire par personne et par jour",
-                "four" when !Chantier.FourRepare => "À réparer : 4 blocs\n+ 3 jours de travail (Odon compte double)",
-                "four" => "2 calcaire + 1 poutre\n→ 2 sacs de chaux (le mortier)",
+                "riviere" => "Sortir les blocs de l'eau : 4 blocs par personne et par jour.",
+                "carriere" => "Tailler la roche, loin du pont : 2 blocs par personne et par jour.",
+                "foret" => "Abattre et ébrancher : 5 poutres par personne et par jour.",
+                "talus" => "Casser le calcaire : 4 par personne et par jour.",
+                "four" when !Chantier.FourRepare => "À réparer : 4 blocs, puis 3 jours de travail (Odon compte double).",
+                "four" => "2 calcaire + 1 poutre donnent 2 sacs de chaux, le mortier des piles.",
                 "chantier" when Chantier.Etape < 3 => ChantierRecette(),
-                _ => "Pont ouvert !",
+                _ => "Le pont est ouvert.",
             };
             string stock;
-            if (p.EstChantier) stock = $"reçu : {Mathf.Floor(p.Stock(Ressource.Pierre)):0} blocs · {Mathf.Floor(p.Stock(Ressource.Chaux)):0} chaux · {Mathf.Floor(p.Stock(Ressource.Bois)):0} poutres";
-            else if (p.EstFour && !Chantier.FourRepare) stock = $"blocs reçus {Mathf.Floor(p.Stock(Ressource.Pierre)):0}/4 · réparation {Chantier.ReparationFour / Chantier.FourJours * 100f:0} %";
-            else if (p.EstFour) stock = $"chaux {Mathf.Floor(p.Stock(Ressource.Chaux)):0} · calcaire {Mathf.Floor(p.Stock(Ressource.Calcaire)):0} · bois {Mathf.Floor(p.Stock(Ressource.Bois)):0}";
-            else stock = $"stock : {Mathf.Floor(p.Stock(p.produit)):0} {Ouvrier.NomRessource(p.produit, 2)}" + (p.reserve >= 0 ? $" (reste {Mathf.Max(0, p.reserve - p.extrait):0})" : "");
-            string travail = $"{p.personnes:0.#} au travail / {p.maxPersonnes}";
+            if (p.EstChantier) stock = $"Reçu : {Mathf.Floor(p.Stock(Ressource.Pierre)):0} blocs, {Mathf.Floor(p.Stock(Ressource.Chaux)):0} chaux, {Mathf.Floor(p.Stock(Ressource.Bois)):0} poutres";
+            else if (p.EstFour && !Chantier.FourRepare) stock = $"Blocs reçus : {Mathf.Floor(p.Stock(Ressource.Pierre)):0}/4";
+            else if (p.EstFour) stock = $"Chaux {Mathf.Floor(p.Stock(Ressource.Chaux)):0} · calcaire {Mathf.Floor(p.Stock(Ressource.Calcaire)):0} · bois {Mathf.Floor(p.Stock(Ressource.Bois)):0}";
+            else stock = $"Stock : {Mathf.Floor(p.Stock(p.produit)):0} {Court(p.produit)}" + (p.reserve >= 0 ? $" (reste {Mathf.Max(0, p.reserve - p.extrait):0})" : "");
             string alerte = p.blocage != "" && p.blocage != "Épuisé" ? $"\n<color=#ff8a8a>⚠ {p.blocage}</color>" : "";
-            return $"<color=#ffd27a><b>{p.nom}</b></color>   <size=13><color=#9a9ab4>{travail}</color></size>\n<size=14>{recette}</size>\n<size=13>{stock}</size>{alerte}";
+            return $"<color=#ffd27a><b>{p.nom}</b></color>  <color=#9a9ab4>{p.personnes:0.#} au travail / {p.maxPersonnes}</color>\n{recette}\n{stock}{alerte}";
         }
 
         static string ChantierRecette()
@@ -460,15 +522,15 @@ namespace Aldermark
             var b = Chantier.Etapes[Chantier.Etape];
             var l = new List<string>();
             if (b.pierre > 0) l.Add($"{b.pierre:0} blocs");
-            if (b.chaux > 0) l.Add($"{b.chaux:0} chaux (mortier)");
+            if (b.chaux > 0) l.Add($"{b.chaux:0} sacs de chaux (le mortier)");
             if (b.bois > 0) l.Add($"{b.bois:0} poutres");
-            return $"Étape {Chantier.Etape + 1} : {b.nom}\n{string.Join(" + ", l)} + des bâtisseurs";
+            return $"Étape {Chantier.Etape + 1} — {b.nom} : {string.Join(" + ", l)}, et des bâtisseurs.";
         }
 
         static string Court(Affectation a) => a.type switch
         {
-            TypeAffectation.Poste => a.poste.nom.Replace("Chantier du pont", "Chantier"),
-            TypeAffectation.Porteur => $"{a.source.nom} → {a.destination.nom.Replace("Chantier du pont", "Chantier")}",
+            TypeAffectation.Poste => a.poste.nom.Replace("Chantier du pont", "Pont"),
+            TypeAffectation.Porteur => $"{a.source.nom.Replace("Chantier du pont", "Pont")} → {a.destination.nom.Replace("Chantier du pont", "Pont")}",
             _ => "au repos",
         };
 
@@ -490,9 +552,6 @@ namespace Aldermark
 
         // ---------- outils ----------
 
-        Vector2 VersCarte(Vector3 w) =>
-            new Vector2((w.x - minMonde.x) / tailleMonde - .5f, (w.z - minMonde.y) / tailleMonde - .5f) * TailleCarte;
-
         static Vector2 Souris(RectTransform r)
         {
             var m = Mouse.current;
@@ -504,7 +563,7 @@ namespace Aldermark
         static bool Dedans(RectTransform r)
         {
             var m = Mouse.current;
-            return m != null && RectTransformUtility.RectangleContainsScreenPoint(r, m.position.ReadValue(), null);
+            return m != null && r.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(r, m.position.ReadValue(), null);
         }
 
         static float DistanceSegment(Vector2 p, Vector2 a, Vector2 b)
@@ -523,7 +582,6 @@ namespace Aldermark
             return r;
         }
 
-        /// <summary>Rectangle coloré ; position relative à l'ancre donnée (pivot au centre).</summary>
         static RectTransform Bloc(string nom, RectTransform parent, Vector2 ancre, Vector2 taille, Vector2 pos, Color couleur)
         {
             var r = new GameObject(nom, typeof(RectTransform)).GetComponent<RectTransform>();
@@ -537,7 +595,6 @@ namespace Aldermark
             return r;
         }
 
-        /// <summary>Texte ; ancré en haut à gauche du parent (ou centré si centre = vrai).</summary>
         UI.Text Texte(string nom, RectTransform parent, int taille, Color couleur, TextAnchor alignement, Vector2 pos, Vector2 dimension, bool centre = false)
         {
             var r = new GameObject(nom, typeof(RectTransform)).GetComponent<RectTransform>();

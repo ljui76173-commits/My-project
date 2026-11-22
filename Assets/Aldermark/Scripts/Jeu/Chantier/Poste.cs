@@ -25,7 +25,20 @@ namespace Aldermark
         readonly Dictionary<Ressource, float> stock = new Dictionary<Ressource, float>();
         [System.NonSerialized] public float extrait, personnes, progresChaux;
         [System.NonSerialized] public string blocage = "";
+        /// <summary>Don de mana : secondes de travail restantes à vitesse double.</summary>
+        [System.NonSerialized] public float boost;
+        public const float DonMana = 10f, DureeBoost = 90f;
+        public float Multiplicateur => boost > 0 ? 2f : 1f;
         Transform repere;
+        LineRenderer anneau;
+
+        /// <summary>Donne 10 mana à l'équipe : elle travaille deux fois plus vite pendant une demi-journée.</summary>
+        public void Donner()
+        {
+            boost = DureeBoost;
+            Sons.Jouer("sceauOn", .7f, .8f);
+            Sons.Jouer("decouverte", .5f, 1.3f);
+        }
 
         void OnEnable() => Tous.Add(this);
         void OnDisable() => Tous.Remove(this);
@@ -74,7 +87,7 @@ namespace Aldermark
                 if (personnes <= 0) return;
                 if (Stock(Ressource.Chaux) >= Capacite) { blocage = "Stock de chaux plein : il manque des porteurs"; return; }
                 // 2 calcaire + 1 poutre → 2 sacs ; 4 sacs par personne et par jour
-                progresChaux += personnes * 2f * dt / Chantier.JourDuree;
+                progresChaux += personnes * Multiplicateur * 2f * dt / Chantier.JourDuree;
                 if (progresChaux >= 1f)
                 {
                     if (Stock(Ressource.Calcaire) >= 2f && Stock(Ressource.Bois) >= 1f)
@@ -95,7 +108,7 @@ namespace Aldermark
             if (produit == Ressource.Aucune || personnes <= 0) return;
             if (Epuise) { blocage = "Épuisé"; return; }
             if (Stock(produit) >= Capacite) { blocage = "Stock plein : il manque des porteurs"; return; }
-            float q = personnes * rendement * dt / Chantier.JourDuree;
+            float q = personnes * Multiplicateur * rendement * dt / Chantier.JourDuree;
             if (reserve >= 0) q = Mathf.Min(q, reserve - extrait);
             Ajouter(produit, q);
             extrait += q;
@@ -124,10 +137,35 @@ namespace Aldermark
             g.GetComponent<MeshRenderer>().sharedMaterial = m;
             repere = g.transform;
             repere.gameObject.SetActive(false);
+
+            // Anneau bleu au sol pendant le don de mana
+            var a = new GameObject("AnneauMana");
+            a.transform.SetParent(transform, false);
+            anneau = a.AddComponent<LineRenderer>();
+            anneau.loop = true; anneau.positionCount = 40; anneau.useWorldSpace = true; anneau.widthMultiplier = .18f;
+            var ma = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            ma.SetColor("_BaseColor", new Color(.5f, .8f, 1f));
+            anneau.sharedMaterial = ma;
+            anneau.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            anneau.enabled = false;
         }
 
         void Update()
         {
+            if (anneau != null)
+            {
+                anneau.enabled = boost > 0;
+                if (boost > 0)
+                {
+                    float r = 4.2f + .3f * Mathf.Sin(Time.time * 3f);
+                    for (int k = 0; k < 40; k++)
+                    {
+                        float a = k * Mathf.PI * 2f / 40f;
+                        float x = transform.position.x + Mathf.Cos(a) * r, z = transform.position.z + Mathf.Sin(a) * r;
+                        anneau.SetPosition(k, new Vector3(x, Mathf.Max(Monde.Hauteur(x, z), -.1f) + .15f, z));
+                    }
+                }
+            }
             if (repere == null) return;
             bool alerte = Disponible && blocage != "" && blocage != "Épuisé";
             repere.gameObject.SetActive(alerte && Mathf.Repeat(Time.time, 1f) < .6f);

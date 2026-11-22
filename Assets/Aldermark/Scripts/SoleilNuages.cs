@@ -24,6 +24,9 @@ namespace Aldermark
         public Vector2 vent = new Vector2(7f, 2.5f);
 
         float temps, couverture;
+        public static float Nuit { get; private set; }
+        public static float Crepuscule { get; private set; }
+        Color ciel0, equateur0, sol0, brouillard0;
         UniversalAdditionalLightData donneesSoleil;
 
         void Start()
@@ -37,11 +40,38 @@ namespace Aldermark
             if (rendu != null) rendu.directionSoleil = direction1;
             Shader.SetGlobalVector("_Soleil1", direction1.normalized);
             Shader.SetGlobalVector("_Soleil2", direction2.normalized);
+            ciel0 = RenderSettings.ambientSkyColor; equateur0 = RenderSettings.ambientEquatorColor;
+            sol0 = RenderSettings.ambientGroundColor; brouillard0 = RenderSettings.fogColor;
+        }
+
+        /// <summary>
+        /// Course du soleil selon l'heure (Chantier.Heure, de 0 à 24) : lever à l'est vers 6 h,
+        /// midi haut dans le ciel, coucher à l'ouest vers 20 h, puis nuit bleutée.
+        /// </summary>
+        void Heure()
+        {
+            float h = Chantier.Heure;
+            float jour = Mathf.Clamp01((h - 6f) / 14f);                 // 0 au lever, 1 au coucher
+            float elev = (6f + 44f * Mathf.Sin(jour * Mathf.PI)) * Mathf.Deg2Rad;
+            float az = Mathf.Lerp(.15f, Mathf.PI - .15f, jour);
+            direction1 = new Vector3(Mathf.Cos(az) * Mathf.Cos(elev), Mathf.Sin(elev), -.55f * Mathf.Cos(elev) - .2f).normalized;
+            Nuit = h < 12f ? 1f - Monde.Lisse(5f, 6.6f, h) : Monde.Lisse(19.4f, 20.6f, h);
+            Crepuscule = Mathf.Max(1f - Mathf.Abs(h - 6.6f) / 1.4f, 1f - Mathf.Abs(h - 19.2f) / 1.6f, 0f) * (1f - Nuit);
+            if (soleil != null) soleil.transform.rotation = Quaternion.LookRotation(-direction1);
+            if (rendu != null) rendu.directionSoleil = direction1;
+            Shader.SetGlobalVector("_Soleil1", direction1);
+            var nuitCiel = new Color(.16f, .19f, .34f);
+            RenderSettings.ambientSkyColor = Color.Lerp(Color.Lerp(ciel0, new Color(1f, .7f, .55f), Crepuscule * .5f), nuitCiel, Nuit);
+            RenderSettings.ambientEquatorColor = Color.Lerp(equateur0, nuitCiel * .8f, Nuit);
+            RenderSettings.ambientGroundColor = Color.Lerp(sol0, nuitCiel * .45f, Nuit);
+            RenderSettings.fogColor = Color.Lerp(Color.Lerp(brouillard0, new Color(.95f, .66f, .55f), Crepuscule * .6f), new Color(.1f, .12f, .24f), Nuit);
+            if (soleil != null) soleil.color = Color.Lerp(new Color(1f, .89f, .66f), new Color(1f, .62f, .4f), Crepuscule);
         }
 
         void Update()
         {
             temps += Time.deltaTime;
+            Heure();
             Shader.SetGlobalFloat("_AldTemps", temps);
 
             // Nuage devant le soleil ? (même calcul que le shader du ciel)
@@ -54,9 +84,9 @@ namespace Aldermark
             float cible = Monde.Lisse(seuil, seuil + .06f, n) * bande;
             couverture = Mathf.Lerp(couverture, cible, Mathf.Clamp01(Time.deltaTime * 2f));
 
-            if (soleil != null) soleil.intensity = intensiteSoleil * (1f - .62f * couverture);
-            if (soleil2 != null) soleil2.intensity = intensiteSoleil2 * (1f - .5f * couverture);
-            RenderSettings.ambientIntensity = intensiteAmbiante * (1f - .12f * couverture);
+            if (soleil != null) soleil.intensity = intensiteSoleil * (1f - .62f * couverture) * (1f - .9f * Nuit);
+            if (soleil2 != null) soleil2.intensity = intensiteSoleil2 * (1f - .5f * couverture) * (1f - .7f * Nuit);
+            RenderSettings.ambientIntensity = intensiteAmbiante * (1f - .12f * couverture) * (1f - .45f * Nuit);
             if (rendu != null) rendu.soleilDegage = 1f - couverture;
 
             if (donneesSoleil != null) donneesSoleil.lightCookieOffset = vent * temps;
