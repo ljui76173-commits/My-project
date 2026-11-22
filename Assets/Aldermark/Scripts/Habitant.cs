@@ -16,6 +16,8 @@ namespace Aldermark
         public Vector2 centre = new Vector2(55, 10);
         public float rayon = 28f;
         public bool panier;
+        [System.NonSerialized] public bool parle;
+        Vector3? destination;
 
         Transform jambeG, jambeD, brasG, brasD;
         Vector3 cible;
@@ -52,7 +54,20 @@ namespace Aldermark
         void Update()
         {
             float dt = Time.deltaTime;
-            if (promeneur)
+            if (destination.HasValue)
+            {
+                Vector3 p = transform.position, c = destination.Value;
+                Vector3 d = new Vector3(c.x - p.x, 0, c.z - p.z);
+                if (d.magnitude < .3f) { destination = null; enMarche = false; }
+                else
+                {
+                    transform.position += d.normalized * Mathf.Min(3.2f, d.magnitude * 2f) * dt;
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), dt * 6f);
+                    enMarche = true;
+                    PoserAuSol();
+                }
+            }
+            else if (promeneur)
             {
                 Vector3 p = transform.position;
                 Vector3 d = new Vector3(cible.x - p.x, 0, cible.z - p.z);
@@ -72,6 +87,20 @@ namespace Aldermark
             jambeD.localRotation = Quaternion.Euler(-b, 0, 0);
             brasG.localRotation = Quaternion.Euler(-b * .7f, 0, 0);
             if (!panier) brasD.localRotation = Quaternion.Euler(b * .7f, 0, 0);
+            if (parle)
+            {
+                // Gestes quand il parle
+                float g = Mathf.Sin(Time.time * 7f);
+                brasG.localRotation = Quaternion.Euler(-35f + g * 15f, 0, -10f);
+                if (!panier) brasD.localRotation = Quaternion.Euler(-20f - g * 10f, 0, 10f);
+            }
+        }
+
+        /// <summary>Fait marcher le personnage jusqu'à un point, puis il s'arrête.</summary>
+        public void AllerVers(Vector2 pos)
+        {
+            promeneur = false;
+            destination = new Vector3(pos.x, 0, pos.y);
         }
 
         void PoserAuSol()
