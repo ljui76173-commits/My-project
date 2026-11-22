@@ -83,7 +83,17 @@ namespace Aldermark
             if (!A("pont_etape2")) { Cible = "chantier"; return "Pont en bois, étape 2 : les poutres maîtresses. Il faut 16 poutres : la forêt et ses porteurs sont la clé."; }
             if (!A("pont_ouvert")) { Cible = "chantier"; return "Pont en bois, étape 3 : le tablier. Encore 20 poutres."; }
             if (!A("convoi_arrive")) { Cible = "chantier"; return "Le pont provisoire est ouvert ! Regarde passer le convoi du Comte."; }
-            return "Fin de la boucle du pont : tu es « le Bâtisseur ». Suite du chapitre 1 en développement.";
+            if (!A("vesk_demain")) return "Le convoi est arrivé. Ce soir, Varenne mange du pain.";
+            if (A("vesk_a_genoux") && !A("bataille_finie")) { Cible = "vesk"; return "Vesk est à genoux. Ilse attend ta réponse."; }
+            if (A("bataille_lancee") && !A("bataille_finie")) return "La bataille du Gué : garde le Siphon (R) sur Vesk.";
+            if (!A("bataille_lancee"))
+            {
+                if (!A("pieges_traces")) { Cible = "gue"; return "Vesk arrive à l'aube. Au débarcadère, active le Sceau (E) : il montre la route de la barge et le chemin de ses hommes. Trace les pièges (T) sur leur passage : 1 chaîne, 3 filets, 2 fosses, 1 chausse-trape, 1 fil à cloches."; }
+                if (!A("discours")) { Cible = "odon"; return "Les pièges sont tracés. Le soir venu (dès 17 h), tout le village attend ton discours au puits : parle à Odon."; }
+                if (!A("soiree_ilse")) { Cible = "ilse"; return "(Facultatif) Ilse est assise au bord du pont neuf. Puis va dormir chez Odon : Vesk arrive à l'aube."; }
+                Cible = "lit"; return "Va dormir chez Odon. Vesk arrive à l'aube.";
+            }
+            return "FIN DE L'ARC 1 — Vainqueur du Gué. La suite du chapitre 1 arrive bientôt.";
         }
     }
 }

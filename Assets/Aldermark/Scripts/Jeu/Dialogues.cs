@@ -56,6 +56,8 @@ namespace Aldermark
                 "lit" => Lit(),
                 "ysolde" => Ysolde(),
                 "ilse" => Ilse(),
+                "vesk" => Vesk(),
+                "garr" => Garr(),
                 "forgeron" => new Noeud("Hadrien", !A("four_repare")
                     ? "Sans charbon de bois ni fer qui arrive, ma forge dort. Relance le four, l'étranger, et on verra pour le reste."
                     : !A("pont_ouvert")
@@ -176,6 +178,8 @@ namespace Aldermark
         static Noeud Odon()
         {
             if (!A("lise")) return new Noeud("Odon", "… (Le vieil homme te dévisage sans un mot. Sa main droite est enveloppée dans un bandage sale.)");
+            if (A("vesk_demain") && !A("bataille_lancee") && !A("discours")) return OdonVeillee();
+            if (A("bataille_finie")) return new Noeud("Odon", "(Il regarde la barge noire, plantée sur la chaîne d'Hadrien.) Des filets de pêcheur et de la boue contre des guerriers… Mon père disait : la meilleure muraille, c'est celle que l'ennemi ne voit pas. Il aurait aimé te connaître, Bâtisseur.");
 
             if (!A("test_four"))
                 return new Noeud("Odon", "Un monsieur des bois. (Il regarde tes bottes neuves, tes mains sans cal.) Tu viens de la part de Corvin ? Ou du Comte ?")
@@ -270,6 +274,13 @@ namespace Aldermark
 
         static Noeud Ilse()
         {
+            if (A("bataille_finie")) return IlseApres();
+            if (A("vesk_demain") && !A("bataille_lancee"))
+            {
+                if (A("discours") && !A("soiree_ilse")) return IlseSoiree();
+                if (!A("pouvoirs_connus")) return IlsePouvoirs();
+                return new Noeud("Ilse", "Garde tes forces pour demain. Et dors, si tu peux.");
+            }
             if (A("ilse_rencontre"))
             {
                 if (A("noeud_touche") && A("ilse_a_vu") && !A("ilse_colonne"))
@@ -314,6 +325,85 @@ namespace Aldermark
                         HUD.Message("INFORMATION CLÉ",
                             "La Tour veut le porteur vivant. Vesk le veut mort, et il arrive bientôt.\nVesk puise dans le nœud de mana sous l'ancien pont.\nLe Sceau peut voir les lignes de mana. Peut-être aussi… les assécher.", 9f);
                     });
+
+        // ---------- la veillée d'armes et la bataille du Gué ----------
+
+        static Noeud OdonVeillee()
+        {
+            if (!(Chantier.EstNuit || Chantier.Heure >= 17f))
+                return new Noeud("Odon", A("pieges_traces")
+                    ? "Les pièges sont tracés, Hadrien a rallumé la forge pour la chaîne. Ce soir, tout le village sera au puits. Ils voudront t'entendre avant demain."
+                    : "« La meilleure muraille, c'est celle que l'ennemi ne voit pas », disait mon père. Va au débarcadère, et regarde avec ton œil d'argent par où ils passeront.");
+            return new Noeud("Odon", "(Sur la place, autour du puits, tout le village est rassemblé : les combattants, les anciens, les enfants. Les torches éclairent les visages. Odon te tend sa main valide pour t'aider à monter sur la margelle.) Ils t'attendent, Bâtisseur.")
+                .Choix("« Ce pont, ce n'est pas moi qui l'ai construit. C'est vous. Demain, ils seront plus forts, mieux armés. Mais ils ne connaissent ni cette rivière, ni cette boue, ni ces arbres. Nous, si. Personne ne se battra seul. »", () =>
+                        new Noeud("Odon", "(Un silence. Puis Odon frappe le sol de son marteau. Une fois. Hadrien l'imite, puis Bram, puis Garr, en ricanant, mais il le fait. Bientôt, tout le village frappe le sol, en rythme.)"),
+                    () => BatailleDuGue.Discours(2))
+                .Choix("« Ce qu'ils veulent, c'est moi. Demain, je serai devant vous, et je ne les laisserai pas vous prendre ce que vous avez bâti. »", () =>
+                        new Noeud("Odon", "(Des hochements de tête, des poings qui se serrent. Odon pose sa main valide sur ton épaule.) Devant nous, d'accord. Mais pas tout seul."),
+                    () => BatailleDuGue.Discours(1))
+                .Choix("« On n'a pas le choix. Soit on se bat, soit on perd tout. »", () =>
+                        new Noeud("Odon", "(Un silence lourd. Les gens rentrent chez eux sans un mot. Odon soupire.) C'est vrai. Mais ça n'aide personne à dormir."),
+                    () => BatailleDuGue.Discours(0));
+        }
+
+        static Noeud IlsePouvoirs() =>
+            new Noeud("Ilse", "Tu veux savoir qui ici a des pouvoirs ? (Elle compte sur ses doigts.) Moi : le Pas d'Ombre. Je disparais dans une ombre et je ressors d'une autre, à quinze pas au plus, trois fois par jour. Ton forgeron, Hadrien, chauffe le métal au rouge à mains nues. Lentement, mais il le fait. Et la vieille Agathe ferme les plaies, trois ou quatre avant de tomber de fatigue.")
+                .Choix("Et Lise ?", () =>
+                        new Noeud("Ilse", "(Elle hausse un sourcil.) La petite ? Elle dit qu'elle « voit les choses qui brillent ». Ta marque. La lueur sous les pierres de la rivière. (Un temps.) Garde-la loin de demain. Les gens comme elle, la Tour les ramasse."),
+                    () => Progression.Mettre("pouvoirs_connus"))
+                .Choix("Hadrien pourrait chauffer la chaîne avant le contact.", () =>
+                        new Noeud("Ilse", "Et quiconque essaiera de la défaire s'y brûlera les mains. (Un demi-sourire.) Tu apprends vite, l'étranger."),
+                    () => Progression.Mettre("pouvoirs_connus"));
+
+        static Noeud IlseSoiree() =>
+            new Noeud("Ilse", "(Assise au bord du pont neuf, les jambes au-dessus de l'eau noire, elle regarde les deux lunes se refléter dans la rivière. Tu t'assieds à côté d'elle. Pendant un long moment, vous ne dites rien.) Joli discours. Tu y croyais vraiment ?")
+                .Choix("Oui.", () =>
+                    new Noeud("Ilse", "(Elle hoche la tête, lentement. Vous parlez longtemps : le village de son enfance, au bord d'un lac, l'odeur des pommiers en automne. Toi, ton ancien monde, prudemment. Elle rit quand tu lui décris un camion. Le froid tombe ; elle pose sa tête sur ton épaule.) Si Vesk me tue demain, ne me pleure pas trop longtemps.")
+                        .Choix("Il ne te tuera pas.", () =>
+                                new Noeud("Ilse", "Tu ne peux pas savoir ça. (Elle se redresse, te regarde. Ses yeux gris sont très proches. Puis elle t'embrasse, brièvement, presque timidement, et se lève aussitôt, comme si elle s'en voulait.) Dors, Aldric. Demain, j'ai besoin que tu sois en vie."),
+                            () => { Progression.Mettre("soiree_ilse"); Progression.Mettre("pouvoirs_connus"); }));
+
+        static Noeud IlseApres()
+        {
+            if (A("vesk_mort")) return new Noeud("Ilse", "(Elle a pansé elle-même son bras brûlé.) Il a brûlé mon village. Maintenant, c'est fini. (Elle détourne les yeux.) Ne me demande pas si je me sens mieux.");
+            if (A("vesk_scelle")) return new Noeud("Ilse", "(Elle regarde vers le cellier où l'on a enfermé Vesk.) Un bras de pierre, et plus jamais de mana. (Un temps.) C'est peut-être pire que la mort, pour un homme comme lui. Tu as eu raison… je crois.");
+            return new Noeud("Ilse", "Tu l'as épargné. J'espère que tu sauras quoi faire de ce qu'il va te dire. (Elle touche son épaule bandée et grimace.) La prochaine fois, c'est moi qui choisis.");
+        }
+
+        static Noeud Garr()
+        {
+            if (A("bataille_finie"))
+                return new Noeud("Garr", A("garr_blesse")
+                    ? "(Il se tient le flanc en grimaçant.) Cinq d'argent de plus, patron. Et une bière. Peut-être deux."
+                    : "On a tenu. Avec des fourches et de la boue. Je raconterai ça à mes petits-enfants, si j'en ai un jour.");
+            return new Noeud("Garr", "Garr, ancien sergent du Comte. J'ai dix gars, des fourches, deux haches et une arbalète qui marche une fois sur deux. (Il crache.) Tu paies, je tiens la ligne. Le chemin sec qui monte au village : on n'y passe qu'à deux de front.")
+                .Choix("Tiens le chemin sec. Personne ne passe, et personne ne meurt sauf s'il le faut.", () =>
+                    new Noeud("Garr", "(Il lève les yeux au ciel.) Personne ne meurt. Bien, patron. On fera de notre mieux."))
+                .Choix("Combien sont-ils ?", () =>
+                    new Noeud("Garr", "Douze Cendrés, d'après ta Lame grise. Et Vesk. Douze soldats contre dix fermiers, c'est perdu d'avance. Douze soldats contre dix fermiers, de la boue et des filets… on verra."));
+        }
+
+        static Noeud Vesk()
+        {
+            if (A("bataille_finie"))
+                return new Noeud("Vesk", A("vesk_mort") ? "(Il ne bougera plus.)" : A("vesk_scelle") ? "(Il fixe son bras de pierre et ne dit rien.)" : "(Il ricane.) Profite, porteur. Profite tant que tu peux.");
+            return new Noeud("Vesk", "(À genoux dans la boue, la noirceur jusqu'à la mâchoire, il respire avec difficulté. Il te regarde, toi, pas Ilse.) Tu crois… que tu as gagné, porteur ? (Il ricane entre deux souffles.) Morwen te veut vivant pour une seule raison. Le dieu a besoin d'un corps. Le tien.")
+                .Choix("(Continuer)", () =>
+                    new Noeud("Ilse", "(Sa main tremble sur la garde de son épée. Elle a les larmes aux yeux.) Il a brûlé mon village, Aldric. (Sa voix se brise.) Dis-moi pourquoi je ne devrais pas le faire.")
+                        .Choix("« Épargne-le. Pas comme ça, pas à genoux dans la boue. Il sera jugé, devant le Comte et devant tous ceux à qui il a fait du mal. Et il parlera. »", VeskEpargne)
+                        .Choix("« Je n'ai rien à t'opposer. C'est ton choix, Ilse. »", () =>
+                                new Noeud("Ilse", "(Un long silence. Puis la lame descend, une seule fois.) … C'est fait. (Elle essuie son épée dans l'herbe, sans te regarder.) Merci de ne pas m'avoir menti."),
+                            () => BatailleDuGue.Conclure(false, false)));
+        }
+
+        static Noeud VeskEpargne() =>
+            new Noeud("Ilse", "(Sa lame tremble contre la gorge de Vesk.) Et s'il recommence ? S'il s'échappe ? Il lui suffit d'un nœud, n'importe où, pour redevenir ce qu'il était.")
+                .Choix("« Il ne fera plus jamais de mal à personne. » (Siphon : sceller son lien au mana, pour toujours)", () =>
+                        new Noeud("Vesk", "(Tu suis le fil de mana jusqu'à sa racine, au fond de sa poitrine, et tu le noues sur lui-même, comme on soude une canalisation. Vesk hurle. La noirceur recule vers sa main… et se fige. Son bras n'est plus du charbon : il est gris et mort, comme de la pierre. Pour la première fois, il a peur.) Qu'est-ce que… tu m'as fait…"),
+                    () => BatailleDuGue.Conclure(true, true), () => BatailleDuGue.ManaPour(4f))
+                .Choix("« Enchaînez-le. Le Comte décidera. »", () =>
+                        new Noeud("Ilse", "(Elle abaisse son épée, lentement.) Comme tu voudras. Mais si ce bras noir le dévore avant le procès, je ne pleurerai pas."),
+                    () => BatailleDuGue.Conclure(true, false));
 
         // ---------- l'Entre-Deux : Ysolde ----------
 
@@ -369,6 +459,10 @@ namespace Aldermark
 
         static Noeud Lit()
         {
+            if (A("vesk_demain") && !A("bataille_lancee") && Chantier.PeutDormir)
+                return new Noeud("Paillasse", "La paillasse de foin, chez Odon. Demain, à l'aube, la barge de Vesk sortira de la brume." + (A("pieges_traces") ? "" : "\nTous les pièges ne sont pas tracés."))
+                    .Choix("Dormir jusqu'à l'aube", () => null, () => Chantier.Dormir())
+                    .Choix("Pas encore");
             if (!Chantier.PeutDormir)
                 return new Noeud("Paillasse", $"Une paillasse de foin, chez Odon. Il est {(int)Chantier.Heure} h : trop tôt pour dormir.");
             return new Noeud("Paillasse", "Une paillasse de foin qui sent bon l'été. Odon ronfle déjà de l'autre côté du mur.")

@@ -116,7 +116,7 @@ namespace Aldermark
                 while (Progression.Palier < 2) Progression.AjouterConfiance(1);
                 Sons.Jouer("decouverte", 1f, .8f);
                 HUD.Message("TITRE OBTENU — LE BÂTISSEUR",
-                    $"Les charrettes du Comte sont arrivées au marché de Varenne, au jour {Chantier.Jour}.\nLe village t'appelle désormais « le Bâtisseur ».\n\nFin de la boucle du pont. Merci d'avoir joué !", 12f);
+                    $"Les charrettes du Comte sont arrivées au marché de Varenne, au jour {Chantier.Jour}.\nLe village t'appelle désormais « le Bâtisseur ».\n\nCe soir, Varenne mange du pain.", 10f);
             }
             if (arrivees == voitures.Count && voitures.Count > 0) fini = true;
         }

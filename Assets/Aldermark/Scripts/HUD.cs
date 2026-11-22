@@ -56,6 +56,17 @@ namespace Aldermark
         public static void Invite(string texte)
         {
             if (instance == null) return;
+            if (texte == null && Time.frameCount - instance.cadreInviteForte <= 1) return;   // une invite forte reste affichée
+            instance.texteInvite.text = texte ?? "";
+        }
+
+        int cadreInviteForte = -10;
+
+        /// <summary>Invite qu'un « rien à signaler » d'un autre script n'efface pas (à rappeler chaque image).</summary>
+        public static void InviteForte(string texte)
+        {
+            if (instance == null) return;
+            instance.cadreInviteForte = Time.frameCount;
             instance.texteInvite.text = texte ?? "";
         }
 

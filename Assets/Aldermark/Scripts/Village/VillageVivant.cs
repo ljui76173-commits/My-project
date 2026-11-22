@@ -61,7 +61,7 @@ namespace Aldermark
         void Update()
         {
             float h = Chantier.Heure;
-            bool nuit = Chantier.EstNuit;
+            bool nuit = Chantier.EstNuit || BatailleDuGue.EnCours;   // pendant la bataille, chacun reste chez soi
             float anime = Animation();
 
             foreach (var v in gens)
@@ -103,7 +103,7 @@ namespace Aldermark
             if (lumieresNuit != null)
                 foreach (var l in lumieresNuit) if (l != null && l.activeSelf != (SoleilNuages.Nuit > .3f)) l.SetActive(SoleilNuages.Nuit > .3f);
             bool feu = !nuit && Progression.A("four_repare");
-            if (forgeron != null)
+            if (forgeron != null && !BatailleDuGue.Mobilises.Contains(forgeron))
             {
                 forgeron.geste = feu ? Geste.Marteau : Geste.Aucun;
                 forgeron.regarder = enclume != null ? enclume.position : (Vector3?)null;
