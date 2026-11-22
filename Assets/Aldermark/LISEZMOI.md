@@ -88,8 +88,9 @@ marteau au chantier et au four, et portent leur charge à deux bras.
 - **Postes** : Rivière (blocs, 31 au total, débloquée par l'indice des blocs), Carrière (blocs,
   loin), Forêt (poutres), Talus (calcaire, débloqué par l'indice du calcaire), Four, Chantier du pont.
 - **Porteurs** : 3 m/s, 5 s de chargement, 3 blocs / 3 sacs / 4 poutres. Rien ne voyage sans eux.
-- **Four** : 4 blocs + 3 jours-personne de réparation, puis 2 calcaire + 1 poutre → 2 sacs de chaux.
-- **Pont provisoire** : piles (12 blocs, 4 chaux), poutres maîtresses (24 poutres), tablier (30 poutres).
+- **Four** : 4 blocs + 1,5 jour-personne de réparation, puis 2 calcaire + 1 poutre → 2 sacs de chaux
+  (8 sacs par personne et par jour). Au départ : 6 calcaire déjà extrait au talus, 4 poutres de bois mort au four.
+- **Pont provisoire** : piles (8 blocs, 4 chaux), poutres maîtresses (16 poutres), tablier (20 poutres).
 - Odon ne porte pas mais bâtit pour deux ; Bram arrive avec son indice ; Agathe, Colin et Firmin
   quand le four est relancé.
 - Vue du Sceau (E) : une ligne ambrée par liaison active, une boule rouge sur un poste bloqué.
@@ -110,3 +111,9 @@ Raccourcis de test (dans l'éditeur seulement) : **F9** saute l'enquête et ouvr
 - **Village vivant** : marché, auberge, forge, chapelle, lavoir, moulin, moutons, poules ;
   les villageois vont aux champs, au marché, à l'auberge ; le village revit à chaque étape.
 - **Fin** : le pont ouvert, le convoi du Comte traverse jusqu'au marché, titre « le Bâtisseur ».
+
+## Équilibrage
+
+Réglé avec une simulation de l'économie du chantier (mêmes règles que le jeu) :
+bien organisé avec le don de mana, le pont tient en 4 jours environ après l'accord d'Odon,
+5 à 6 jours sans mana, et le chantier se bloque si la chaîne de la chaux est oubliée.

@@ -132,7 +132,7 @@ namespace Aldermark
                     Progression.Mettre("plan_bois");
                     Sons.Jouer("decouverte", .7f, 1.1f);
                     HUD.Message("PLAN MODIFIÉ",
-                        "Pont provisoire en bois, posé sur les piles renforcées.\n12 blocs · 4 sacs de chaux · 54 poutres · 15 jours-personne.\nBien organisé, trois jours suffisent.", 7f);
+                        "Pont provisoire en bois, posé sur les piles renforcées.\n8 blocs · 4 sacs de chaux · 36 poutres · 9 jours-personne.\nBien organisé, trois ou quatre jours suffisent.", 7f);
                 }
                 return;
             }

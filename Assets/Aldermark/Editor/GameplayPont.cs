@@ -189,11 +189,13 @@ namespace Aldermark.Editeur
             Vector2 pc = PlaceLibre(new Vector2(cx + 21f, zp - 4f), 4.5f);
             Vector2 pForet = PlaceLibre(new Vector2(40f, 74f), 4f), pCarriere = PlaceLibre(new Vector2(95f, -108f), 4f);
             CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "plan_bois", pc);
-            CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 4, 2, 31, "vu_blocs", PlaceLibre(new Vector2(Monde.PontX + 10f, 7f), 3f));
+            CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 6, 2, 31, "vu_blocs", PlaceLibre(new Vector2(Monde.PontX + 10f, 7f), 3f));
             CreerPoste(ch, "carriere", "Carrière", Ressource.Pierre, 2, 4, -1, "", pCarriere);
-            CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 5, 4, -1, "", pForet);
-            CreerPoste(ch, "talus", "Talus", Ressource.Calcaire, 4, 2, 40, "vu_calcaire", PlaceLibre(new Vector2(K.x - 14f, K.y + 9f), 3f));
-            CreerPoste(ch, "four", "Four", Ressource.Aucune, 0, 2, -1, "vu_four", PlaceLibre(K + versVillage * 7f, 2.5f));
+            CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 10, 4, -1, "", pForet);
+            var talus = CreerPoste(ch, "talus", "Talus", Ressource.Calcaire, 4, 2, 40, "vu_calcaire", PlaceLibre(new Vector2(K.x - 14f, K.y + 9f), 3f));
+            talus.ressourceDepart = Ressource.Calcaire; talus.quantiteDepart = 6;   // le calcaire déjà extrait, jamais cuit
+            var four = CreerPoste(ch, "four", "Four", Ressource.Aucune, 0, 2, -1, "vu_four", PlaceLibre(K + versVillage * 7f, 2.5f));
+            four.ressourceDepart = Ressource.Bois; four.quantiteDepart = 4;          // du bois mort entassé contre le four
 
             // Décor des postes
             DecorForet(pForet, ch);
