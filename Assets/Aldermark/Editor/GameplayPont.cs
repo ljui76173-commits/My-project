@@ -170,13 +170,14 @@ namespace Aldermark.Editeur
             var ch = new GameObject("Chantier").transform;
             ch.SetParent(racine, false);
             var chantier = ch.gameObject.AddComponent<Chantier>();
+            ch.gameObject.AddComponent<PlanRegistre>().chantier = chantier;
 
             float zp = -9f, cx = Monde.Riviere(zp);          // le pont provisoire, en aval des ruines
             var K = Monde.Four;
             Vector2 versVillage = (Monde.Village - K).normalized;
 
             // Postes (positions à environ la distance prévue par la spec)
-            CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "", new Vector2(cx + 19f, zp - 3f));
+            CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "plan_bois", new Vector2(cx + 19f, zp - 3f));
             CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 4, 2, 31, "vu_blocs", new Vector2(Monde.PontX + 10f, 7f));
             CreerPoste(ch, "carriere", "Carrière", Ressource.Pierre, 2, 4, -1, "", new Vector2(95f, -108f));
             CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 5, 4, -1, "", new Vector2(40f, 74f));

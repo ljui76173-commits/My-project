@@ -203,7 +203,7 @@ namespace Aldermark
             if (!A("pont_accepte"))
                 return new Noeud("Odon", "L'étranger. Ce pont, c'est mon père qui l'a monté. Tu sais le rebâtir ? Vraiment ?")
                     .Choix("Oui. Mais il me faut des bras, du bois et de la chaux.", () =>
-                            new Noeud("Odon", "Alors on commence à l'aube. Joss, Pell et Marthe sont à toi. Et moi, j'ai encore une main qui sait poser une pierre. D'abord le four : sans chaux, pas de piles. Il lui faut quatre blocs et des bras."),
+                            new Noeud("Odon", "Alors on commence à l'aube. Joss, Pell et Marthe sont à toi. Et moi, j'ai encore une main qui sait poser une pierre. Montre-moi d'abord ce que tu vois sur ces ruines. Ensuite le four : sans chaux, pas de piles."),
                         () => { Progression.Mettre("pont_accepte"); Progression.AjouterConfiance(1); },
                         () => A("vu_corvin"))
                     .Choix("Pas encore. Je veux d'abord suivre la piste de ceux qui l'ont fait sauter.", () =>

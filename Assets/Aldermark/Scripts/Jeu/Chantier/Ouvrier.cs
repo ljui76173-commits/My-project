@@ -121,6 +121,8 @@ namespace Aldermark
         {
             if (!Disponible) { AuPoste = false; return; }
             float dt = Time.deltaTime;
+            h.geste = Geste.Aucun;
+            h.regarder = null;
 
             // Une charge en cours est toujours livrée, quelle que soit la nouvelle affectation
             if (quantite > 0 && livraison != null)
@@ -143,7 +145,6 @@ namespace Aldermark
             {
                 case TypeAffectation.Aucune:
                     AuPoste = false;
-                    h.parle = false;
                     Etat = "attend tes ordres";
                     break;
 
@@ -153,7 +154,11 @@ namespace Aldermark
                     int rang = Rang(p);
                     bool arrive = Marcher(p.Place(rang), 3.2f);
                     AuPoste = arrive;
-                    h.parle = arrive && p.personnes > 0 && p.blocage == "";
+                    if (arrive && p.blocage == "" && rang < p.maxPersonnes)
+                    {
+                        h.geste = GesteDuPoste(p);
+                        h.regarder = p.transform.position;
+                    }
                     Etat = !arrive ? $"va à {p.nom}" : (p.blocage != "" ? p.blocage.ToLowerInvariant() : "au travail");
                     if (arrive && rang >= p.maxPersonnes) Etat = "attend : le poste est complet";
                     break;
@@ -162,7 +167,6 @@ namespace Aldermark
                 case TypeAffectation.Porteur:
                 {
                     AuPoste = false;
-                    h.parle = false;
                     var s = affectation.source;
                     var r = s.Fournit;
                     if (r == Ressource.Aucune || !affectation.destination.Accepte(r)) { Etat = "rien à porter"; break; }
@@ -177,6 +181,8 @@ namespace Aldermark
                         livraison = null;
                     }
                     minuteur += dt;
+                    h.geste = Geste.Ramasser;
+                    h.regarder = s.transform.position;
                     Etat = $"charge {NomRessource(r, 2)}";
                     if (minuteur >= DureeChargement)
                     {
@@ -188,6 +194,16 @@ namespace Aldermark
                 }
             }
         }
+
+        static Geste GesteDuPoste(Poste p) => p.id switch
+        {
+            "foret" => Geste.Hache,
+            "carriere" => Geste.Pioche,
+            "talus" => Geste.Pioche,
+            "riviere" => Geste.Ramasser,
+            "four" => Chantier.FourRepare ? Geste.Ramasser : Geste.Marteau,
+            _ => Geste.Marteau,
+        };
 
         /// <summary>Rang de cet ouvrier parmi ceux du même poste (pour sa place autour du poste).</summary>
         int Rang(Poste p)

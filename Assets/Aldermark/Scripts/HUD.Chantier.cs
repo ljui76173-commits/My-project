@@ -13,7 +13,8 @@ namespace Aldermark
     {
         public static bool TableauOuvert { get; private set; }
 
-        GameObject panneauTableau;
+        GameObject panneauTableau, panneauPlan;
+        UnityEngine.UI.Text textePlan;
         UnityEngine.UI.Text texteTitreTableau, texteVillageois, textePostes, texteAideTableau;
         int selection;
         readonly Dictionary<Poste, UnityEngine.UI.Text> etiquettesPostes = new Dictionary<Poste, UnityEngine.UI.Text>();
@@ -43,6 +44,22 @@ namespace Aldermark
             texteAideTableau = Texte("Aide", t, "↑ ↓  choisir un villageois     ← →  changer son affectation     Tab  fermer     (manette : croix, Start)", 18, new Color(.8f, .8f, .95f), TextAnchor.LowerCenter);
             Etirer((RectTransform)texteAideTableau.transform, new Vector2(36, 22), new Vector2(-36, -22));
             panneauTableau.SetActive(false);
+
+            // Panneau du Plan du Registre (à gauche)
+            var pl = Panneau("PlanRegistre", toile, new Vector2(0, .5f), new Vector2(0, .5f), new Vector2(0, .5f), new Vector2(24, 40), new Vector2(660, 420), new Color(.04f, .07f, .16f, .86f));
+            panneauPlan = pl.gameObject;
+            textePlan = Texte("Texte", pl, "", 19, Color.white, TextAnchor.UpperLeft);
+            textePlan.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Etirer((RectTransform)textePlan.transform, new Vector2(24, 18), new Vector2(-24, -18));
+            panneauPlan.SetActive(false);
+        }
+
+        /// <summary>Affiche le panneau du Plan du Registre (null pour le cacher).</summary>
+        public static void AfficherPlan(string texte)
+        {
+            if (instance == null || instance.panneauPlan == null) return;
+            instance.panneauPlan.SetActive(texte != null && !TableauOuvert);
+            if (texte != null) instance.textePlan.text = texte;
         }
 
         void MettreAJourChantier(Vector2 taille)
@@ -132,7 +149,21 @@ namespace Aldermark
                 if (poste.blocage != "") p.AppendLine($"   <color={Rouge}>⚠ {poste.blocage}</color>");
             }
 
-            p.AppendLine().AppendLine($"<color={Ambre}><b>PONT PROVISOIRE EN BOIS</b></color>");
+            p.AppendLine().Append(TextePont());
+            textePostes.text = p.ToString();
+        }
+
+        /// <summary>État du pont provisoire : étapes, matériaux requis / au chantier / en route, blocage en rouge.</summary>
+        public static string TextePont()
+        {
+            var p = new StringBuilder();
+            if (!Progression.A("plan_bois"))
+            {
+                p.AppendLine($"<color={Ambre}><b>PONT DE VARENNE</b></color>");
+                p.AppendLine($"<color={Gris}>Pas encore de plan. Projette le Plan du Registre (P) sur les ruines du pont.</color>");
+                return p.ToString();
+            }
+            p.AppendLine($"<color={Ambre}><b>PONT PROVISOIRE EN BOIS</b></color>");
             var c = Poste.Trouver("chantier");
             int e = Chantier.Etape;
             for (int k = 0; k < 3; k++)
@@ -152,7 +183,7 @@ namespace Aldermark
                 }
             }
             if (e >= 3) p.AppendLine($"<color={Vert}>Le pont est ouvert !</color>");
-            textePostes.text = p.ToString();
+            return p.ToString();
         }
 
         static string Horloge()

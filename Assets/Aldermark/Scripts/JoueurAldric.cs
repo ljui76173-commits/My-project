@@ -32,6 +32,14 @@ namespace Aldermark
         public float SceauNiveau { get; private set; }
         public float Cap => transform.eulerAngles.y;
 
+        /// <summary>Dépense du mana (Plan du Registre, don de mana). Renvoie faux s'il n'y en a pas assez.</summary>
+        public bool Depenser(float q)
+        {
+            if (Mana < q) { Mana = 0f; return false; }
+            Mana -= q;
+            return true;
+        }
+
         CharacterController cc;
         float tangage, vitesseVerticale, balancement, tempsDepuisDebut;
         bool bienvenueAffichee, sceauDejaUtilise;
@@ -187,7 +195,7 @@ namespace Aldermark
                     HUD.Message("MANA ÉPUISÉ", "La vue des flux se referme.", 2.5f);
                 }
             }
-            else Mana = Mathf.Min(manaMax, Mana + regenerationMana * dt);
+            else if (!PlanRegistre.Actif) Mana = Mathf.Min(manaMax, Mana + regenerationMana * dt);
             SceauNiveau = Mathf.Lerp(SceauNiveau, SceauActif ? 1f : 0f, Mathf.Clamp01(dt * 5f));
             if (rendu != null) rendu.sceau = SceauNiveau;
 
