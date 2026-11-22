@@ -10,7 +10,7 @@ namespace Aldermark.Editeur
     /// les indices du Sceau, Odon, Bram et le système de dialogues, sans toucher au décor.
     /// Relancer le menu remplace seulement l'objet « Gameplay ».
     /// </summary>
-    public static class GameplayPont
+    public static partial class GameplayPont
     {
         [MenuItem("Aldermark/Ajouter le gameplay du pont")]
         public static void Ajouter()
@@ -116,6 +116,7 @@ namespace Aldermark.Editeur
             Attelages(racine);
             ConstruireVillage(racine);
             ConstruireConvoi(racine);
+            ConstruirePrologue(racine);
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -556,7 +557,7 @@ namespace Aldermark.Editeur
             fumee.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
             vie.fumeeForge = fumee;
             var forgeron = Personnage(v, "Forgeron", "forgeron", pf + Vers(pf) * 1.2f, "#4a3a2a", "#2a2020", 1.05f);
-            forgeron.GetComponent<Interlocuteur>().nom = "Garin, le forgeron";
+            forgeron.GetComponent<Interlocuteur>().nom = "Hadrien, le forgeron";
             vie.forgeron = forgeron.GetComponent<Habitant>();
             vie.enclume = forge;
 

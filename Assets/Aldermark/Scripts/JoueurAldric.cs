@@ -37,6 +37,19 @@ namespace Aldermark
 
         public void RemplirMana() => Mana = manaMax;
 
+        /// <summary>Déplace Aldric d'un coup (prologue, cinématiques).</summary>
+        public void Teleporter(Vector3 position, float lacet)
+        {
+            if (cc == null) cc = GetComponent<CharacterController>();
+            cc.enabled = false;
+            transform.SetPositionAndRotation(position, Quaternion.Euler(0, lacet, 0));
+            cc.enabled = true;
+            vitesseVerticale = 0f;
+        }
+
+        /// <summary>Force l'inclinaison du regard (négatif : vers le ciel).</summary>
+        public void Regarder(float inclinaison) => tangage = inclinaison;
+
         /// <summary>Dépense du mana (Plan du Registre, don de mana). Renvoie faux s'il n'y en a pas assez.</summary>
         public bool Depenser(float q)
         {
@@ -137,6 +150,7 @@ namespace Aldermark
             var souris = Mouse.current;
             var pad = Gamepad.current;
 
+            if (Prologue.EnCours) tempsDepuisDebut = 0f;
             if (!bienvenueAffichee && tempsDepuisDebut > 1.2f)
             {
                 bienvenueAffichee = true;
@@ -550,6 +564,7 @@ namespace Aldermark
         void BasculerSceau()
         {
             if (!SceauActif && Mana < 3f) { HUD.Message("MANA INSUFFISANT", "Repose-toi un instant.", 2.5f); return; }
+            if (Prologue.EnCours) return;   // pas encore de Sceau avant l'Entre-Deux
             SceauActif = !SceauActif;
             Sons.Jouer(SceauActif ? "sceauOn" : "sceauOff", .7f);
             if (SceauActif && !sceauDejaUtilise)
