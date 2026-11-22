@@ -259,7 +259,7 @@ namespace Aldermark
                 bool estCible = i.id == Progression.Cible;
                 if (estCible) cibleQuete = tete;
                 Vector3 vp = cam.WorldToViewportPoint(tete);
-                bool vis = !Dialogues.EnCours && vp.z > 0 && vp.z < 28f && vp.x > 0 && vp.x < 1 && vp.y > 0 && vp.y < 1;
+                bool vis = !Dialogues.EnCours && !TableauOuvert && vp.z > 0 && vp.z < 28f && vp.x > 0 && vp.x < 1 && vp.y > 0 && vp.y < 1;
                 n.rect.gameObject.SetActive(vis);
                 if (vis)
                 {
@@ -276,7 +276,7 @@ namespace Aldermark
                 foreach (var p in PointInteret.Tous)
                     if (p.cible == Progression.Cible && !p.decouvert) { cibleQuete = p.transform.position; if (p.Disponible) break; }
 
-            bool montrer = cibleQuete.HasValue && !Dialogues.EnCours;
+            bool montrer = cibleQuete.HasValue && !Dialogues.EnCours && !TableauOuvert;
             if (montrer)
             {
                 Vector3 vp = cam.WorldToViewportPoint(cibleQuete.Value + Vector3.up * .6f);
