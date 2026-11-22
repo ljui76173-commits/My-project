@@ -34,16 +34,16 @@ namespace Aldermark
         bool nuitAnnoncee;
 
         // Réparation du four
-        public const float FourJours = 3f, FourBlocs = 4f;
+        public const float FourJours = 1.5f, FourBlocs = 4f;
         public static float ReparationFour { get; private set; }
 
         // Pont en bois : pierre, chaux, bois, jours-personne
         public struct Besoin { public string nom; public float pierre, chaux, bois, jours; }
         public static readonly Besoin[] Etapes =
         {
-            new Besoin { nom = "Piles renforcées", pierre = 12, chaux = 4, bois = 0, jours = 4 },
-            new Besoin { nom = "Poutres maîtresses", pierre = 0, chaux = 0, bois = 24, jours = 6 },
-            new Besoin { nom = "Tablier et garde-corps", pierre = 0, chaux = 0, bois = 30, jours = 5 },
+            new Besoin { nom = "Piles renforcées", pierre = 8, chaux = 4, bois = 0, jours = 3 },
+            new Besoin { nom = "Poutres maîtresses", pierre = 0, chaux = 0, bois = 16, jours = 3 },
+            new Besoin { nom = "Tablier et garde-corps", pierre = 0, chaux = 0, bois = 20, jours = 3 },
         };
         public static readonly float[] Avancement = new float[3];
         public static int Etape => Progression.A("pont_ouvert") ? 3 : Progression.A("pont_etape2") ? 2 : Progression.A("pont_etape1") ? 1 : 0;

@@ -18,6 +18,9 @@ namespace Aldermark
         public int maxPersonnes = 6;
         [Tooltip("Quantité totale disponible (-1 = illimité)")] public float reserve = -1f;
         [Tooltip("Drapeau de progression qui débloque le poste (vide = toujours)")] public string requis = "";
+        [Tooltip("Stock déjà présent au départ (calcaire déjà extrait au talus, bois mort au four)")]
+        public Ressource ressourceDepart = Ressource.Aucune;
+        public float quantiteDepart;
 
         public const float Capacite = 20f;
         public static readonly List<Poste> Tous = new List<Poste>();
@@ -86,8 +89,8 @@ namespace Aldermark
                 if (!Chantier.FourRepare) return;   // la réparation est gérée par le chantier
                 if (personnes <= 0) return;
                 if (Stock(Ressource.Chaux) >= Capacite) { blocage = "Stock de chaux plein : il manque des porteurs"; return; }
-                // 2 calcaire + 1 poutre → 2 sacs ; 4 sacs par personne et par jour
-                progresChaux += personnes * Multiplicateur * 2f * dt / Chantier.JourDuree;
+                // 2 calcaire + 1 poutre → 2 sacs ; 8 sacs par personne et par jour
+                progresChaux += personnes * Multiplicateur * 4f * dt / Chantier.JourDuree;
                 if (progresChaux >= 1f)
                 {
                     if (Stock(Ressource.Calcaire) >= 2f && Stock(Ressource.Bois) >= 1f)
@@ -124,6 +127,7 @@ namespace Aldermark
 
         void Start()
         {
+            if (ressourceDepart != Ressource.Aucune && quantiteDepart > 0) Ajouter(ressourceDepart, quantiteDepart);
             // Alerte rouge visible dans la vue du Sceau quand le poste est bloqué
             int couche = LayerMask.NameToLayer("Sceau");
             if (couche < 0) return;

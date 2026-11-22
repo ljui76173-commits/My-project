@@ -499,12 +499,12 @@ namespace Aldermark
                 return $"<b>{p.nom}</b>\n<color=#9a9ab4>À découvrir avec le Sceau (E).</color>";
             string recette = p.id switch
             {
-                "riviere" => "Sortir les blocs de l'eau : 4 blocs par personne et par jour.",
+                "riviere" => "Sortir les blocs de l'eau : 6 blocs par personne et par jour.",
                 "carriere" => "Tailler la roche, loin du pont : 2 blocs par personne et par jour.",
-                "foret" => "Abattre et ébrancher : 5 poutres par personne et par jour.",
+                "foret" => "Abattre et ébrancher : 10 poutres par personne et par jour.",
                 "talus" => "Casser le calcaire : 4 par personne et par jour.",
-                "four" when !Chantier.FourRepare => "À réparer : 4 blocs, puis 3 jours de travail (Odon compte double).",
-                "four" => "2 calcaire + 1 poutre donnent 2 sacs de chaux, le mortier des piles.",
+                "four" when !Chantier.FourRepare => "À réparer : 4 blocs, puis un jour et demi de travail (Odon compte double).",
+                "four" => "2 calcaire + 1 poutre donnent 2 sacs de chaux, le mortier des piles (8 sacs par personne et par jour).",
                 "chantier" when Chantier.Etape < 3 => ChantierRecette(),
                 _ => "Le pont est ouvert.",
             };

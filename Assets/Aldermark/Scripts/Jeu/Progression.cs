@@ -77,9 +77,9 @@ namespace Aldermark
             if (!A("four_repare")) { Cible = "four"; return "Relancer le four : envoie 4 blocs de pierre et des bras au four. Organise le village avec Tab."; }
             if (A("sonnailles_donnees") && !A("sonnailles_resolues")) { Cible = "four"; return $"La nuit des sonnailles : pose les sonnailles (T) sur le chemin des saboteurs, que le Sceau (E) montre entre chez Corvin et le four. Puis dors chez Odon, ou veille."; }
             if (A("saboteurs_captures") && !A("tobin_interroge")) { Cible = "tobin"; return "Trois saboteurs ont été pris au four. Interroge Tobin."; }
-            if (!A("pont_etape1")) { Cible = "chantier"; return "Pont en bois, étape 1 : les piles. Il faut 12 blocs, 4 sacs de chaux et des bâtisseurs au chantier."; }
-            if (!A("pont_etape2")) { Cible = "chantier"; return "Pont en bois, étape 2 : les poutres maîtresses. Il faut 24 poutres : la forêt et ses porteurs sont la clé."; }
-            if (!A("pont_ouvert")) { Cible = "chantier"; return "Pont en bois, étape 3 : le tablier. Encore 30 poutres."; }
+            if (!A("pont_etape1")) { Cible = "chantier"; return "Pont en bois, étape 1 : les piles. Il faut 8 blocs, 4 sacs de chaux et des bâtisseurs au chantier."; }
+            if (!A("pont_etape2")) { Cible = "chantier"; return "Pont en bois, étape 2 : les poutres maîtresses. Il faut 16 poutres : la forêt et ses porteurs sont la clé."; }
+            if (!A("pont_ouvert")) { Cible = "chantier"; return "Pont en bois, étape 3 : le tablier. Encore 20 poutres."; }
             if (!A("convoi_arrive")) { Cible = "chantier"; return "Le pont provisoire est ouvert ! Regarde passer le convoi du Comte."; }
             return "Fin de la boucle du pont : tu es « le Bâtisseur ». Suite du chapitre 1 en développement.";
         }
