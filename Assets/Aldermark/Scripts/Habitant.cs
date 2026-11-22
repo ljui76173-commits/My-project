@@ -8,7 +8,7 @@ namespace Aldermark
     /// d'un point à l'autre du village et s'arrête un moment entre deux trajets.
     /// </summary>
     /// <summary>Geste de travail d'un villageois.</summary>
-    public enum Geste { Aucun, Hache, Pioche, Marteau, Ramasser }
+    public enum Geste { Aucun, Hache, Pioche, Marteau, Ramasser, Epee }
 
     public class Habitant : MonoBehaviour
     {
@@ -140,7 +140,7 @@ namespace Aldermark
                 if (d.sqrMagnitude > .01f) transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), dt * 4f);
             }
 
-            float rythme = g == Geste.Marteau ? 1.7f : g == Geste.Ramasser ? .8f : 1.05f;
+            float rythme = g == Geste.Marteau ? 1.7f : g == Geste.Ramasser ? .8f : g == Geste.Epee ? 1.5f : 1.05f;
             float avant = phaseTravail;
             phaseTravail += dt * rythme;
             float t = Mathf.Repeat(phaseTravail, 1f);
@@ -156,13 +156,14 @@ namespace Aldermark
             // Armer lentement, frapper vite
             angle = t < .7f ? Mathf.Lerp(-35f, -165f, Mathf.SmoothStep(0, 1, t / .7f)) : Mathf.Lerp(-165f, -35f, (t - .7f) / .3f);
             brasD.localRotation = Quaternion.Euler(angle, 0, -6f);
-            if (g != Geste.Marteau) brasG.localRotation = Quaternion.Euler(angle + 8f, 0, 14f);   // outils à deux mains
+            if (g == Geste.Epee) brasG.localRotation = Quaternion.Euler(-25f, 0, 12f);                  // l'épée à une main
+            else if (g != Geste.Marteau) brasG.localRotation = Quaternion.Euler(angle + 8f, 0, 14f);   // outils à deux mains
             else brasG.localRotation = Quaternion.Euler(-40f, 0, 10f);                           // l'autre main tient la pièce
 
             // Le coup : un « toc » dans le monde (hache sourde, pioche et marteau plus secs)
             if (Mathf.Floor(avant) != Mathf.Floor(phaseTravail))
                 Sons.JouerA("coup", transform.position + transform.forward * .8f + Vector3.up, .35f,
-                    g == Geste.Hache ? .6f : g == Geste.Pioche ? .85f : 1.15f);
+                    g == Geste.Hache ? .6f : g == Geste.Pioche ? .85f : g == Geste.Epee ? 1.45f : 1.15f);
         }
 
         void ChangerOutil(Geste g)
@@ -176,6 +177,12 @@ namespace Aldermark
             outil.localPosition = new Vector3(0, -.46f, 0);
             var bois = Lit(new Color(.45f, .3f, .18f));
             var fer = Lit(new Color(.55f, .56f, .6f));
+            if (g == Geste.Epee)
+            {
+                PieceOutil(new Vector3(0, 0, .05f), new Vector3(.22f, .04f, .05f), fer);      // la garde
+                PieceOutil(new Vector3(0, 0, .5f), new Vector3(.035f, .09f, .85f), fer);      // la lame
+                return;
+            }
             float l = g == Geste.Marteau ? .38f : .78f;
             // Manche vers l'avant de la main, tête au bout
             PieceOutil(new Vector3(0, 0, l / 2f - .08f), new Vector3(.045f, .045f, l), bois);

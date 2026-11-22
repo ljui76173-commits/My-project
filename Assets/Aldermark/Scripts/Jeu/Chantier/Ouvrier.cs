@@ -57,7 +57,7 @@ namespace Aldermark
             maison = new Vector2(transform.position.x, transform.position.z);
         }
 
-        public bool Disponible => Chantier.Actif && (string.IsNullOrEmpty(requis) || Progression.A(requis));
+        public bool Disponible => Chantier.Actif && !BatailleDuGue.EnCours && (string.IsNullOrEmpty(requis) || Progression.A(requis));
         public Poste Livraison => quantite > 0 ? livraison : null;
 
         public static int Capacite(Ressource r) => r == Ressource.Bois ? 4 : 3;

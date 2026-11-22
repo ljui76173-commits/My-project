@@ -74,7 +74,7 @@ namespace Aldermark
         void Update()
         {
             RaccourcisDeTest();
-            if (Prologue.EnCours) return;   // le temps est figé pendant le prologue
+            if (Prologue.EnCours || BatailleDuGue.EnCours) return;   // le temps est figé pendant le prologue et la bataille
             float dt = Time.deltaTime;
             int jourAvant = Jour;
             Temps += dt;

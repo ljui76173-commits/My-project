@@ -28,6 +28,8 @@ namespace Aldermark
         public bool troisiemePersonne;
 
         public float Mana { get; private set; }
+        /// <summary>Freine la marche (le Siphon sur Vesk : « tu ne peux pas bouger sans lâcher »).</summary>
+        [System.NonSerialized] public float entrave = 1f;
         public bool SceauActif { get; private set; }
         public float SceauNiveau { get; private set; }
         public float Cap => transform.eulerAngles.y;
@@ -191,6 +193,7 @@ namespace Aldermark
             // Dans l'eau seulement si les pieds sont sous la surface (pas sur un pont ou une pierre)
             bool dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
             if (dansLEau) vitesse *= .5f;
+            vitesse *= entrave;
             Vector3 mouvement = (transform.forward * dep.y + transform.right * dep.x) * vitesse;
             bool saute = !fige && ((kb != null && kb.spaceKey.wasPressedThisFrame) || (pad != null && pad.buttonSouth.wasPressedThisFrame));
             if (cc.isGrounded)

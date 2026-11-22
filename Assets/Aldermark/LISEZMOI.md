@@ -137,3 +137,25 @@ Les décors sont construits 600 m sous la vallée par « Ajouter le gameplay du 
   Lâcher entre 1,6 et 2,2 fois le mana maximum : +10 de mana maximum pour toujours ; trop tard,
   rupture : −20 % jusqu'à l'aube. Le nœud s'affaiblit et le **Siphon (R maintenu)** s'éveille.
 - Le rendu peint / brut passe sur F8 (R sert désormais au Siphon).
+
+## La veillée d'armes et la bataille du Gué (fin de l'arc 1)
+
+- Quelques secondes après l'arrivée du convoi, Ilse prévient : Vesk descend la rivière sur une barge
+  noire avec douze Cendrés, il sera au Gué **à l'aube**. Garr, ancien sergent, lève une milice.
+- **Les pièges** : au débarcadère (au nord des ponts, rive du village), le Sceau (E) montre la route
+  de la barge (bleu), le chemin de ses hommes (or) et celui d'un fuyard (pâle). Le Plan propose
+  14 emplacements pour 8 pièges : 1 chaîne, 3 filets lestés, 2 fosses à boue, 1 lot de
+  chausse-trapes, 1 fil à cloches. **T** pour tracer ou effacer (3 mana).
+  Les cloches : en amont, elles donnent l'alerte (moins de blessés) ; sur le sentier du bois, elles
+  rattrapent le douzième Cendré. Il faut choisir.
+- **La veillée** : dès 17 h, parle à Odon pour le discours au puits (le moral réduit les blessés).
+  Ilse t'attend ensuite au bord du pont neuf (facultatif). Puis dors.
+- **La bataille** : la barge bute sur la chaîne (sans chaîne, elle accoste et tout le monde débarque
+  sur le quai). **Siphon (R maintenu) sur Vesk** : un bras de fer, il force par vagues. Une fois la
+  vanne fermée, garde-la fermée : si tu lâches, sa main noire se rallume et brûle un filet ou la
+  milice. Tu marches lentement tant que tu tiens. Ilse s'occupe de Vesk quand il saute à l'eau.
+- **Le verdict** : l'épargner (et sceller son lien au mana) ou laisser Ilse le tuer. Bilan, titre
+  « Vainqueur du Gué », fin de l'arc 1.
+- Raccourci de test (éditeur) : **F7** saute à la veille de la bataille, F7 encore lance l'aube.
+- Équilibrage : `Outils/simulation_bataille.py` (pièges parfaits : 1 Cendré passe ; sans chaîne : 5 ;
+  sans rien : 11, la ligne plie).

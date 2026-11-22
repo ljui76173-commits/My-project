@@ -77,6 +77,9 @@ namespace Aldermark.Editeur
             var sh = vap.shape; sh.shapeType = ParticleSystemShapeType.Circle; sh.radius = 9f;
             vap.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
             noeud.vapeur = vap;
+
+            // La veillée d'armes et la bataille du Gué (le débarcadère, les pièges, la barge : construits au lancement)
+            new GameObject("BatailleDuGue").AddComponent<BatailleDuGue>().transform.SetParent(arc, false);
         }
     }
 }
