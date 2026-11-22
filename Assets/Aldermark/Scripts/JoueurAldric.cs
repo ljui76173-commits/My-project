@@ -137,10 +137,10 @@ namespace Aldermark
             cc.Move(mouvement * dt);
             bool bouge = dep.sqrMagnitude > .01f;
             if (bouge) balancement += dt * vitesse * 1.6f;
-            int pas = Mathf.FloorToInt(balancement / Mathf.PI);
-            if (pas != dernierPas)
+            int numeroPas = Mathf.FloorToInt(balancement / Mathf.PI);
+            if (numeroPas != dernierPas)
             {
-                dernierPas = pas;
+                dernierPas = numeroPas;
                 if (cc.isGrounded && bouge)
                 {
                     Vector3 pied = transform.position;
