@@ -180,10 +180,12 @@ namespace Aldermark.Editeur
         static GameObject PoserModele(GameObject modele, Transform parent, Vector3 sol, float hauteur, float rotY, float enfonce = .2f)
         {
             var go = (GameObject)PrefabUtility.InstantiatePrefab(modele, parent);
-            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0));
-            go.transform.localScale = Vector3.one;
+            // On garde la rotation d'import du FBX (axe Z vers le haut chez Meshy) et on tourne seulement autour de la verticale.
+            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0) * modele.transform.localRotation);
+            go.transform.localScale = modele.transform.localScale;
+            var echelle0 = go.transform.localScale;
             var b = Bornes(go);
-            if (b.size.y > 1e-4f) go.transform.localScale = Vector3.one * (hauteur / b.size.y);
+            if (b.size.y > 1e-4f) go.transform.localScale = echelle0 * (hauteur / b.size.y);
             b = Bornes(go);
             go.transform.position += new Vector3(sol.x - b.center.x, sol.y - enfonce - b.min.y, sol.z - b.center.z);
             foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
