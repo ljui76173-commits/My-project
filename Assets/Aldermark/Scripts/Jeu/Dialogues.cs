@@ -53,6 +53,14 @@ namespace Aldermark
                 "lise" => Lise(),
                 "odon" => Odon(),
                 "bram" => Bram(),
+                "lit" => Lit(),
+                "forgeron" => new Noeud("Garin", !A("four_repare")
+                    ? "Sans charbon de bois ni fer qui arrive, ma forge dort. Relance le four, l'étranger, et on verra pour le reste."
+                    : !A("pont_ouvert")
+                        ? "Le four refume, alors j'ai rallumé la forge : des clous et des crampons pour ton pont. Tiens bon."
+                        : "Les charrettes passent, le fer arrive. Repasse me voir, j'aurai peut-être quelque chose pour toi."),
+                "tobin" => Tobin(),
+                "prisonnier" => new Noeud(qui.nom, "(Il crache par terre.) Je dirai rien. Corvin vous fera payer ça, tous autant que vous êtes."),
                 _ => new Noeud(qui.nom, qui.GetComponent<Ouvrier>() is Ouvrier o ? o.Replique() : "…")
             };
             instance.Afficher(n);
@@ -212,6 +220,57 @@ namespace Aldermark
             if (!A("four_repare")) return new Noeud("Odon", Chantier.Conseil() + " (Tab : carte du chantier)");
             if (!A("pont_ouvert")) return new Noeud("Odon", Chantier.Conseil() + " (Tab : carte du chantier)");
             return new Noeud("Odon", "Il tient. Il tient vraiment. (Il pose sa main valide sur la rambarde.) Merci, Bâtisseur.");
+        }
+
+        // ---------- interrogatoire de Tobin ----------
+
+        static Noeud Tobin()
+        {
+            if (A("tobin_rallie")) return new Noeud("Tobin", "Je porte, je porte. C'est plus honnête que ce que je faisais avant.");
+            if (A("tobin_interroge")) return new Noeud("Tobin", "J'ai tout dit. Qu'est-ce que vous allez faire de moi ?")
+                .Choix("Tu peux te racheter : viens travailler au pont.", TobinRallie, () => Rallier(), () => !A("tobin_maltraite"))
+                .Choix("Le Comte décidera de ton sort.");
+            return new Noeud("Tobin", "(Ligoté, il évite ton regard. Bram se tient à l'écart, les poings serrés.) J'ai rien fait de mal… On m'a juste payé pour porter des sacs.")
+                .Choix("Le secouer pour le faire parler.", () =>
+                    new Noeud("Odon", "(Odon t'attrape le bras, sa main bandée tremble.) Non. Pas comme ça. Si on fait comme eux, on vaut pas mieux qu'eux.")
+                        .Choix("Insister : « Il parlera, de gré ou de force. »", () =>
+                                new Noeud("Tobin", "(Terrifié.) C'est Corvin ! Corvin qui paie ! Les hommes en noir apportent la poudre, ils viennent de plus haut, je sais pas qui ! Arrêtez !"),
+                            () => { Progression.Mettre("tobin_interroge"); Progression.Mettre("tobin_maltraite"); Progression.AjouterConfiance(-2); })
+                        .Choix("Lâcher prise : « Tu as raison, Odon. »", TobinCalme))
+                .Choix("L'interroger calmement.", TobinCalme);
+        }
+
+        static Noeud TobinCalme() =>
+            new Noeud("Tobin", "(Il souffle.) Corvin nous payait. Une pièce d'argent par nuit, pour casser et pour voler. Les hommes en noir apportaient la poudre, le tonnerre sans orage. Ils disaient que le pont devait rester tombé.")
+                .Choix("Pourquoi le pont doit-il rester tombé ?", () =>
+                        new Noeud("Tobin", "Tant qu'il est cassé, tout passe par la barque de Corvin, au prix qu'il veut. Et les charrettes du Comte restent de l'autre côté. Quelqu'un veut que Varenne crève, je crois.")
+                            .Choix("Tu peux te racheter : viens travailler au pont.", TobinRallie, () => Rallier())
+                            .Choix("Le Comte décidera de ton sort."),
+                    () => { Progression.Mettre("tobin_interroge"); Progression.AjouterConfiance(1); });
+
+        static Noeud TobinRallie() =>
+            new Noeud("Tobin", "(Il regarde Bram, qui finit par hocher la tête.) … D'accord. Je porterai ce que tu veux. Et pardon, pour le pont.");
+
+        static void Rallier()
+        {
+            Progression.Mettre("tobin_rallie");
+            Progression.AjouterConfiance(1);
+            foreach (var i in Interlocuteur.Tous)
+                if (i.id == "tobin")
+                {
+                    var corde = i.transform.Find("Corde");
+                    if (corde != null) Object.Destroy(corde.gameObject);
+                }
+            HUD.Message("TOBIN REJOINT LE CHANTIER", "Il est libre, et il porte. Tu peux l'affecter sur la carte du chantier (Tab).", 5f);
+        }
+
+        static Noeud Lit()
+        {
+            if (!Chantier.PeutDormir)
+                return new Noeud("Paillasse", $"Une paillasse de foin, chez Odon. Il est {(int)Chantier.Heure} h : trop tôt pour dormir.");
+            return new Noeud("Paillasse", "Une paillasse de foin qui sent bon l'été. Odon ronfle déjà de l'autre côté du mur.")
+                .Choix("Dormir jusqu'à l'aube", () => null, () => Chantier.Dormir())
+                .Choix("Pas encore");
         }
 
         static Noeud OdonPresentation() =>

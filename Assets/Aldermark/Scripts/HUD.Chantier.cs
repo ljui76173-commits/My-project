@@ -16,6 +16,15 @@ namespace Aldermark
         GameObject panneauPlan;
         UnityEngine.UI.Text textePlan;
         CarteChantier carteChantier;
+        UnityEngine.UI.Image voileNoir;
+        float fondu, fonduDuree;
+
+        /// <summary>Fondu au noir puis retour (sommeil, nuit des sonnailles).</summary>
+        public static void Fondu(float duree)
+        {
+            if (instance == null) return;
+            instance.fondu = duree; instance.fonduDuree = duree;
+        }
         readonly Dictionary<Poste, UnityEngine.UI.Text> etiquettesPostes = new Dictionary<Poste, UnityEngine.UI.Text>();
 
         const string Ambre = "#ffd27a", Rouge = "#ff7a7a", Gris = "#9a98b0", Vert = "#a8e6a0";
@@ -24,6 +33,10 @@ namespace Aldermark
         {
             carteChantier = gameObject.AddComponent<CarteChantier>();
             carteChantier.Construire(toile, police);
+
+            var v = Panneau("Voile", toile, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color(0, 0, 0, 0));
+            v.offsetMin = v.offsetMax = Vector2.zero;
+            voileNoir = v.GetComponent<UnityEngine.UI.Image>();
 
             // Panneau du Plan du Registre (à gauche)
             var pl = Panneau("PlanRegistre", toile, new Vector2(0, .5f), new Vector2(0, .5f), new Vector2(0, .5f), new Vector2(24, 40), new Vector2(660, 420), new Color(.04f, .07f, .16f, .86f));
@@ -52,6 +65,10 @@ namespace Aldermark
             if (TableauOuvert && !Chantier.Actif) DefinirTableau(false);
 
             MettreAJourEtiquettesPostes(taille);
+            if (fondu > 0) fondu -= Time.unscaledDeltaTime;
+            float tf = fonduDuree > 0 ? 1f - Mathf.Clamp01(fondu / fonduDuree) : 1f;   // 0 → 1
+            voileNoir.color = new Color(0, 0, 0, fondu > 0 ? (tf < .25f ? tf / .25f : tf > .7f ? (1f - tf) / .3f : 1f) : 0f);
+            voileNoir.transform.SetAsLastSibling();
         }
 
         void DefinirTableau(bool ouvert, bool verrouiller = true)

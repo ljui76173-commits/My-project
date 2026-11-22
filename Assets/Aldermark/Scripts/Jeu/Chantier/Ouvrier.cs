@@ -50,7 +50,12 @@ namespace Aldermark
 
         void OnEnable() => Tous.Add(this);
         void OnDisable() => Tous.Remove(this);
-        void Awake() => h = GetComponent<Habitant>();
+        Vector2 maison;
+        void Awake()
+        {
+            h = GetComponent<Habitant>();
+            maison = new Vector2(transform.position.x, transform.position.z);
+        }
 
         public bool Disponible => Chantier.Actif && (string.IsNullOrEmpty(requis) || Progression.A(requis));
         public Poste Livraison => quantite > 0 ? livraison : null;
@@ -138,6 +143,14 @@ namespace Aldermark
                         h.Porter(null);
                     }
                 }
+                return;
+            }
+
+            // La nuit, chacun rentre chez soi
+            if (Chantier.EstNuit)
+            {
+                AuPoste = false;
+                Etat = Marcher(maison, 2.6f) ? "dort" : "rentre chez lui";
                 return;
             }
 

@@ -14,13 +14,24 @@ namespace Aldermark
         [Header("Pont provisoire (pièces révélées au fil de l'avancement)")]
         public Transform etape1, etape2, etape3;
         public Collider tablier;
+        [Tooltip("Centre du tablier du pont provisoire (hauteur du tablier en y)")] public Vector3 centrePont;
+        public float longueurPont = 32f;
 
         public static Chantier Instance { get; private set; }
         public static bool Actif => Progression.A("pont_accepte");
         public static bool FourRepare => Progression.A("four_repare");
-        public static float Temps { get; private set; }
-        public static int Jour => 1 + (int)(Temps / JourDuree);
-        public static float HeureDuJour => Mathf.Repeat(Temps, JourDuree) / JourDuree;
+        /// <summary>Une journée de travail dure 3 minutes, la nuit 1 minute (ou un instant en dormant).</summary>
+        public const float NuitDuree = 60f, Cycle = JourDuree + NuitDuree;
+        public static float Temps { get; private set; } = 20f;
+        public static int Jour => 1 + (int)(Temps / Cycle);
+        static float DansCycle => Mathf.Repeat(Temps, Cycle);
+        public static bool EstNuit => DansCycle >= JourDuree;
+        /// <summary>Avancement de la journée de travail (0 à l'aube, 1 au crépuscule).</summary>
+        public static float HeureDuJour => Mathf.Clamp01(DansCycle / JourDuree);
+        /// <summary>Heure affichée, de 0 à 24 : 6 h → 20 h le jour, 20 h → 6 h la nuit.</summary>
+        public static float Heure => EstNuit ? Mathf.Repeat(20f + (DansCycle - JourDuree) / NuitDuree * 10f, 24f) : 6f + HeureDuJour * 14f;
+        public static event System.Action NouveauJour;
+        bool nuitAnnoncee;
 
         // Réparation du four
         public const float FourJours = 3f, FourBlocs = 4f;
@@ -46,7 +57,7 @@ namespace Aldermark
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reinitialiser()
         {
-            Temps = 0; ReparationFour = 0; BlocageChantier = "";
+            Temps = 20f; ReparationFour = 0; BlocageChantier = "";
             for (int i = 0; i < Avancement.Length; i++) Avancement[i] = 0;
         }
 
@@ -63,9 +74,16 @@ namespace Aldermark
         void Update()
         {
             RaccourcisDeTest();
-            if (!Actif) return;
             float dt = Time.deltaTime;
+            int jourAvant = Jour;
             Temps += dt;
+            if (Jour != jourAvant) Aube();
+            if (EstNuit && !nuitAnnoncee)
+            {
+                nuitAnnoncee = true;
+                HUD.Message("LA NUIT TOMBE", "Les villageois rentrent chez eux.\nDors dans la paillasse chez Odon pour passer la nuit et retrouver tout ton mana.", 6f);
+            }
+            if (!Actif) return;
 
             if (!annonce)
             {
@@ -74,10 +92,14 @@ namespace Aldermark
                     "Le village est prêt à travailler.\nAppuie sur Tab pour affecter chacun à un poste ou en faire un porteur.\nRien n'arrive au chantier sans porteur !", 8f);
             }
 
-            CompterPersonnes();
-            foreach (var p in Poste.Tous) if (p.Disponible) p.Simuler(dt);
-            Four(dt);
-            Pont(dt);
+            if (!EstNuit)
+            {
+                CompterPersonnes();
+                foreach (var p in Poste.Tous) { if (p.Disponible) p.Simuler(dt); p.boost = Mathf.Max(0, p.boost - dt); }
+                Four(dt);
+                Pont(dt);
+            }
+            else foreach (var p in Poste.Tous) p.personnes = 0;
 
             minuteurLignes -= dt;
             if (minuteurLignes <= 0) { minuteurLignes = .5f; MettreAJourLignes(); }
@@ -99,6 +121,7 @@ namespace Aldermark
                 Progression.Mettre("pont_accepte");
                 Debug.Log("Aldermark (test) : enquête sautée, chantier ouvert.");
             }
+            if (kb.f11Key.wasPressedThisFrame) Temps += 30f;   // avance d'une demi-heure de jeu environ
             if (kb.f10Key.wasPressedThisFrame)
             {
                 Time.timeScale = Time.timeScale > 1f ? 1f : 4f;
@@ -120,6 +143,29 @@ namespace Aldermark
                 nombre[p] = n + 1;
                 p.personnes += p.Batir ? o.force : 1f;
             }
+        }
+
+        // ---------- jour, nuit, sommeil ----------
+
+        void Aube()
+        {
+            nuitAnnoncee = false;
+            NouveauJour?.Invoke();
+            HUD.Message($"JOUR {Jour}", Actif ? "Le chantier reprend." : "Le soleil se lève sur Varenne.", 3f);
+        }
+
+        /// <summary>Peut-on dormir maintenant ? (la nuit, ou en fin de journée)</summary>
+        public static bool PeutDormir => EstNuit || Heure >= 18f;
+
+        /// <summary>Dormir chez Odon : la nuit passe d'un coup et le mana revient entièrement.</summary>
+        public static void Dormir()
+        {
+            if (Instance == null || !PeutDormir) return;
+            Temps = (Mathf.Floor(Temps / Cycle) + 1f) * Cycle + .01f;
+            var j = FindFirstObjectByType<JoueurAldric>();
+            if (j != null) j.RemplirMana();
+            HUD.Fondu(2.2f);
+            Instance.Aube();
         }
 
         // ---------- conseils d'Odon ----------
@@ -207,7 +253,7 @@ namespace Aldermark
                 four.blocage = $"Il manque {FourBlocs - Mathf.Floor(four.Stock(Ressource.Pierre)):0} blocs pour réparer";
             }
             float plafond = FourJours * Mathf.Clamp01(Mathf.Floor(four.Stock(Ressource.Pierre)) / FourBlocs);
-            ReparationFour = Mathf.Min(ReparationFour + four.personnes * dt / JourDuree, plafond);
+            ReparationFour = Mathf.Min(ReparationFour + four.personnes * four.Multiplicateur * dt / JourDuree, plafond);
             if (ReparationFour >= FourJours - .001f)
             {
                 four.Prendre(Ressource.Pierre, FourBlocs);
@@ -245,7 +291,7 @@ namespace Aldermark
             if (manque.Count > 0) BlocageChantier = "Il manque " + string.Join(", ", manque);
             c.blocage = Avancement[e] >= b.jours * part - .001f && part < 1f ? BlocageChantier : "";
 
-            Avancement[e] = Mathf.Min(Avancement[e] + c.personnes * dt / JourDuree, b.jours * part);
+            Avancement[e] = Mathf.Min(Avancement[e] + c.personnes * c.Multiplicateur * dt / JourDuree, b.jours * part);
             if (Avancement[e] >= b.jours - .001f)
             {
                 c.Prendre(Ressource.Pierre, b.pierre);

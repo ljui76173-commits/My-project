@@ -192,7 +192,7 @@ namespace Aldermark
             if (flashQuete > 0) flashQuete -= dt;
             texteQuete.color = Color.Lerp(Color.white, new Color(1f, .82f, .45f), Mathf.Clamp01(flashQuete));
             texteEtat.text = $"Éveil du Sceau {Progression.Eveil:0.#} %   ·   Village : {Progression.NomConfiance}"
-                + (Chantier.Actif ? $"   ·   Jour {Chantier.Jour}   ·   Tab : chantier" : "");
+                + $"   ·   Jour {Chantier.Jour}, {(int)Chantier.Heure:00} h" + (Chantier.Actif ? "   ·   Tab : chantier" : "");
             var kb = Keyboard.current;
             if (kb != null && kb.jKey.wasPressedThisFrame && !Dialogues.EnCours) panneauJournal.SetActive(!panneauJournal.activeSelf);
             if (panneauJournal.activeSelf)
@@ -430,7 +430,7 @@ namespace Aldermark
         void ConstruireAide()
         {
             var bloc = Panneau("Aide", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 18), new Vector2(1180, 38), Verre);
-            var t = Texte("Texte", bloc, "VARENNE · ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · J — journal · V — vue · R — rendu · Échap — souris", 19, Color.white, TextAnchor.MiddleCenter);
+            var t = Texte("Texte", bloc, "ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · P — Plan · Tab — chantier · G — mana · J — journal · V — vue · Échap — souris", 16, Color.white, TextAnchor.MiddleCenter);
             Etirer((RectTransform)t.transform, Vector2.zero, Vector2.zero);
         }
 

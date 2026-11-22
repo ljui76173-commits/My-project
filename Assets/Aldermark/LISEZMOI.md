@@ -95,4 +95,18 @@ marteau au chantier et au four, et portent leur charge à deux bras.
 - Vue du Sceau (E) : une ligne ambrée par liaison active, une boule rouge sur un poste bloqué.
 
 Raccourcis de test (dans l'éditeur seulement) : **F9** saute l'enquête et ouvre le chantier,
-**F10** accélère le temps ×4.
+**F10** accélère le temps ×4, **F11** avance l'heure.
+
+## Fin de la boucle du pont
+
+- **Don de mana (G)** : vise un poste (ou choisis-le sur la carte) et donne 10 mana : l'équipe
+  travaille deux fois plus vite pendant une demi-journée. Pendant le chantier, le mana remonte
+  lentement : dormir le remplit.
+- **Jour et nuit** : 3 minutes de jour, 1 minute de nuit. Les villageois rentrent le soir.
+  La paillasse d'Odon (F) fait passer la nuit d'un coup.
+- **Nuit des sonnailles** : une fois le four relancé, le soir, Odon donne 6 sonnailles.
+  T pour les poser sur le chemin des saboteurs (le Sceau le montre, de chez Corvin au four).
+  Réussi : trois hommes pris, dont Tobin, à interroger (choix moral). Raté : 10 poutres volées.
+- **Village vivant** : marché, auberge, forge, chapelle, lavoir, moulin, moutons, poules ;
+  les villageois vont aux champs, au marché, à l'auberge ; le village revit à chaque étape.
+- **Fin** : le pont ouvert, le convoi du Comte traverse jusqu'au marché, titre « le Bâtisseur ».

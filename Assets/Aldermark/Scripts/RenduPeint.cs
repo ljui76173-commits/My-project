@@ -115,6 +115,8 @@ namespace Aldermark
 
             mat.SetFloat("_Peint", peint ? 1f : 0f);
             mat.SetFloat("_Sceau", sceau);
+            mat.SetFloat("_Nuit", SoleilNuages.Nuit);
+            mat.SetFloat("_Crepuscule", SoleilNuages.Crepuscule);
 
             Vector3 vp = cam.WorldToViewportPoint(cam.transform.position + directionSoleil.normalized * 1000f);
             float vis = 0f;

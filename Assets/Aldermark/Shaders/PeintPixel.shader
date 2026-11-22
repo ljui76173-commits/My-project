@@ -14,6 +14,8 @@ Shader "Aldermark/PeintPixel"
         _Res ("Résolution", Vector) = (480,270,0,0)
         _SoleilPos ("Soleil (écran)", Vector) = (0.5,0.5,0,0)
         _SoleilVis ("Soleil visible", Range(0,1)) = 0
+        _Nuit ("Nuit", Range(0,1)) = 0
+        _Crepuscule ("Crépuscule", Range(0,1)) = 0
     }
     SubShader
     {
@@ -28,7 +30,7 @@ Shader "Aldermark/PeintPixel"
             #include "UnityCG.cginc"
 
             sampler2D _MainTex, _SceauTex;
-            float _Peint, _Sceau, _Niveaux, _Tramage, _SoleilVis;
+            float _Peint, _Sceau, _Niveaux, _Tramage, _SoleilVis, _Nuit, _Crepuscule;
             float4 _Res, _SoleilPos;
 
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
@@ -72,6 +74,10 @@ Shader "Aldermark/PeintPixel"
                 p = floor(p * _Niveaux + t * _Tramage + .5) / _Niveaux;
 
                 c = lerp(brut, p, _Peint);
+
+                // Crépuscule doré, puis nuit bleutée (lune)
+                c *= lerp(float3(1, 1, 1), float3(1.1, .88, .72), _Crepuscule);
+                c = lerp(c, c * float3(.3, .38, .7) + float3(.012, .016, .04), _Nuit);
 
                 float3 o = versPerceptuel(tex2D(_SceauTex, i.uv).rgb);
                 c = lerp(c, l * float3(.42, .46, .66), .72 * _Sceau) + o * 1.35 * _Sceau;
