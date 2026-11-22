@@ -59,16 +59,20 @@ namespace Aldermark
             Change?.Invoke();
         }
 
+        /// <summary>Identifiant du personnage ou de l'indice que la quête désigne (repère à l'écran).</summary>
+        public static string Cible { get; private set; } = "lise";
+
         static string CalculerQuete()
         {
-            if (!A("lise")) return "Descendre vers le village. Quelqu'un t'observe au bord du chemin.";
-            if (!A("test_four")) return "Le pont de Varenne : parler à Odon, près du puits.";
-            if (!(A("vu_four") && A("vu_calcaire"))) return "Inspecter le four à chaux et ses alentours avec le Sceau (E).";
-            if (!A("vu_cendres")) return "Le foyer du four cache quelque chose. Approche-toi et analyse-le.";
-            if (!A("four_ok") || !A("sabotage_connu")) return "Retourner voir Odon et lui dire ce qu'il faut au four.";
-            if (!A("vu_corvin")) return "Suivre la piste du sabotage avec le Sceau (E).";
-            if (!A("bram")) return "Parler à Bram de la piste qui mène chez Corvin.";
-            if (!A("pont_accepte")) return "Dire à Odon que tu vas rebâtir le pont.";
+            Cible = "";
+            if (!A("lise")) { Cible = "lise"; return "Descendre le chemin. Une fillette t'observe au bord du chemin."; }
+            if (!A("test_four")) { Cible = "odon"; return "Le pont de Varenne : parler à Odon, près du puits du village."; }
+            if (!(A("vu_four") && A("vu_calcaire"))) { Cible = "four"; return "Odon t'attend au four à chaux. Inspecte le four et ses alentours avec le Sceau (E)."; }
+            if (!A("vu_cendres")) { Cible = "four"; return "Le foyer du four cache quelque chose. Approche-toi et analyse-le."; }
+            if (!A("four_ok") || !A("sabotage_connu")) { Cible = "odon"; return "Dire à Odon ce qu'il faut au four, et ce que tu as trouvé dans le foyer."; }
+            if (!A("bram")) { Cible = "bram"; return "Bram a tout entendu. Parle-lui."; }
+            if (!A("vu_corvin")) { Cible = "corvin"; return "Suivre la piste du sabotage avec le Sceau (E)."; }
+            if (!A("pont_accepte")) { Cible = "odon"; return "Dire à Odon que tu vas rebâtir le pont."; }
             return "Chapitre suivant : le Plan du Registre et le chantier (en développement).";
         }
     }

@@ -44,6 +44,9 @@ namespace Aldermark
         PointInteret cibleAnalyse;
         float tempsAnalyse;
         const float DureeAnalyse = 1.5f;
+        int dernierPas;
+        float fovBase = 68f;
+        bool liseAInterpelle;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
         static readonly Vector3 BrasDroitPos = new Vector3(.56f, -.56f, .95f);
@@ -53,6 +56,7 @@ namespace Aldermark
             cc = GetComponent<CharacterController>();
             if (cam == null) cam = GetComponentInChildren<Camera>();
             Mana = manaMax;
+            fovBase = cam.fieldOfView;
             ConstruireCorps();
             ConstruireVue();
             CreerRonds();
@@ -104,14 +108,45 @@ namespace Aldermark
             Vector3 p = transform.position;
             if (Monde.Hauteur(p.x, p.z) < -.15f) vitesse *= .5f; // dans la rivière
             Vector3 mouvement = (transform.forward * dep.y + transform.right * dep.x) * vitesse;
-            vitesseVerticale = cc.isGrounded ? -1f : vitesseVerticale - 20f * dt;
+            bool saute = !fige && ((kb != null && kb.spaceKey.wasPressedThisFrame) || (pad != null && pad.buttonSouth.wasPressedThisFrame));
+            if (cc.isGrounded)
+            {
+                if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .5f, .7f);   // réception
+                vitesseVerticale = saute ? 6.2f : -1f;
+                if (saute) Sons.Jouer("pasHerbe", .35f, .8f);
+            }
+            else vitesseVerticale -= 18f * dt;
             mouvement.y = vitesseVerticale;
             cc.Move(mouvement * dt);
             bool bouge = dep.sqrMagnitude > .01f;
             if (bouge) balancement += dt * vitesse * 1.6f;
+            int pas = Mathf.FloorToInt(balancement / Mathf.PI);
+            if (pas != dernierPas)
+            {
+                dernierPas = pas;
+                if (cc.isGrounded && bouge)
+                {
+                    Vector3 pied = transform.position;
+                    bool terre = Monde.DistanceRoute(pied.x, pied.z) < 2.5f || Vector2.Distance(new Vector2(pied.x, pied.z), Monde.Village) < 12f;
+                    Sons.Jouer(terre ? "pasTerre" : "pasHerbe", course ? .45f : .3f, Random.Range(.85f, 1.15f));
+                }
+            }
             MettreAJourRonds(dt, bouge && Monde.Hauteur(p.x, p.z) < -.15f, p);
             MettreAJourPoussiere(dt, bouge && cc.isGrounded, course, transform.position);
 
+            if (fige && Dialogues.Courant != null)
+            {
+                Vector3 tete = Dialogues.Courant.transform.position + Vector3.up * (1.45f * Dialogues.Courant.transform.lossyScale.y);
+                Vector3 vers = tete - cam.transform.position;
+                Vector3 horiz = new Vector3(vers.x, 0, vers.z);
+                if (horiz.sqrMagnitude > .01f)
+                {
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(horiz), Mathf.Clamp01(dt * 4f));
+                    float vise = -Mathf.Atan2(vers.y, horiz.magnitude) * Mathf.Rad2Deg;
+                    tangage = Mathf.Lerp(tangage, vise, Mathf.Clamp01(dt * 4f));
+                }
+            }
+            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fige ? fovBase - 16f : fovBase, Mathf.Clamp01(dt * 3f));
             cam.transform.localPosition = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
             cam.transform.localRotation = Quaternion.Euler(tangage, 0f, 0f);
 
@@ -164,15 +199,17 @@ namespace Aldermark
                 }
             }
             if (cible != cibleAnalyse) { cibleAnalyse = cible; tempsAnalyse = 0f; }
-            if (cible == null) { HUD.Analyse(-1f); return; }
+            if (cible == null) { HUD.Analyse(-1f); Sons.Analyse(-1f); return; }
             tempsAnalyse += dt;
             HUD.Analyse(tempsAnalyse / DureeAnalyse);
+            Sons.Analyse(tempsAnalyse / DureeAnalyse);
             if (tempsAnalyse >= DureeAnalyse)
             {
                 cible.Decouvrir();
                 cibleAnalyse = null;
                 tempsAnalyse = 0f;
                 HUD.Analyse(-1f);
+                Sons.Analyse(-1f);
             }
         }
 
@@ -188,7 +225,21 @@ namespace Aldermark
                 if (dist > 3.5f || Vector3.Angle(cam.transform.forward, d) > 35f) continue;
                 if (dist < meilleur) { meilleur = dist; proche = i; }
             }
-            HUD.Invite(proche != null ? $"[F]  Parler à {proche.nom}" : null);
+            string invite = proche != null ? $"[F]  Parler à {proche.nom}" : null;
+            if (proche == null && !Progression.A("lise"))
+                foreach (var i in Interlocuteur.Tous)
+                    if (i.id == "lise" && Vector3.Distance(i.transform.position, transform.position) < 16f)
+                    {
+                        invite = "Lise te fait signe : « Monsieur ! Monsieur ! »";
+                        if (!liseAInterpelle)
+                        {
+                            liseAInterpelle = true;
+                            for (int k = 0; k < 4; k++) Sons.Voix(1.75f);
+                            var h = i.GetComponent<Habitant>();
+                            if (h != null) h.parle = true;
+                        }
+                    }
+            HUD.Invite(invite);
             if (proche != null && ((kb != null && kb.fKey.wasPressedThisFrame) || (pad != null && pad.buttonWest.wasPressedThisFrame)))
             {
                 var vers = transform.position - proche.transform.position;
@@ -311,6 +362,7 @@ namespace Aldermark
         {
             if (!SceauActif && Mana < 3f) { HUD.Message("MANA INSUFFISANT", "Repose-toi un instant.", 2.5f); return; }
             SceauActif = !SceauActif;
+            Sons.Jouer(SceauActif ? "sceauOn" : "sceauOff", .7f);
             if (SceauActif && !sceauDejaUtilise)
             {
                 sceauDejaUtilise = true;
@@ -387,18 +439,13 @@ namespace Aldermark
         {
             var peau = Lit(Hex("#e2b48a"));
             var lin = Lit(Hex("#d8cba8"));
-            var fer = Lit(Hex("#7c7f8c"));
-            var bois = Lit(Hex("#6b4a2e"));
 
-            // Bras droit + bâton de bois ferré
+            // Bras droit, main nue (pas d'arme : Aldric arrive sans rien dans ce monde)
             brasDroit = Groupe("BrasDroit", cam.transform, BrasDroitPos);
             Piece(PrimitiveType.Cube, brasDroit, Vector3.zero, new Vector3(.1f, .11f, .13f), peau, false);
-            Piece(PrimitiveType.Cube, brasDroit, new Vector3(.05f, -.07f, -.3f), new Vector3(.13f, .13f, .5f), lin, false, new Vector3(-14f, 0, 0));
-            var baton = Groupe("Baton", brasDroit, Vector3.zero, new Vector3(26f, 0, 2f));
-            Piece(PrimitiveType.Cylinder, baton, new Vector3(0, .3f, 0), new Vector3(.044f, .85f, .044f), bois, false);
-            Piece(PrimitiveType.Cylinder, baton, new Vector3(0, 1.15f, 0), new Vector3(.076f, .075f, .076f), fer, false);
-            Piece(PrimitiveType.Cylinder, baton, new Vector3(0, -.55f, 0), new Vector3(.076f, .075f, .076f), fer, false);
-            Piece(PrimitiveType.Cylinder, baton, new Vector3(0, .86f, 0), new Vector3(.068f, .025f, .068f), fer, false);
+            Piece(PrimitiveType.Cube, brasDroit, new Vector3(-.035f, .03f, .03f), new Vector3(.04f, .04f, .09f), peau, false, new Vector3(0, 25f, 0));
+            Piece(PrimitiveType.Cube, brasDroit, new Vector3(0, 0, -.22f), new Vector3(.1f, .1f, .34f), peau, false);
+            Piece(PrimitiveType.Cube, brasDroit, new Vector3(0, 0, -.5f), new Vector3(.13f, .13f, .3f), lin, false);
 
             // Bras gauche + marque d'argent (se lève quand le Sceau s'active)
             brasGauche = Groupe("BrasGauche", cam.transform, BrasGaucheRepos, new Vector3(-25f, 17f, 0));

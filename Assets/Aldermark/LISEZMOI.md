@@ -17,6 +17,7 @@ Les retouches faites à la main dans la scène sont alors perdues.
 | --- | --- | --- |
 | Marcher | ZQSD ou flèches | stick gauche |
 | Courir | Maj gauche | clic stick gauche |
+| Sauter | Espace | bouton Sud (A / Croix) |
 | Regarder | souris | stick droit |
 | Sceau du Grand Registre | E | bouton Nord (Y / Triangle) |
 | Rendu brut / peint | R | Select |
@@ -54,3 +55,15 @@ Le générateur les reconnaît à leur nom de fichier et remplace les formes de 
 
 Le modèle est mis automatiquement à la bonne taille, posé au sol et reçoit des collisions.
 La console indique quel fichier a été utilisé. Relance le générateur après chaque ajout.
+
+## Musique
+
+Dépose tes musiques (MP3, OGG ou WAV) dans `Assets/Aldermark/Audio`, puis relance
+**Aldermark > Ajouter le gameplay du pont** : elles sont jouées à la suite, avec
+20 secondes de silence entre deux morceaux. Les bruitages (vent, rivière, pas, Sceau,
+voix des dialogues) sont fabriqués par le code : rien à installer.
+
+## Personnages
+
+Nomme les modèles `lise.fbx`, `odon.fbx`, `bram.fbx` et `aldric.fbx` dans `Models`.
+Ils seront branchés sur les personnages dans une prochaine mise à jour.
