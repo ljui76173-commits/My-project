@@ -18,6 +18,10 @@ namespace Aldermark
         public bool panier;
         [System.NonSerialized] public bool parle;
         Vector3? destination;
+        float vitesseDestination = 3.2f;
+        Transform charge;
+        /// <summary>Vrai tant que le personnage marche vers un point donné.</summary>
+        public bool EnRoute => destination.HasValue;
 
         Transform jambeG, jambeD, brasG, brasD;
         Vector3 cible;
@@ -61,7 +65,7 @@ namespace Aldermark
                 if (d.magnitude < .3f) { destination = null; enMarche = false; }
                 else
                 {
-                    transform.position += d.normalized * Mathf.Min(3.2f, d.magnitude * 2f) * dt;
+                    transform.position += d.normalized * Mathf.Min(vitesseDestination, d.magnitude * 2f) * dt;
                     transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), dt * 6f);
                     enMarche = true;
                     PoserAuSol();
@@ -97,10 +101,29 @@ namespace Aldermark
         }
 
         /// <summary>Fait marcher le personnage jusqu'à un point, puis il s'arrête.</summary>
-        public void AllerVers(Vector2 pos)
+        public void AllerVers(Vector2 pos, float vitesse = 3.2f)
         {
             promeneur = false;
+            vitesseDestination = vitesse;
             destination = new Vector3(pos.x, 0, pos.y);
+        }
+
+        /// <summary>Affiche une charge sur le dos (couleur de la ressource), ou rien.</summary>
+        public void Porter(Color? couleur)
+        {
+            if (couleur == null) { if (charge != null) charge.gameObject.SetActive(false); return; }
+            if (charge == null)
+            {
+                var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Object.Destroy(g.GetComponent<Collider>());
+                g.name = "Charge";
+                charge = g.transform;
+                charge.SetParent(transform, false);
+                charge.localPosition = new Vector3(0, .95f, -.27f);
+                charge.localScale = new Vector3(.4f, .42f, .26f);
+            }
+            charge.gameObject.SetActive(true);
+            charge.GetComponent<MeshRenderer>().sharedMaterial = Lit(couleur.Value);
         }
 
         void PoserAuSol()

@@ -100,7 +100,7 @@ namespace Aldermark
             if (kb != null && kb.escapeKey.wasPressedThisFrame) Verrouiller(false);
             if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) Verrouiller(true);
 
-            bool fige = Dialogues.EnCours;
+            bool fige = Dialogues.EnCours || HUD.TableauOuvert;
 
             // Regard
             Vector2 regard = Vector2.zero;
