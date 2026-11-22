@@ -125,3 +125,15 @@ l'entrepôt à 6 h 22 (scanner les trois cartons avec F, puis sortir), la rue so
 camion, l'Entre-Deux avec Ysolde (orbes, Sceau, Genèse, pacte), puis le réveil dans la vallée,
 quand le rendu peint s'allume. F12 passe le prologue ; F9 (éditeur) le saute aussi.
 Les décors sont construits 600 m sous la vallée par « Ajouter le gameplay du pont ».
+
+## Ilse et le nœud (scènes 10 et 11)
+
+- Au matin qui suit la nuit des sonnailles, Lise annonce une femme en gris à l'auberge, et le
+  **Voile du Registre (C)** se débloque : il fait tomber la Présence détectable (affichée sous le
+  mana), coûte 1 mana par heure de jeu et ralentit la recharge.
+- **Ilse** : son pendentif trouve le porteur si la Présence est haute, il hésite si le Voile tient.
+  Selon le cas, le dialogue change. Elle révèle que Vesk arrive et qu'il puise dans le nœud.
+- **Le nœud** sous les piles du vieux pont (visible au Sceau) : F maintenu pour l'absorber.
+  Lâcher entre 1,6 et 2,2 fois le mana maximum : +10 de mana maximum pour toujours ; trop tard,
+  rupture : −20 % jusqu'à l'aube. Le nœud s'affaiblit et le **Siphon (R maintenu)** s'éveille.
+- Le rendu peint / brut passe sur F8 (R sert désormais au Siphon).
