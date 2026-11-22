@@ -164,6 +164,22 @@ namespace Aldermark.Editeur
             return null;
         }
 
+        /// <summary>Tous les modèles dont le nom contient l'un des mots-clés, triés par nom.</summary>
+        static GameObject[] TrouverModeles(params string[] motsCles)
+        {
+            var dossiers = DossiersModeles.Where(AssetDatabase.IsValidFolder).ToArray();
+            if (dossiers.Length == 0) return new GameObject[0];
+            var res = AssetDatabase.FindAssets("t:GameObject", dossiers)
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(c => motsCles.Any(m => Path.GetFileNameWithoutExtension(c).ToLowerInvariant().Contains(m)))
+                .OrderBy(c => c)
+                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                .Where(g => g != null)
+                .ToArray();
+            if (res.Length > 0) Debug.Log($"Aldermark : {res.Length} modèle(s) utilisé(s) pour « {motsCles[0]} »");
+            return res;
+        }
+
         static Bounds Bornes(GameObject g)
         {
             var rs = g.GetComponentsInChildren<Renderer>();
@@ -180,10 +196,12 @@ namespace Aldermark.Editeur
         static GameObject PoserModele(GameObject modele, Transform parent, Vector3 sol, float hauteur, float rotY, float enfonce = .2f)
         {
             var go = (GameObject)PrefabUtility.InstantiatePrefab(modele, parent);
-            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0));
-            go.transform.localScale = Vector3.one;
+            // On garde la rotation d'import du FBX (axe Z vers le haut chez Meshy) et on tourne seulement autour de la verticale.
+            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, rotY, 0) * modele.transform.localRotation);
+            go.transform.localScale = modele.transform.localScale;
+            var echelle0 = go.transform.localScale;
             var b = Bornes(go);
-            if (b.size.y > 1e-4f) go.transform.localScale = Vector3.one * (hauteur / b.size.y);
+            if (b.size.y > 1e-4f) go.transform.localScale = echelle0 * (hauteur / b.size.y);
             b = Bornes(go);
             go.transform.position += new Vector3(sol.x - b.center.x, sol.y - enfonce - b.min.y, sol.z - b.center.z);
             foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
@@ -229,16 +247,60 @@ namespace Aldermark.Editeur
 
         // ---------- terrain ----------
 
-        static TerrainLayer Couche(string nom, string hex)
+        static float BruitPeriodique(float x, float y, int p)
         {
-            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = nom };
-            var c = Hex(hex);
-            var px = new Color[16];
-            for (int i = 0; i < 16; i++) px[i] = c;
+            int xi = Mathf.FloorToInt(x), yi = Mathf.FloorToInt(y);
+            float u = x - xi, v = y - yi;
+            u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v);
+            float Hp(int a, int b) => Monde.HashPublic(((a % p) + p) % p + p * 7.3f, ((b % p) + p) % p + 3.1f);
+            float A = Hp(xi, yi), B = Hp(xi + 1, yi), C = Hp(xi, yi + 1), D = Hp(xi + 1, yi + 1);
+            float ab = A + (B - A) * u, cd = C + (D - C) * u;
+            return ab + (cd - ab) * v;
+        }
+
+        /// <summary>
+        /// Couche de sol avec une vraie texture peinte (128 px, se répète sans couture) :
+        /// 3 aplats de teinte, plus des brins (h), des cailloux (t) ou des fissures (r).
+        /// </summary>
+        static TerrainLayer Couche(string nom, string hex, char type, float tuile = 3f)
+        {
+            const int S = 128;
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, true) { name = nom, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
+            Color b = Hex(hex), sombre = b * .78f, clair = Color.Lerp(b, Color.white, .14f);
+            sombre.a = 1; clair.a = 1;
+            var px = new Color[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float u = (float)x / S, v = (float)y / S, n = 0, a = .5f;
+                    int per = 4;
+                    for (int o = 0; o < 4; o++) { n += a * BruitPeriodique(u * per, v * per, per); per *= 2; a *= .5f; }
+                    Color c = n < .42f ? sombre : (n > .6f ? clair : b);
+                    float h = Hash(x * 1.7f + nom.Length, y * 2.3f);
+                    if (type == 'h' && h > .86f) c = Color.Lerp(c, h > .95f ? clair : sombre * .9f, .8f);
+                    if (type == 't' && h > .94f) c = h > .975f ? clair * 1.08f : sombre * .85f;
+                    if (type == 'r' && h > .9f) c = sombre * .85f;
+                    c.a = 1;
+                    px[y * S + x] = c;
+                }
+            if (type == 'h')
+                for (int i = 0; i < 350; i++)
+                {
+                    int x0 = (int)(Hash(i, nom.Length) * S), y0 = (int)(Hash(i, 7.7f) * S), lg = 2 + (int)(Hash(i, 3.3f) * 3);
+                    Color cc = Hash(i, 5.5f) > .5f ? clair : sombre * .92f; cc.a = 1;
+                    for (int k = 0; k < lg; k++) px[((y0 + k) % S) * S + x0 % S] = cc;
+                }
+            if (type == 't')
+                for (int i = 0; i < 120; i++)
+                {
+                    int x0 = (int)(Hash(i, 11.1f + nom.Length) * S), y0 = (int)(Hash(i, 13.7f) * S);
+                    Color cc = Hash(i, 9.1f) > .5f ? clair * 1.08f : sombre * .85f; cc.a = 1;
+                    for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) px[((y0 + dy) % S) * S + (x0 + dx) % S] = cc;
+                }
             tex.SetPixels(px);
             tex.Apply();
-            Sauver(tex, $"Terrain/{nom}_Couleur.asset");
-            var tl = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(4, 4), name = nom };
+            Sauver(tex, $"Terrain/{nom}_Texture.asset");
+            var tl = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(tuile, tuile), name = nom };
             return Sauver(tl, $"Terrain/{nom}.terrainlayer");
         }
 
@@ -263,10 +325,10 @@ namespace Aldermark.Editeur
             // Couleurs du sol
             var couches = new[]
             {
-                Couche("Herbe", "#6f9a3a"), Couche("HerbeDoree", "#d2a840"), Couche("HerbeSombre", "#4f7a34"),
-                Couche("Ble", "#ddb44c"), Couche("Culture", "#86a83e"), Couche("Labour", "#9c7444"),
-                Couche("Chemin", "#a88454"), Couche("Roche", "#6f7488"), Couche("Sable", "#c2b488"), Couche("LitRiviere", "#6e6650"),
-                Couche("Neige", "#e8eaf4"),
+                Couche("Herbe", "#6f9a3a", 'h'), Couche("HerbeDoree", "#c9a43e", 'h'), Couche("HerbeSombre", "#4f7a34", 'h'),
+                Couche("Ble", "#d8b048", 'h'), Couche("Culture", "#86a83e", 'h'), Couche("Labour", "#8a6a40", 't'),
+                Couche("Chemin", "#9a7a48", 't', 2.5f), Couche("Roche", "#6f7488", 'r', 6f), Couche("Sable", "#b8a878", 't'), Couche("LitRiviere", "#6e6650", 't'),
+                Couche("Neige", "#e8eaf4", 'p', 6f),
             };
             td.terrainLayers = couches;
             int a = td.alphamapResolution, nc = couches.Length;
@@ -296,6 +358,9 @@ namespace Aldermark.Editeur
                     for (int k = 0; k < nc; k++) w[k] *= 1 - neige;
                     w[10] += neige;
                     if (y < -.2f) { System.Array.Clear(w, 0, nc); w[9] = 1; }
+                    // Transitions nettes et irrégulières, comme peintes au pinceau (plus d'effet « époxy »)
+                    for (int k = 0; k < nc; k++)
+                        if (w[k] > 0) { w[k] *= .7f + .6f * Hash(ix * .37f + k * 3.1f, iz * .53f); w[k] = w[k] * w[k] * w[k]; }
                     float somme = 0;
                     for (int k = 0; k < nc; k++) somme += w[k];
                     for (int k = 0; k < nc; k++) carte[iz, ix, k] = somme > 0 ? w[k] / somme : (k == 0 ? 1 : 0);
@@ -565,6 +630,7 @@ namespace Aldermark.Editeur
             var toit = Sauver(Formes.Toit(), "Formes/Toit.asset");
             string[] murs = { "#eadfc6", "#e2d3b4", "#d9c9a8", "#8d6b4b" }, toits = { "#b4523a", "#3f5a8c", "#7a4a33", "#94403a", "#4f6b8f" };
             var V = Monde.Village;
+            var modelesMaisons = TrouverModeles("maison", "house");
             var places = new List<Vector2>();
             int essai = 0;
             while (places.Count < 28 && essai++ < 900)
@@ -579,6 +645,12 @@ namespace Aldermark.Editeur
                 maison.SetParent(racine, false);
                 maison.position = new Vector3(x, H(x, z), z);
                 maison.rotation = Quaternion.Euler(0, ry, 0);
+                if (modelesMaisons.Length > 0)
+                {
+                    PoserModele(modelesMaisons[places.Count % modelesMaisons.Length], maison, maison.position, h + rh + 1f, ry, .3f);
+                    if (Hash(essai, 8) > .65f) Fumee(maison, new Vector3(w * .2f, h + rh + 1.2f, 0));
+                    continue;
+                }
                 Bloc(PrimitiveType.Cube, maison, new Vector3(0, h / 2 - .3f, 0), new Vector3(w, h, dp), Lit(murs[essai % 4]), default, true, "Murs");
                 var t = new GameObject("Toit");
                 t.transform.SetParent(maison, false);
