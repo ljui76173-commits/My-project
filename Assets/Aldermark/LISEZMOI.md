@@ -19,7 +19,7 @@ Les retouches faites à la main dans la scène sont alors perdues.
 | Courir | Maj gauche | clic stick gauche |
 | Sauter | Espace | bouton Sud (A / Croix) |
 | Plan du Registre | P (1 : choisir le pont en bois) | gâchette haute gauche |
-| Tableau du chantier | Tab (↑↓ villageois, ←→ affectation) | Start, croix directionnelle |
+| Carte du chantier | Tab (glisser les portraits à la souris) | Start, croix directionnelle |
 | Vue 1re / 3e personne | V | croix directionnelle haut |
 | Regarder | souris | stick droit |
 | Sceau du Grand Registre | E | bouton Nord (Y / Triangle) |
@@ -80,7 +80,9 @@ Lise, Odon, Bram : `lise.fbx`, `odon.fbx`, `bram.fbx`, branchés dans une procha
 
 Après avoir accepté de rebâtir le pont, P projette le **Plan du Registre** : un pont fantôme
 bleu sur la rivière et la liste de ce qui manque (2 mana par minute). Il propose d'abord le
-pont de pierre (6 jours, trop long), puis le pont provisoire en bois. Tab ouvre le tableau du chantier.
+pont de pierre (6 jours, trop long), puis le pont provisoire en bois. Tab ouvre la carte du chantier : la vallée vue d'en haut, chaque poste avec sa recette, les flèches
+de transport, les villageois en direct et un conseil d'Odon. On glisse un portrait sur un poste
+(il y travaille) ou sur une flèche (il devient porteur).
 Les villageois travaillent avec des gestes : hache à la forêt, pioche à la carrière et au talus,
 marteau au chantier et au four, et portent leur charge à deux bras.
 - **Postes** : Rivière (blocs, 31 au total, débloquée par l'indice des blocs), Carrière (blocs,

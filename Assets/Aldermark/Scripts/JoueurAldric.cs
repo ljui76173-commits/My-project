@@ -141,7 +141,7 @@ namespace Aldermark
 
             // Souris : Échap libère, clic reprend
             if (kb != null && kb.escapeKey.wasPressedThisFrame) Verrouiller(false);
-            if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) Verrouiller(true);
+            if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && !HUD.TableauOuvert) Verrouiller(true);
 
             bool fige = Dialogues.EnCours || HUD.TableauOuvert;
 
@@ -166,14 +166,16 @@ namespace Aldermark
             bool course = (kb != null && kb.leftShiftKey.isPressed) || (pad != null && pad.leftStickButton.isPressed);
             float vitesse = course ? vitesseCourse : vitesseMarche;
             Vector3 p = transform.position;
-            if (Monde.Hauteur(p.x, p.z) < -.15f) vitesse *= .5f; // dans la rivière
+            // Dans l'eau seulement si les pieds sont sous la surface (pas sur un pont ou une pierre)
+            bool dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
+            if (dansLEau) vitesse *= .5f;
             Vector3 mouvement = (transform.forward * dep.y + transform.right * dep.x) * vitesse;
             bool saute = !fige && ((kb != null && kb.spaceKey.wasPressedThisFrame) || (pad != null && pad.buttonSouth.wasPressedThisFrame));
             if (cc.isGrounded)
             {
-                if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .5f, .7f);   // réception
+                if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .3f, .8f);   // réception
                 vitesseVerticale = saute ? 6.2f : -1f;
-                if (saute) Sons.Jouer("pasHerbe", .35f, .8f);
+                if (saute) Sons.Jouer("pasHerbe", .18f, .9f);
             }
             else vitesseVerticale -= 18f * dt;
             mouvement.y = vitesseVerticale;
@@ -188,10 +190,10 @@ namespace Aldermark
                 {
                     Vector3 pied = transform.position;
                     bool terre = Monde.DistanceRoute(pied.x, pied.z) < 2.5f || Vector2.Distance(new Vector2(pied.x, pied.z), Monde.Village) < 12f;
-                    Sons.Jouer(terre ? "pasTerre" : "pasHerbe", course ? .45f : .3f, Random.Range(.85f, 1.15f));
+                    Sons.Jouer(terre ? "pasTerre" : "pasHerbe", course ? .2f : .13f, Random.Range(.88f, 1.1f));
                 }
             }
-            MettreAJourRonds(dt, bouge && Monde.Hauteur(p.x, p.z) < -.15f, p);
+            MettreAJourRonds(dt, bouge && dansLEau, p);
             MettreAJourPoussiere(dt, bouge && cc.isGrounded, course, transform.position);
 
             if (fige && Dialogues.Courant != null)

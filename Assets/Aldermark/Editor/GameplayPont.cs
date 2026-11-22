@@ -113,6 +113,7 @@ namespace Aldermark.Editeur
                 lise.transform.rotation = Quaternion.LookRotation(new Vector3(depart.x - lisePos.x, 0, depart.y - lisePos.y));
 
             ConstruireChantier(racine);
+            Attelages(racine);
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -172,22 +173,28 @@ namespace Aldermark.Editeur
             var chantier = ch.gameObject.AddComponent<Chantier>();
             ch.gameObject.AddComponent<PlanRegistre>().chantier = chantier;
 
-            float zp = -9f, cx = Monde.Riviere(zp);          // le pont provisoire, en aval des ruines
+            // Le pont provisoire, en aval des ruines, là où ses deux abords sont libres (pas de maison)
+            Physics.SyncTransforms();
+            float zp = -9f;
+            foreach (float z in new[] { -9f, -13f, -17f, -21f, -25f, -6f })
+                if (AbordsLibres(z)) { zp = z; break; }
+            float cx = Monde.Riviere(zp);
             var K = Monde.Four;
             Vector2 versVillage = (Monde.Village - K).normalized;
 
-            // Postes (positions à environ la distance prévue par la spec)
-            CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "plan_bois", new Vector2(cx + 19f, zp - 3f));
-            CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 4, 2, 31, "vu_blocs", new Vector2(Monde.PontX + 10f, 7f));
-            CreerPoste(ch, "carriere", "Carrière", Ressource.Pierre, 2, 4, -1, "", new Vector2(95f, -108f));
-            CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 5, 4, -1, "", new Vector2(40f, 74f));
-            CreerPoste(ch, "talus", "Talus", Ressource.Calcaire, 4, 2, 40, "vu_calcaire", new Vector2(K.x - 14f, K.y + 9f));
-            CreerPoste(ch, "four", "Four", Ressource.Aucune, 0, 2, -1, "vu_four", K + versVillage * 7f);
+            // Postes (positions à environ la distance prévue par la spec, décalées si une maison gêne)
+            Vector2 pc = PlaceLibre(new Vector2(cx + 21f, zp - 4f), 4.5f);
+            Vector2 pForet = PlaceLibre(new Vector2(40f, 74f), 4f), pCarriere = PlaceLibre(new Vector2(95f, -108f), 4f);
+            CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "plan_bois", pc);
+            CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 4, 2, 31, "vu_blocs", PlaceLibre(new Vector2(Monde.PontX + 10f, 7f), 3f));
+            CreerPoste(ch, "carriere", "Carrière", Ressource.Pierre, 2, 4, -1, "", pCarriere);
+            CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 5, 4, -1, "", pForet);
+            CreerPoste(ch, "talus", "Talus", Ressource.Calcaire, 4, 2, 40, "vu_calcaire", PlaceLibre(new Vector2(K.x - 14f, K.y + 9f), 3f));
+            CreerPoste(ch, "four", "Four", Ressource.Aucune, 0, 2, -1, "vu_four", PlaceLibre(K + versVillage * 7f, 2.5f));
 
             // Décor des postes
-            DecorForet(new Vector2(40f, 74f), ch);
-            DecorCarriere(new Vector2(95f, -108f), ch);
-            Vector2 pc = new Vector2(cx + 19f, zp - 3f);
+            DecorForet(pForet, ch);
+            DecorCarriere(pCarriere, ch);
             for (int i = 0; i < 2; i++)   // tréteaux du chantier
             {
                 var q = pc + new Vector2(-1.5f + i * 3f, 1.5f);
@@ -208,6 +215,8 @@ namespace Aldermark.Editeur
                 {
                     float x = cx + dx, z = zp + dz, fond = Mathf.Max(Monde.Hauteur(x, z), -3.6f);
                     Piece(chantier.etape1, PrimitiveType.Cube, new Vector3(x, fond + .5f, z), new Vector3(1.4f, 1.2f, 1.4f), new Vector3(0, 8f * dx, 0), "#9a948a");
+                    // Joint de mortier (la chaux) au sommet du socle
+                    Piece(chantier.etape1, PrimitiveType.Cube, new Vector3(x, fond + 1.14f, z), new Vector3(1.5f, .1f, 1.5f), new Vector3(0, 8f * dx, 0), "#ece6d6");
                     float h = Y - fond;
                     Piece(chantier.etape1, PrimitiveType.Cylinder, new Vector3(x, fond + h / 2f, z), new Vector3(.45f, h / 2f, .45f), Vector3.zero, "#6b4a2e");
                 }
@@ -242,6 +251,132 @@ namespace Aldermark.Editeur
             CreerOuvrier(Personnage(racine, "Agathe", "agathe", new Vector2(V.x - 8f, V.y - 2f), "#6e8c5b", "#2a2020", .9f), "Agathe", "four_repare", true, 1f);
             CreerOuvrier(Personnage(racine, "Colin", "colin", new Vector2(V.x + 9f, V.y + 4f), "#8c7a5b", "#5a3a20", 1.02f), "Colin", "four_repare", true, 1f);
             CreerOuvrier(Personnage(racine, "Firmin", "firmin", new Vector2(V.x + 2f, V.y + 9f), "#5b5b8c", "#7a7a7a", 1f), "Firmin", "four_repare", true, 1f);
+        }
+
+        /// <summary>Vrai si rien de solide (maison, rocher, arbre…) ne se trouve dans ce rayon, au-dessus du sol.</summary>
+        static bool Libre(Vector2 p, float rayon)
+        {
+            var centre = new Vector3(p.x, Sol(p.x, p.y) + 1.6f, p.y);
+            foreach (var c in Physics.OverlapSphere(centre, rayon, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (c is TerrainCollider) continue;
+                var g = c.transform.root.name;
+                if (g == "Gameplay" || g == "Aldric") continue;
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>Le point voulu s'il est libre, sinon le plus proche point libre autour.</summary>
+        static Vector2 PlaceLibre(Vector2 voulu, float rayon)
+        {
+            if (Libre(voulu, rayon)) return voulu;
+            for (int anneau = 1; anneau <= 14; anneau++)
+                for (int k = 0; k < 12; k++)
+                {
+                    float a = k * Mathf.PI / 6f + anneau * .4f;
+                    var q = voulu + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * anneau * 2f;
+                    if (Monde.Hauteur(q.x, q.y) > -.2f && Libre(q, rayon)) return q;
+                }
+            Debug.LogWarning($"Aldermark : pas de place libre trouvée près de {voulu}.");
+            return voulu;
+        }
+
+        /// <summary>Les deux abords du pont provisoire sont-ils libres de maisons ?</summary>
+        static bool AbordsLibres(float z)
+        {
+            float cx = Monde.Riviere(z);
+            for (float d = 12f; d <= 27f; d += 3f)
+                if (!Libre(new Vector2(cx + d, z), 3f) || !Libre(new Vector2(cx - d, z), 3f)) return false;
+            return Libre(new Vector2(cx + 21f, z - 4f), 4.5f);
+        }
+
+        /// <summary>
+        /// Un bœuf attelé devant chaque charrette du Comte (modèle « boeuf », « ox », « cheval »
+        /// ou « horse » dans Models s'il existe, sinon un bœuf en formes simples).
+        /// </summary>
+        static void Attelages(Transform racine)
+        {
+            var groupe = new GameObject("Attelages").transform;
+            groupe.SetParent(racine, false);
+            var modele = TrouverModele("boeuf", "bœuf", "ox", "cheval", "horse");
+            int n = 0;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if (t.name != "Charrette") continue;
+                n++;
+                var a = new GameObject("Attelage" + n).transform;
+                a.SetParent(groupe, false);
+                Vector3 devant = t.TransformPoint(new Vector3(4.6f, 0, 0));
+                a.position = new Vector3(devant.x, Sol(devant.x, devant.z), devant.z);
+                a.rotation = Quaternion.LookRotation(t.right, Vector3.up);   // la charrette avance vers +x
+                // Brancards entre la charrette et l'animal
+                foreach (float cote in new[] { -.55f, .55f })
+                {
+                    Vector3 p0 = t.TransformPoint(new Vector3(2f, 1.05f, cote)), p1 = t.TransformPoint(new Vector3(4.2f, 1.25f, cote * .9f));
+                    var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    Object.DestroyImmediate(b.GetComponent<Collider>());
+                    b.name = "Brancard";
+                    b.transform.SetParent(a, true);
+                    b.transform.position = (p0 + p1) / 2f;
+                    b.transform.rotation = Quaternion.LookRotation(p1 - p0);
+                    b.transform.localScale = new Vector3(.09f, .09f, Vector3.Distance(p0, p1));
+                    b.GetComponent<MeshRenderer>().sharedMaterial = Mat("#5a3e26");
+                }
+                if (modele != null)
+                {
+                    var g = (GameObject)PrefabUtility.InstantiatePrefab(modele, a);
+                    g.transform.localPosition = Vector3.zero;
+                    g.transform.localRotation = modele.transform.localRotation;
+                    var rs = g.GetComponentsInChildren<Renderer>();
+                    if (rs.Length > 0)
+                    {
+                        var bo = rs[0].bounds; foreach (var r in rs) bo.Encapsulate(r.bounds);
+                        if (bo.size.y > 1e-4f) g.transform.localScale *= 1.6f / bo.size.y;
+                    }
+                    continue;
+                }
+                Boeuf(a, n % 2 == 0 ? "#8a6a4a" : "#d8cfc0");
+            }
+            if (n == 0) Debug.Log("Aldermark : aucune charrette trouvée dans la scène.");
+        }
+
+        static void Boeuf(Transform a, string robe)
+        {
+            void P(PrimitiveType t, Vector3 pos, Vector3 taille, string hex, Vector3 rot = default)
+            {
+                var g = GameObject.CreatePrimitive(t);
+                Object.DestroyImmediate(g.GetComponent<Collider>());
+                g.transform.SetParent(a, false);
+                g.transform.localPosition = pos;
+                g.transform.localRotation = Quaternion.Euler(rot);
+                g.transform.localScale = taille;
+                g.GetComponent<MeshRenderer>().sharedMaterial = Mat(hex);
+            }
+            P(PrimitiveType.Cube, new Vector3(0, 1.15f, -.2f), new Vector3(.95f, .85f, 2.1f), robe);                 // corps
+            P(PrimitiveType.Cube, new Vector3(0, 1.25f, 1.05f), new Vector3(.55f, .55f, .7f), robe, new Vector3(25, 0, 0)); // cou et tête
+            P(PrimitiveType.Cube, new Vector3(0, 1.0f, 1.45f), new Vector3(.42f, .36f, .3f), "#c9a98a");             // museau
+            P(PrimitiveType.Cube, new Vector3(-.36f, 1.55f, 1.2f), new Vector3(.4f, .07f, .07f), "#e8e0cc", new Vector3(0, 0, -20)); // cornes
+            P(PrimitiveType.Cube, new Vector3(.36f, 1.55f, 1.2f), new Vector3(.4f, .07f, .07f), "#e8e0cc", new Vector3(0, 0, 20));
+            P(PrimitiveType.Cube, new Vector3(0, 1.62f, .85f), new Vector3(1.1f, .12f, .14f), "#5a3e26");            // joug
+            foreach (var (x, z) in new[] { (-.32f, .6f), (.32f, .6f), (-.32f, -1f), (.32f, -1f) })
+                P(PrimitiveType.Cube, new Vector3(x, .38f, z), new Vector3(.2f, .76f, .2f), robe);                 // pattes
+            P(PrimitiveType.Cube, new Vector3(0, 1.1f, -1.3f), new Vector3(.06f, .7f, .06f), robe, new Vector3(-15, 0, 0)); // queue
+        }
+
+        static GameObject TrouverModele(params string[] motsCles)
+        {
+            foreach (var d in new[] { "Assets/Aldermark/Models", "Assets/Aldermark/Modeles" })
+            {
+                if (!AssetDatabase.IsValidFolder(d)) continue;
+                foreach (var guid in AssetDatabase.FindAssets("t:GameObject", new[] { d }))
+                {
+                    string c = AssetDatabase.GUIDToAssetPath(guid);
+                    string nom = System.IO.Path.GetFileNameWithoutExtension(c).ToLowerInvariant();
+                    if (motsCles.Any(m => nom.Contains(m))) return AssetDatabase.LoadAssetAtPath<GameObject>(c);
+                }
+            }
+            return null;
         }
 
         static Poste CreerPoste(Transform parent, string id, string nom, Ressource produit, float rendement, int max, float reserve, string requis, Vector2 pos)

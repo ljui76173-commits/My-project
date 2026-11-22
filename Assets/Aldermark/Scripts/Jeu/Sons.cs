@@ -30,8 +30,9 @@ namespace Aldermark
             clips["vent"] = Vent();
             clips["riviere"] = Riviere();
             clips["oiseau"] = Oiseau();
-            clips["pasHerbe"] = Pas(.035f, 900f);
-            clips["pasTerre"] = Pas(.05f, 2400f);
+            clips["pasHerbe"] = PasHerbe();
+            clips["pasTerre"] = PasTerre();
+            clips["coup"] = Coup();
             clips["sceauOn"] = Souffle(true);
             clips["sceauOff"] = Souffle(false);
             clips["analyse"] = Bourdon();
@@ -54,8 +55,8 @@ namespace Aldermark
             goR.transform.position = positionRiviere;
             var riv = goR.AddComponent<AudioSource>();
             riv.clip = clips["riviere"]; riv.loop = true; riv.spatialBlend = 1f;
-            riv.minDistance = 6f; riv.maxDistance = 70f; riv.rolloffMode = AudioRolloffMode.Linear;
-            riv.volume = .55f * volumeAmbiance; riv.Play();
+            riv.minDistance = 5f; riv.maxDistance = 55f; riv.rolloffMode = AudioRolloffMode.Linear;
+            riv.volume = .32f * volumeAmbiance; riv.Play();
         }
 
         AudioSource Source(bool boucle, bool spatial, float volume)
@@ -158,19 +159,29 @@ namespace Aldermark
             });
         }
 
+        /// <summary>Murmure d'eau : bruit grave et doux, qui ondule, avec quelques bulles.</summary>
         AudioClip Riviere()
         {
-            float b1 = 0, b2 = 0;
-            const float duree = 5f;
+            float b1 = 0, b2 = 0, b3 = 0;
+            const float duree = 6f;
+            var bulles = new float[18];
+            for (int k = 0; k < bulles.Length; k++) bulles[k] = (float)alea.NextDouble() * duree;
             return Creer("Riviere", duree, (i, t) =>
             {
                 float n = Bruit();
-                b1 += (n - b1) * .25f;
-                b2 += (b1 - b2) * .25f;
-                float haut = b1 - b2;                 // bruit filtré « clapotis »
-                float glouglou = Mathf.Sin(t * 2f * Mathf.PI * (3f + Mathf.Sin(t * 1.3f))) * .3f + .7f;
-                float fondu = Mathf.Min(1f, Mathf.Min(t, duree - t) / .4f);
-                return haut * 1.6f * glouglou * fondu;
+                b1 += (n - b1) * .06f;          // trois passes basses : plus de sifflement
+                b2 += (b1 - b2) * .06f;
+                b3 += (b2 - b3) * .1f;
+                float houle = .65f + .2f * Mathf.Sin(t * 2f * Mathf.PI / duree * 3f) + .15f * Mathf.Sin(t * 2f * Mathf.PI / duree * 7f + 1f);
+                float bulle = 0;
+                foreach (float t0 in bulles)
+                {
+                    float u = t - t0;
+                    if (u < 0 || u > .06f) continue;
+                    bulle += Mathf.Sin(2f * Mathf.PI * (300f + 900f * u / .06f) * u) * Mathf.Sin(u / .06f * Mathf.PI) * .12f;
+                }
+                float fondu = Mathf.Min(1f, Mathf.Min(t, duree - t) / .5f);
+                return (b3 * 12f * houle + bulle) * fondu;
             });
         }
 
@@ -190,13 +201,55 @@ namespace Aldermark
             });
         }
 
+        /// <summary>Clic d'interface, très court.</summary>
         AudioClip Pas(float duree, float coupure)
         {
             float b = 0, k = Mathf.Clamp01(coupure / Freq * 6.28f);
-            return Creer("Pas", duree, (i, t) =>
+            return Creer("Clic", duree, (i, t) =>
             {
                 b += (Bruit() - b) * k;
                 return b * 2.5f * Mathf.Exp(-t / duree * 4f);
+            });
+        }
+
+        /// <summary>Pas dans l'herbe : un froissement doux, sans attaque sèche.</summary>
+        AudioClip PasHerbe()
+        {
+            float b1 = 0, b2 = 0;
+            const float d = .2f;
+            return Creer("PasHerbe", d, (i, t) =>
+            {
+                b1 += (Bruit() - b1) * .14f;
+                b2 += (b1 - b2) * .14f;
+                float env = Mathf.Sin(Mathf.Clamp01(t / .03f) * Mathf.PI * .5f) * Mathf.Exp(-t / d * 3.5f);
+                return b2 * 1.6f * env;
+            });
+        }
+
+        /// <summary>Pas sur la terre : un son sourd et grave.</summary>
+        AudioClip PasTerre()
+        {
+            float b1 = 0, b2 = 0;
+            const float d = .16f;
+            return Creer("PasTerre", d, (i, t) =>
+            {
+                b1 += (Bruit() - b1) * .08f;
+                b2 += (b1 - b2) * .08f;
+                float env = Mathf.Clamp01(t / .008f) * Mathf.Exp(-t / d * 5f);
+                float sourd = Mathf.Sin(2f * Mathf.PI * (95f - 30f * t / d) * t) * .45f;
+                return (b2 * 1.4f + sourd) * env;
+            });
+        }
+
+        /// <summary>Coup d'outil (hache, pioche, marteau) : un « toc » boisé.</summary>
+        AudioClip Coup()
+        {
+            float b = 0;
+            return Creer("Coup", .18f, (i, t) =>
+            {
+                b += (Bruit() - b) * .3f;
+                float env = Mathf.Exp(-t * 32f);
+                return (Mathf.Sin(2f * Mathf.PI * 420f * t) * .6f + Mathf.Sin(2f * Mathf.PI * 760f * t) * .25f + b * .5f) * env;
             });
         }
 
