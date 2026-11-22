@@ -54,6 +54,10 @@ namespace Aldermark
         Animator anim;
         Renderer[] rendusModele;
         Vector3 positionModele;
+        // Corps complet (modèle humanoïde riggé) : on voit son propre corps à la première personne
+        bool corpsComplet;
+        Transform teteOs, avantBrasG, mainG, ancreMarque;
+        Vector3 echelleTete = Vector3.one;
         float distanceCamera = 3.6f;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
@@ -74,6 +78,37 @@ namespace Aldermark
                 if (anim != null) anim.applyRootMotion = false;
                 rendusModele = modele.GetComponentsInChildren<Renderer>();
                 positionModele = modele.localPosition;
+                if (anim != null && anim.isHuman)
+                {
+                    teteOs = anim.GetBoneTransform(HumanBodyBones.Head);
+                    avantBrasG = anim.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                    mainG = anim.GetBoneTransform(HumanBodyBones.LeftHand);
+                    corpsComplet = teteOs != null && avantBrasG != null && mainG != null;
+                }
+                if (corpsComplet)
+                {
+                    echelleTete = teteOs.localScale;
+                    anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                    anim.gameObject.AddComponent<IKAldric>().joueur = this;
+                    // La marque d'argent passe sur le vrai avant-bras gauche
+                    ancreMarque = new GameObject("AncreMarque").transform;
+                    ancreMarque.SetParent(transform, false);
+                    var marque = brasGauche.Find("Marque");
+                    var sigle = brasGauche.Find("Sigle");
+                    if (marque != null)
+                    {
+                        marque.SetParent(ancreMarque, false);
+                        marque.localPosition = Vector3.zero;
+                        marque.localRotation = Quaternion.identity;
+                        marque.localScale = Vector3.one * .75f;
+                        if (sigle != null)
+                        {
+                            sigle.SetParent(marque, false);
+                            sigle.localPosition = new Vector3(0, .052f, -.04f);
+                            sigle.localRotation = Quaternion.Euler(90f, 0, 0);
+                        }
+                    }
+                }
             }
             AppliquerVue();
             CreerRonds();
@@ -204,6 +239,15 @@ namespace Aldermark
 
         void AppliquerVue()
         {
+            if (corpsComplet)
+            {
+                // Corps riggé : toujours visible, la tête disparaît seulement à la première personne
+                foreach (var r in rendusModele) r.shadowCastingMode = ShadowCastingMode.On;
+                teteOs.localScale = troisiemePersonne ? echelleTete : echelleTete * .001f;
+                if (brasDroit != null) brasDroit.gameObject.SetActive(false);
+                if (brasGauche != null) brasGauche.gameObject.SetActive(false);
+                return;
+            }
             // Première personne : le modèle ne fait que son ombre, on voit les mains.
             // Troisième personne : le modèle est visible, les mains de la vue disparaissent.
             if (rendusModele != null)
@@ -222,6 +266,12 @@ namespace Aldermark
             Vector3 tete = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
             if (!troisiemePersonne)
             {
+                if (corpsComplet)
+                {
+                    // Les yeux suivent la tête animée, un peu en avant pour ne pas voir l'intérieur du cou
+                    float hy = transform.InverseTransformPoint(teteOs.position).y;
+                    tete = new Vector3(0f, Mathf.Lerp(cam.transform.localPosition.y, hy + .1f, Mathf.Clamp01(dt * 10f)), .16f);
+                }
                 cam.transform.localPosition = tete;
                 cam.transform.localRotation = rot;
                 return;
@@ -253,6 +303,14 @@ namespace Aldermark
             float roulis = bouge ? Mathf.Sin(balancement * .5f) * 2.5f : 0f;
             modele.localPosition = Vector3.Lerp(modele.localPosition, positionModele + Vector3.up * b, Mathf.Clamp01(dt * 12f));
             modele.localRotation = Quaternion.Slerp(modele.localRotation, Quaternion.Euler(0, 0, roulis), Mathf.Clamp01(dt * 8f));
+        }
+
+        void LateUpdate()
+        {
+            if (!corpsComplet || ancreMarque == null) return;
+            Vector3 a = avantBrasG.position, b = mainG.position;
+            ancreMarque.position = Vector3.Lerp(a, b, .72f);
+            if ((b - a).sqrMagnitude > 1e-6f) ancreMarque.rotation = Quaternion.LookRotation(b - a, transform.up);
         }
 
         // ---------- indices et dialogues ----------
