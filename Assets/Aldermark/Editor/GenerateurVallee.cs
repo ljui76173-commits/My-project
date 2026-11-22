@@ -164,6 +164,22 @@ namespace Aldermark.Editeur
             return null;
         }
 
+        /// <summary>Tous les modèles dont le nom contient l'un des mots-clés, triés par nom.</summary>
+        static GameObject[] TrouverModeles(params string[] motsCles)
+        {
+            var dossiers = DossiersModeles.Where(AssetDatabase.IsValidFolder).ToArray();
+            if (dossiers.Length == 0) return new GameObject[0];
+            var res = AssetDatabase.FindAssets("t:GameObject", dossiers)
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(c => motsCles.Any(m => Path.GetFileNameWithoutExtension(c).ToLowerInvariant().Contains(m)))
+                .OrderBy(c => c)
+                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                .Where(g => g != null)
+                .ToArray();
+            if (res.Length > 0) Debug.Log($"Aldermark : {res.Length} modèle(s) utilisé(s) pour « {motsCles[0]} »");
+            return res;
+        }
+
         static Bounds Bornes(GameObject g)
         {
             var rs = g.GetComponentsInChildren<Renderer>();
@@ -614,6 +630,7 @@ namespace Aldermark.Editeur
             var toit = Sauver(Formes.Toit(), "Formes/Toit.asset");
             string[] murs = { "#eadfc6", "#e2d3b4", "#d9c9a8", "#8d6b4b" }, toits = { "#b4523a", "#3f5a8c", "#7a4a33", "#94403a", "#4f6b8f" };
             var V = Monde.Village;
+            var modelesMaisons = TrouverModeles("maison", "house");
             var places = new List<Vector2>();
             int essai = 0;
             while (places.Count < 28 && essai++ < 900)
@@ -628,6 +645,12 @@ namespace Aldermark.Editeur
                 maison.SetParent(racine, false);
                 maison.position = new Vector3(x, H(x, z), z);
                 maison.rotation = Quaternion.Euler(0, ry, 0);
+                if (modelesMaisons.Length > 0)
+                {
+                    PoserModele(modelesMaisons[places.Count % modelesMaisons.Length], maison, maison.position, h + rh + 1f, ry, .3f);
+                    if (Hash(essai, 8) > .65f) Fumee(maison, new Vector3(w * .2f, h + rh + 1.2f, 0));
+                    continue;
+                }
                 Bloc(PrimitiveType.Cube, maison, new Vector3(0, h / 2 - .3f, 0), new Vector3(w, h, dp), Lit(murs[essai % 4]), default, true, "Murs");
                 var t = new GameObject("Toit");
                 t.transform.SetParent(maison, false);

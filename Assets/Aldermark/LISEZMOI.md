@@ -50,6 +50,7 @@ Le générateur les reconnaît à leur nom de fichier et remplace les formes de 
 | --- | --- |
 | Four à chaux | `four`, `kiln`, `chaux` |
 | Puits | `puits`, `well` |
+| Maisons du village (autant de modèles que tu veux, utilisés à tour de rôle) | `maison`, `house` |
 
 Le modèle est mis automatiquement à la bonne taille, posé au sol et reçoit des collisions.
 La console indique quel fichier a été utilisé. Relance le générateur après chaque ajout.
