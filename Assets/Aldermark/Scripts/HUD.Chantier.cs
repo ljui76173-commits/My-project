@@ -18,12 +18,20 @@ namespace Aldermark
         CarteChantier carteChantier;
         UnityEngine.UI.Image voileNoir;
         float fondu, fonduDuree;
+        Color couleurVoile = Color.black;
 
         /// <summary>Fondu au noir puis retour (sommeil, nuit des sonnailles).</summary>
         public static void Fondu(float duree)
         {
             if (instance == null) return;
-            instance.fondu = duree; instance.fonduDuree = duree;
+            instance.fondu = duree; instance.fonduDuree = duree; instance.couleurVoile = Color.black;
+        }
+
+        /// <summary>Éclair plein écran d'une couleur (blanc : le camion, l'Entre-Deux, le réveil).</summary>
+        public static void Flash(Color c, float duree)
+        {
+            if (instance == null) return;
+            instance.fondu = duree; instance.fonduDuree = duree; instance.couleurVoile = c;
         }
         readonly Dictionary<Poste, UnityEngine.UI.Text> etiquettesPostes = new Dictionary<Poste, UnityEngine.UI.Text>();
 
@@ -65,9 +73,10 @@ namespace Aldermark
             if (TableauOuvert && !Chantier.Actif) DefinirTableau(false);
 
             MettreAJourEtiquettesPostes(taille);
+            MettreAJourSousTitre();
             if (fondu > 0) fondu -= Time.unscaledDeltaTime;
             float tf = fonduDuree > 0 ? 1f - Mathf.Clamp01(fondu / fonduDuree) : 1f;   // 0 → 1
-            voileNoir.color = new Color(0, 0, 0, fondu > 0 ? (tf < .25f ? tf / .25f : tf > .7f ? (1f - tf) / .3f : 1f) : 0f);
+            voileNoir.color = new Color(couleurVoile.r, couleurVoile.g, couleurVoile.b, fondu > 0 ? (tf < .25f ? tf / .25f : tf > .7f ? (1f - tf) / .3f : 1f) : 0f);
             voileNoir.transform.SetAsLastSibling();
         }
 

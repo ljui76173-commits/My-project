@@ -33,6 +33,8 @@ namespace Aldermark
             clips["pasHerbe"] = PasHerbe();
             clips["pasTerre"] = PasTerre();
             clips["coup"] = Coup();
+            clips["pluie"] = Pluie();
+            clips["klaxon"] = Klaxon();
             clips["sceauOn"] = Souffle(true);
             clips["sceauOff"] = Souffle(false);
             clips["analyse"] = Bourdon();
@@ -122,6 +124,8 @@ namespace Aldermark
             s.volume = .18f + .22f * progression;
             s.pitch = .8f + .7f * progression;
         }
+
+        public static AudioClip Clip(string id) => instance != null && instance.clips.TryGetValue(id, out var c) ? c : null;
 
         /// <summary>Petite voix de dialogue : une syllabe à la hauteur du personnage.</summary>
         public static void Voix(float hauteur)
@@ -238,6 +242,35 @@ namespace Aldermark
                 float env = Mathf.Clamp01(t / .008f) * Mathf.Exp(-t / d * 5f);
                 float sourd = Mathf.Sin(2f * Mathf.PI * (95f - 30f * t / d) * t) * .45f;
                 return (b2 * 1.4f + sourd) * env;
+            });
+        }
+
+        /// <summary>Pluie sur le bitume : un bruit doux et continu, sans boucle audible.</summary>
+        AudioClip Pluie()
+        {
+            float b1 = 0, b2 = 0;
+            const float d = 5f;
+            var gouttes = new float[160];
+            for (int k = 0; k < gouttes.Length; k++) gouttes[k] = (float)alea.NextDouble() * d;
+            return Creer("Pluie", d, (i, t) =>
+            {
+                float n = Bruit();
+                b1 += (n - b1) * .35f; b2 += (b1 - b2) * .35f;
+                float goutte = 0;
+                foreach (float t0 in gouttes) { float u = t - t0; if (u >= 0 && u < .012f) goutte += Bruit() * (1f - u / .012f) * .5f; }
+                float fondu = Mathf.Min(1f, Mathf.Min(t, d - t) / .4f);
+                return ((b1 - b2) * 1.4f + goutte) * .7f * fondu;
+            });
+        }
+
+        /// <summary>Klaxon de camion : deux notes rauques.</summary>
+        AudioClip Klaxon()
+        {
+            return Creer("Klaxon", 1.4f, (i, t) =>
+            {
+                float s = Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 311f * t)) * .5f + Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 392f * t)) * .5f;
+                float env = Mathf.Clamp01(t / .03f) * Mathf.Clamp01((1.4f - t) / .1f);
+                return s * .35f * env;
             });
         }
 

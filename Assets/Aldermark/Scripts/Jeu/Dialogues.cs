@@ -54,7 +54,8 @@ namespace Aldermark
                 "odon" => Odon(),
                 "bram" => Bram(),
                 "lit" => Lit(),
-                "forgeron" => new Noeud("Garin", !A("four_repare")
+                "ysolde" => Ysolde(),
+                "forgeron" => new Noeud("Hadrien", !A("four_repare")
                     ? "Sans charbon de bois ni fer qui arrive, ma forge dort. Relance le four, l'étranger, et on verra pour le reste."
                     : !A("pont_ouvert")
                         ? "Le four refume, alors j'ai rallumé la forge : des clous et des crampons pour ton pont. Tiens bon."
@@ -124,7 +125,7 @@ namespace Aldermark
 
         static bool A(string d) => Progression.A(d);
 
-        static float HauteurVoix(string qui) => qui switch { "Lise" => 1.75f, "Odon" => .72f, "Bram" => .95f, _ => 1.1f };
+        static float HauteurVoix(string qui) => qui switch { "Lise" => 1.75f, "Odon" => .72f, "Bram" => .95f, "Ysolde" => 1.35f, "Ilse" => 1.2f, "Vesk" => .55f, "Hadrien" => .8f, "Garr" => .65f, _ => 1.1f };
 
         /// <summary>Envoie un personnage marcher jusqu'à un point (Odon et Bram vont au four).</summary>
         static void Envoyer(string id, Vector2 pos, float rapprocher = 0f)
@@ -263,6 +264,58 @@ namespace Aldermark
                 }
             HUD.Message("TOBIN REJOINT LE CHANTIER", "Il est libre, et il porte. Tu peux l'affecter sur la carte du chantier (Tab).", 5f);
         }
+
+        // ---------- l'Entre-Deux : Ysolde ----------
+
+        static Noeud Ysolde()
+        {
+            if (A("pacte_signe")) return new Noeud("Ysolde", "Allez, Aldric. Le monde vous attend. Et pardon, encore, pour le camion.");
+            return new Noeud("Ysolde", "(Une femme aux cheveux d'argent tamponne des parchemins sans lever les yeux.) Numéro 4 471… asseyez-vous. (Elle lit ta fiche et pâlit.) Ah. Ah non. Vous n'étiez pas prévu avant 61 ans. Encore une erreur d'aiguillage… Ce camion devait passer par l'autre rue.")
+                .Choix("Où suis-je ? Qui êtes-vous ?", YsoldeQui)
+                .Choix("Une erreur d'aiguillage ? Je suis mort à cause d'une erreur de planning ?", () =>
+                    new Noeud("Ysolde", "(Elle grimace.) Si ça peut vous consoler, je déteste les erreurs de planning autant que vous.").Choix("(Continuer)", YsoldeQui));
+        }
+
+        static Noeud YsoldeQui() =>
+            new Noeud("Ysolde", "Je suis Ysolde, déesse des Routes et des Passages. Je ne peux pas vous renvoyer : votre corps est… n'en parlons pas. Le règlement prévoit une compensation : une nouvelle vie à Aldermark, un monde qui manque cruellement de gens organisés. Et un don, au choix. (Trois orbes s'allument au-dessus du bureau.)")
+                .Choix("L'Œil des Flux : voir les marchandises, les gens et les armées en lignes de lumière.", () => OrbeOrdinaire("L'Œil des Flux"))
+                .Choix("L'Inventaire du Monde : un espace de stockage qui grandit si on le range bien.", () => OrbeOrdinaire("L'Inventaire du Monde"))
+                .Choix("Le Plan du Bâtisseur : ce qu'on dessine se bâtit deux fois plus vite.", () => OrbeOrdinaire("Le Plan du Bâtisseur"))
+                .Choix("Pardonnez-moi, mais n'auriez-vous pas plus d'informations ? Et un orbe bien plus puissant ?", YsoldeMonde);
+
+        static Noeud OrbeOrdinaire(string nom) =>
+            new Noeud("Ysolde", $"{nom}… (Sa main s'arrête au-dessus de l'orbe.) Vous hésitez. Un logisticien qui se contente d'un seul outil, ça m'étonnerait. Posez-moi plutôt la vraie question.")
+                .Choix("N'auriez-vous pas plus d'informations ? Et un orbe plus puissant ?", YsoldeMonde);
+
+        static Noeud YsoldeMonde() =>
+            new Noeud("Ysolde", "(Elle claque des doigts : une carte se déploie dans le vide.) Aldermark. Il y a vingt ans, la Grande Rupture a détruit les ponts, les cols et les routes marchandes. Les villes du nord ont du fer mais pas de blé ; le sud a du blé mais pas d'outils. Les gens meurent de faim à côté de greniers pleins, parce que rien ne circule. Et à l'est, le Seigneur des Cendres avance, lui, parfaitement ravitaillé.")
+                .Choix("Et personne n'a rien fait ?", () =>
+                    new Noeud("Ysolde", "L'Empire a invoqué cinq Héros de votre monde. Des épées, du feu, de la force brute. Aucun n'a pensé à demander comment nourrir une armée. (Elle jette un coup d'œil derrière elle, vers le vide.)")
+                        .Choix("Et cet orbe plus puissant ?", YsoldeSceau))
+                .Choix("Et cet orbe plus puissant ?", YsoldeSceau);
+
+        static Noeud YsoldeSceau() =>
+            new Noeud("Ysolde", "(Elle ouvre un tiroir : un orbe noir et or y pulse comme un cœur.) Le Sceau du Grand Registre. Il voit, modifie et réorganise tout ce qui appartient à un réseau : routes, stocks, contrats, chaînes de commandement. Il appartenait au dieu qui a provoqué la Grande Rupture. Il s'éveille lentement, et son porteur est visible : ceux qui le cherchent sentiront votre présence. Vous ne vivrez plus jamais tranquille.")
+                .Choix("Je prends le Sceau. Et je veux un orbe qui me permette de créer mes propres pouvoirs.", YsoldeGenese)
+                .Choix("Visible ? Qui me chercherait ?", () =>
+                    new Noeud("Ysolde", "La Tour d'obsidienne. Les Cendres. Peut-être d'autres. (Elle hausse les épaules.) Mais un homme qui voit les flux sait aussi les cacher, avec le temps.")
+                        .Choix("Je prends le Sceau. Et je veux un orbe qui me permette de créer mes propres pouvoirs.", YsoldeGenese));
+
+        static Noeud YsoldeGenese() =>
+            new Noeud("Ysolde", "(Elle lâche son tampon, qui roule et tombe dans le vide.) Vous ne voulez pas créer de la matière. Vous voulez créer des pouvoirs. C'est comme ça que nous, les dieux, fabriquons les orbes. (Elle sort une boîte de fer scellée de sept chaînes et n'en défait qu'une.) L'Orbe de Genèse. Ses règles ne sont pas de moi : comprendre avant de créer. Une compétence au niveau 1, une de plus tous les dix niveaux. Rien sur la mort, le temps ou les dieux. Et chaque création laisse une trace dans le Registre divin.")
+                .Choix("Le Sceau me montre comment marche le monde, la Genèse en fait des pouvoirs. J'accepte.", YsoldePacte);
+
+        static Noeud YsoldePacte() =>
+            new Noeud("Ysolde", "Alors voici le pacte. Vous serez traqué. Vous serez lié à moi : si vous mourez, je m'affaiblis ; si l'on me punit, vous le sentirez. Vous vous engagez à retrouver le dieu qui a provoqué la Grande Rupture, à décider ensuite s'il faut réparer le réseau ou le réécrire, et à me protéger si je tombe. (Elle fait glisser un parchemin vers toi.) Sous quel nom signez-vous ?")
+                .Choix("Signer : « Aldric ». Et je vous promets de rendre ce monde meilleur.", () =>
+                        new Noeud("Ysolde", "(Elle sourit, pour la première fois.) Aldric. Prenez aussi ceci : la Bénédiction du Passant, l'endurance d'un soldat aguerri. Vous en aurez besoin. Et… je suis désolée pour le camion. Vraiment."),
+                    () =>
+                    {
+                        Progression.Mettre("pacte_signe");
+                        Sons.Jouer("decouverte", .9f, .9f);
+                        HUD.Message("PACTE SIGNÉ",
+                            "ALDRIC\nSceau du Grand Registre · éveil 1 %\nOrbe de Genèse · 1 emplacement\nBénédiction du Passant\nMana : 35 / 35 · Classe : non classable\nPrésence détectable : moyenne", 9f);
+                    });
 
         static Noeud Lit()
         {

@@ -276,7 +276,7 @@ namespace Aldermark
                 foreach (var p in PointInteret.Tous)
                     if (p.cible == Progression.Cible && !p.decouvert) { cibleQuete = p.transform.position; if (p.Disponible) break; }
 
-            bool montrer = cibleQuete.HasValue && !Dialogues.EnCours && !TableauOuvert;
+            bool montrer = cibleQuete.HasValue && !Dialogues.EnCours && !TableauOuvert && !Prologue.EnCours;
             if (montrer)
             {
                 Vector3 vp = cam.WorldToViewportPoint(cibleQuete.Value + Vector3.up * .6f);

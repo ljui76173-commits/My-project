@@ -117,3 +117,11 @@ Raccourcis de test (dans l'éditeur seulement) : **F9** saute l'enquête et ouvr
 Réglé avec une simulation de l'économie du chantier (mêmes règles que le jeu) :
 bien organisé avec le don de mana, le pont tient en 4 jours environ après l'accord d'Odon,
 5 à 6 jours sans mana, et le chantier se bloque si la chaîne de la chaux est oubliée.
+
+## Prologue
+
+Au lancement, le jeu commence par le prologue (rendu terne, sans pouvoirs) :
+l'entrepôt à 6 h 22 (scanner les trois cartons avec F, puis sortir), la rue sous la pluie et le
+camion, l'Entre-Deux avec Ysolde (orbes, Sceau, Genèse, pacte), puis le réveil dans la vallée,
+quand le rendu peint s'allume. F12 passe le prologue ; F9 (éditeur) le saute aussi.
+Les décors sont construits 600 m sous la vallée par « Ajouter le gameplay du pont ».

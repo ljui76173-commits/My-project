@@ -19,6 +19,7 @@ namespace Aldermark
         public Vector2 centre = new Vector2(55, 10);
         public float rayon = 28f;
         public bool panier;
+        [Tooltip("Ne pas recaler sur le sol de la vallée (personnages du prologue)")] public bool hauteurLibre;
         [System.NonSerialized] public bool parle;
         /// <summary>Geste de travail en cours (hache, pioche, marteau, ramasser).</summary>
         [System.NonSerialized] public Geste geste;
@@ -214,6 +215,7 @@ namespace Aldermark
 
         void PoserAuSol()
         {
+            if (hauteurLibre) return;
             var p = transform.position;
             p.y = Mathf.Max(Monde.Hauteur(p.x, p.z), -1.2f);
             transform.position = p;

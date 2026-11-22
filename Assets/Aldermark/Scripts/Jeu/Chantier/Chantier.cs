@@ -74,6 +74,7 @@ namespace Aldermark
         void Update()
         {
             RaccourcisDeTest();
+            if (Prologue.EnCours) return;   // le temps est figé pendant le prologue
             float dt = Time.deltaTime;
             int jourAvant = Jour;
             Temps += dt;
@@ -116,7 +117,7 @@ namespace Aldermark
             if (kb == null) return;
             if (kb.f9Key.wasPressedThisFrame && !Actif)
             {
-                foreach (var d in new[] { "lise", "test_four", "vu_pont", "vu_four", "vu_calcaire", "vu_blocs", "vu_cendres", "four_ok", "sabotage_connu", "bram", "vu_corvin" })
+                foreach (var d in new[] { "prologue_fini", "pacte_signe", "lise", "test_four", "vu_pont", "vu_four", "vu_calcaire", "vu_blocs", "vu_cendres", "four_ok", "sabotage_connu", "bram", "vu_corvin" })
                     Progression.Mettre(d);
                 Progression.Mettre("pont_accepte");
                 Debug.Log("Aldermark (test) : enquête sautée, chantier ouvert.");
@@ -152,6 +153,14 @@ namespace Aldermark
             nuitAnnoncee = false;
             NouveauJour?.Invoke();
             HUD.Message($"JOUR {Jour}", Actif ? "Le chantier reprend." : "Le soleil se lève sur Varenne.", 3f);
+        }
+
+        /// <summary>Place l'horloge à une heure donnée du jour en cours (prologue, réveil).</summary>
+        public static void FixerHeure(float h)
+        {
+            float debut = Mathf.Floor(Temps / Cycle) * Cycle;
+            if (h >= 6f && h <= 20f) Temps = debut + (h - 6f) / 14f * JourDuree;
+            else Temps = debut + JourDuree + Mathf.Repeat(h - 20f, 24f) / 10f * NuitDuree;
         }
 
         /// <summary>Peut-on dormir maintenant ? (la nuit, ou en fin de journée)</summary>
