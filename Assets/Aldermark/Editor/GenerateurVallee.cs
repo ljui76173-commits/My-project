@@ -280,27 +280,27 @@ namespace Aldermark.Editeur
                     if (type == 'h' && h > .86f) c = Color.Lerp(c, h > .95f ? clair : sombre * .9f, .8f);
                     if (type == 't' && h > .94f) c = h > .975f ? clair * 1.08f : sombre * .85f;
                     if (type == 'r' && h > .9f) c = sombre * .85f;
-                    c.a = 1;
+                    c.a = 0;
                     px[y * S + x] = c;
                 }
             if (type == 'h')
                 for (int i = 0; i < 350; i++)
                 {
                     int x0 = (int)(Hash(i, nom.Length) * S), y0 = (int)(Hash(i, 7.7f) * S), lg = 2 + (int)(Hash(i, 3.3f) * 3);
-                    Color cc = Hash(i, 5.5f) > .5f ? clair : sombre * .92f; cc.a = 1;
+                    Color cc = Hash(i, 5.5f) > .5f ? clair : sombre * .92f; cc.a = 0;
                     for (int k = 0; k < lg; k++) px[((y0 + k) % S) * S + x0 % S] = cc;
                 }
             if (type == 't')
                 for (int i = 0; i < 120; i++)
                 {
                     int x0 = (int)(Hash(i, 11.1f + nom.Length) * S), y0 = (int)(Hash(i, 13.7f) * S);
-                    Color cc = Hash(i, 9.1f) > .5f ? clair * 1.08f : sombre * .85f; cc.a = 1;
+                    Color cc = Hash(i, 9.1f) > .5f ? clair * 1.08f : sombre * .85f; cc.a = 0;
                     for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) px[((y0 + dy) % S) * S + (x0 + dx) % S] = cc;
                 }
             tex.SetPixels(px);
             tex.Apply();
             Sauver(tex, $"Terrain/{nom}_Texture.asset");
-            var tl = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(tuile, tuile), name = nom };
+            var tl = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(tuile, tuile), name = nom, smoothness = 0f, metallic = 0f, specular = Color.black };
             return Sauver(tl, $"Terrain/{nom}.terrainlayer");
         }
 
@@ -368,8 +368,6 @@ namespace Aldermark.Editeur
             }
             td.SetAlphamaps(0, 0, carte);
 
-            Progres("Herbe et fleurs", .4f);
-            Herbe(td);
 
             EditorUtility.SetDirty(td);
             var go = UnityEngine.Terrain.CreateTerrainGameObject(td);
@@ -383,6 +381,7 @@ namespace Aldermark.Editeur
             t.detailObjectDistance = 90f;
             t.detailObjectDensity = 1f;
             t.heightmapPixelError = 3f;
+            t.drawTreesAndFoliage = false; // l'herbe est dessinée par HerbeVivante
         }
 
         static Texture2D TextureHerbe(string nom, bool fleurs)
@@ -895,6 +894,9 @@ namespace Aldermark.Editeur
             var hud = s.AddComponent<HUD>();
             hud.joueur = joueur.GetComponent<JoueurAldric>(); hud.cam = cam;
             s.AddComponent<Oiseaux>();
+            var herbe = s.AddComponent<HerbeVivante>();
+            herbe.joueur = joueur.transform;
+            herbe.materiau = Sauver(new Material(Shader.Find("Aldermark/HerbeVivante")) { enableInstancing = true }, "Materiaux/HerbeVivante.mat");
         }
 
         static void Habitants()

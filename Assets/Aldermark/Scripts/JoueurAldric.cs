@@ -39,6 +39,8 @@ namespace Aldermark
         Vector3[] centreRonds;
         int prochainRond;
         float minuterieRonds;
+        ParticleSystem poussiere;
+        float minuteriePoussiere;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
         static readonly Vector3 BrasDroitPos = new Vector3(.56f, -.56f, .95f);
@@ -51,6 +53,7 @@ namespace Aldermark
             ConstruireCorps();
             ConstruireVue();
             CreerRonds();
+            CreerPoussiere();
             Verrouiller(true);
         }
 
@@ -102,6 +105,7 @@ namespace Aldermark
             bool bouge = dep.sqrMagnitude > .01f;
             if (bouge) balancement += dt * vitesse * 1.6f;
             MettreAJourRonds(dt, bouge && Monde.Hauteur(p.x, p.z) < -.15f, p);
+            MettreAJourPoussiere(dt, bouge && cc.isGrounded, course, transform.position);
 
             cam.transform.localPosition = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
             cam.transform.localRotation = Quaternion.Euler(tangage, 0f, 0f);
@@ -130,6 +134,51 @@ namespace Aldermark
             brasDroit.localPosition = BrasDroitPos + new Vector3(Mathf.Cos(balancement * .5f) * .012f, Mathf.Sin(balancement) * .012f, 0);
             brasGauche.localPosition = Vector3.Lerp(BrasGaucheRepos, BrasGaucheLeve, SceauNiveau);
             matMarque.SetColor("_BaseColor", Color.Lerp(new Color(.78f, .8f, .85f), new Color(.95f, .98f, 1f), SceauNiveau));
+        }
+
+        // ---------- poussière sous les pas ----------
+
+        void CreerPoussiere()
+        {
+            var go = new GameObject("PoussiereDesPas");
+            poussiere = go.AddComponent<ParticleSystem>();
+            poussiere.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = poussiere.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(.6f, 1.1f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(.3f, .9f);
+            main.startSize = new ParticleSystem.MinMaxCurve(.12f, .3f);
+            main.gravityModifier = -.03f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 80;
+            var em = poussiere.emission; em.enabled = false;
+            var sh = poussiere.shape; sh.shapeType = ParticleSystemShapeType.Hemisphere; sh.radius = .25f;
+            var col = poussiere.colorOverLifetime;
+            col.enabled = true;
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+                      new[] { new GradientAlphaKey(.6f, 0), new GradientAlphaKey(0, 1) });
+            col.color = g;
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = ronds[0].sharedMaterial;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        void MettreAJourPoussiere(float dt, bool marche, bool course, Vector3 pied)
+        {
+            if (!marche) return;
+            bool surTerre = Monde.DistanceRoute(pied.x, pied.z) < 2.5f || Vector2.Distance(new Vector2(pied.x, pied.z), Monde.Village) < 12f;
+            minuteriePoussiere -= dt;
+            if (minuteriePoussiere > 0f) return;
+            minuteriePoussiere = course ? .12f : .25f;
+            var e = new ParticleSystem.EmitParams
+            {
+                position = pied + transform.forward * -.2f + Vector3.up * .05f,
+                startColor = surTerre ? new Color(.62f, .5f, .34f, .7f) : new Color(.55f, .62f, .4f, .45f),
+                applyShapeToPosition = true
+            };
+            poussiere.Emit(e, surTerre ? (course ? 4 : 2) : 1);
         }
 
         // ---------- ronds dans l'eau ----------
