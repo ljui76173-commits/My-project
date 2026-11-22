@@ -160,8 +160,8 @@ namespace Aldermark
 
             // Le coup : un « toc » dans le monde (hache sourde, pioche et marteau plus secs)
             if (Mathf.Floor(avant) != Mathf.Floor(phaseTravail))
-                Sons.JouerA(g == Geste.Hache ? "pasTerre" : "clic", transform.position + transform.forward * .8f + Vector3.up, g == Geste.Hache ? .5f : .35f,
-                    g == Geste.Hache ? .55f : g == Geste.Pioche ? .75f : 1.1f);
+                Sons.JouerA("coup", transform.position + transform.forward * .8f + Vector3.up, .35f,
+                    g == Geste.Hache ? .6f : g == Geste.Pioche ? .85f : 1.15f);
         }
 
         void ChangerOutil(Geste g)

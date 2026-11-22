@@ -209,8 +209,8 @@ namespace Aldermark
                     .Choix("Pas encore. Je veux d'abord suivre la piste de ceux qui l'ont fait sauter.", () =>
                         new Noeud("Odon", "Sage. Mais ne traîne pas : le village mange des champignons depuis trois lunes."));
 
-            if (!A("four_repare")) return new Noeud("Odon", "Le four d'abord. Quatre blocs, et des bras pour la voûte. La rivière en est pleine, de blocs : il suffit de les sortir et de les porter.");
-            if (!A("pont_ouvert")) return new Noeud("Odon", Chantier.BlocageChantier != "" ? $"Le chantier attend. {Chantier.BlocageChantier}. Un pont, ça se bâtit avec des porteurs, pas avec des souhaits." : "Ça avance, l'étranger. Mon père serait content.");
+            if (!A("four_repare")) return new Noeud("Odon", Chantier.Conseil() + " (Tab : carte du chantier)");
+            if (!A("pont_ouvert")) return new Noeud("Odon", Chantier.Conseil() + " (Tab : carte du chantier)");
             return new Noeud("Odon", "Il tient. Il tient vraiment. (Il pose sa main valide sur la rambarde.) Merci, Bâtisseur.");
         }
 

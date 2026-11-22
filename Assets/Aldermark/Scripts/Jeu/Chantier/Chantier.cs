@@ -122,6 +122,79 @@ namespace Aldermark
             }
         }
 
+        // ---------- conseils d'Odon ----------
+
+        static int Au(string id) { int n = 0; foreach (var o in Ouvrier.Tous) if (o.Disponible && o.affectation.type == TypeAffectation.Poste && o.affectation.poste != null && o.affectation.poste.id == id) n++; return n; }
+        static int Porteurs(string src, string dst) { int n = 0; foreach (var o in Ouvrier.Tous) if (o.Disponible && o.affectation.type == TypeAffectation.Porteur && o.affectation.source.id == src && o.affectation.destination.id == dst) n++; return n; }
+        static bool Ouvert(string id) { var p = Poste.Trouver(id); return p != null && p.Disponible; }
+        static float EnChemin(string dst, Ressource r) { float q = 0; foreach (var o in Ouvrier.Tous) if (o.Livraison != null && o.Livraison.id == dst && o.charge == r) q += o.quantite; return q; }
+
+        /// <summary>Le blocage du moment, dit simplement (affiché par Odon sur la carte du chantier).</summary>
+        public static string Conseil()
+        {
+            if (!Actif) return "";
+            if (!Progression.A("plan_bois")) return "Montre-moi d'abord ce que tu vois sur les ruines : projette le Plan du Registre (P).";
+            foreach (var p in Poste.Tous)
+                if (p.Disponible && p.blocage.StartsWith("Stock plein")) return $"Ça s'entasse à {p.nom} : personne ne vient chercher. Ajoute un porteur depuis {p.nom}.";
+            string pierre = Ouvert("riviere") ? "riviere" : "carriere";
+            string nomPierre = pierre == "riviere" ? "la Rivière" : "la Carrière";
+            var four = Poste.Trouver("four");
+            if (!FourRepare && four != null)
+            {
+                float blocs = four.Stock(Ressource.Pierre) + EnChemin("four", Ressource.Pierre);
+                if (blocs < FourBlocs)
+                {
+                    if (Au("riviere") + Au("carriere") == 0) return $"Le four a besoin de 4 blocs. Mets quelqu'un à {nomPierre} pour les sortir.";
+                    if (Porteurs("riviere", "four") + Porteurs("carriere", "four") == 0) return $"Les blocs attendent à {nomPierre}. Il faut un porteur jusqu'au Four.";
+                }
+                if (four.personnes <= 0) return "Il faut des bras au Four pour la voûte. Moi, je bâtis pour deux : mets-moi là-bas.";
+                return "Le four se répare. Pense déjà au bois : le pont en dévore, et le four aussi.";
+            }
+            int e = Etape;
+            if (e >= 3) return "Il tient. Les charrettes peuvent passer.";
+            var c = Poste.Trouver("chantier");
+            var b = Etapes[e];
+            if (b.chaux > 0 && c.Stock(Ressource.Chaux) + EnChemin("chantier", Ressource.Chaux) < b.chaux)
+            {
+                if (Au("talus") == 0) return "Pas de chaux sans calcaire. Envoie quelqu'un casser le calcaire au Talus.";
+                if (Porteurs("talus", "four") == 0) return "Le calcaire reste au Talus. Il faut un porteur Talus → Four.";
+                if (Au("foret") == 0) return "Le four brûle du bois pour cuire la chaux. Mets quelqu'un à la Forêt.";
+                if (Porteurs("foret", "four") == 0) return "Le four n'a pas de bois pour cuire. Il faut un porteur Forêt → Four.";
+                if (four.personnes <= 0) return "Tout est au four, mais personne ne le fait tourner. Mets quelqu'un au Four.";
+                if (Porteurs("four", "chantier") == 0) return "La chaux attend au four. Il faut un porteur Four → Chantier : c'est le mortier des piles.";
+            }
+            if (b.pierre > 0 && c.Stock(Ressource.Pierre) + EnChemin("chantier", Ressource.Pierre) < b.pierre)
+            {
+                if (Au("riviere") + Au("carriere") == 0) return $"Il faut des blocs pour les piles. Mets quelqu'un à {nomPierre}.";
+                if (Porteurs("riviere", "chantier") + Porteurs("carriere", "chantier") == 0) return $"Les blocs attendent à {nomPierre}. Il faut un porteur jusqu'au chantier.";
+            }
+            if (b.bois > 0 && c.Stock(Ressource.Bois) + EnChemin("chantier", Ressource.Bois) < b.bois)
+            {
+                if (Au("foret") == 0) return "Le pont, c'est du bois maintenant. Mets du monde à la Forêt.";
+                if (Porteurs("foret", "chantier") == 0) return "Les poutres attendent en forêt. Il faut des porteurs Forêt → Chantier.";
+            }
+            if (c.personnes <= 0) return "Les matériaux arrivent, mais personne ne bâtit. Mets du monde au chantier — moi compris.";
+            return "Ça avance. Pour aller plus vite, renforce la liaison la plus lente.";
+        }
+
+        /// <summary>Liaisons qui devraient avoir un porteur pour la prochaine étape (pointillés rouges sur la carte).</summary>
+        public static HashSet<(Poste, Poste)> LiaisonsManquantes()
+        {
+            var res = new HashSet<(Poste, Poste)>();
+            if (!Actif || !Progression.A("plan_bois")) return res;
+            Poste P(string id) => Poste.Trouver(id);
+            var pierre = Ouvert("riviere") ? P("riviere") : P("carriere");
+            void Ajouter(Poste a, Poste b) { if (a != null && b != null && a.Disponible && b.Disponible) res.Add((a, b)); }
+            if (!FourRepare) { Ajouter(pierre, P("four")); return res; }
+            int e = Etape;
+            if (e >= 3) return res;
+            var b = Etapes[e];
+            if (b.chaux > 0) { Ajouter(P("talus"), P("four")); Ajouter(P("foret"), P("four")); Ajouter(P("four"), P("chantier")); }
+            if (b.pierre > 0) Ajouter(pierre, P("chantier"));
+            if (b.bois > 0) Ajouter(P("foret"), P("chantier"));
+            return res;
+        }
+
         // ---------- four ----------
 
         static void Four(float dt)

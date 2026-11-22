@@ -215,6 +215,8 @@ namespace Aldermark.Editeur
                 {
                     float x = cx + dx, z = zp + dz, fond = Mathf.Max(Monde.Hauteur(x, z), -3.6f);
                     Piece(chantier.etape1, PrimitiveType.Cube, new Vector3(x, fond + .5f, z), new Vector3(1.4f, 1.2f, 1.4f), new Vector3(0, 8f * dx, 0), "#9a948a");
+                    // Joint de mortier (la chaux) au sommet du socle
+                    Piece(chantier.etape1, PrimitiveType.Cube, new Vector3(x, fond + 1.14f, z), new Vector3(1.5f, .1f, 1.5f), new Vector3(0, 8f * dx, 0), "#ece6d6");
                     float h = Y - fond;
                     Piece(chantier.etape1, PrimitiveType.Cylinder, new Vector3(x, fond + h / 2f, z), new Vector3(.45f, h / 2f, .45f), Vector3.zero, "#6b4a2e");
                 }
