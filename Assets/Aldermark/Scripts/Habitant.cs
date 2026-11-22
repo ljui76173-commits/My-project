@@ -7,6 +7,9 @@ namespace Aldermark
     /// Villageois low-poly construit en code. S'il est « promeneur », il marche
     /// d'un point à l'autre du village et s'arrête un moment entre deux trajets.
     /// </summary>
+    /// <summary>Geste de travail d'un villageois.</summary>
+    public enum Geste { Aucun, Hache, Pioche, Marteau, Ramasser }
+
     public class Habitant : MonoBehaviour
     {
         public Color tunique = new Color(.55f, .35f, .24f);
@@ -17,7 +20,19 @@ namespace Aldermark
         public float rayon = 28f;
         public bool panier;
         [System.NonSerialized] public bool parle;
+        /// <summary>Geste de travail en cours (hache, pioche, marteau, ramasser).</summary>
+        [System.NonSerialized] public Geste geste;
+        /// <summary>Point que le villageois regarde pendant qu'il travaille.</summary>
+        [System.NonSerialized] public Vector3? regarder;
+        Geste outilAffiche = Geste.Aucun;
+        Transform outil;
+        float phaseTravail;
+        bool porteDevant;
         Vector3? destination;
+        float vitesseDestination = 3.2f;
+        Transform charge;
+        /// <summary>Vrai tant que le personnage marche vers un point donné.</summary>
+        public bool EnRoute => destination.HasValue;
 
         Transform jambeG, jambeD, brasG, brasD;
         Vector3 cible;
@@ -61,7 +76,7 @@ namespace Aldermark
                 if (d.magnitude < .3f) { destination = null; enMarche = false; }
                 else
                 {
-                    transform.position += d.normalized * Mathf.Min(3.2f, d.magnitude * 2f) * dt;
+                    transform.position += d.normalized * Mathf.Min(vitesseDestination, d.magnitude * 2f) * dt;
                     transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), dt * 6f);
                     enMarche = true;
                     PoserAuSol();
@@ -87,7 +102,14 @@ namespace Aldermark
             jambeD.localRotation = Quaternion.Euler(-b, 0, 0);
             brasG.localRotation = Quaternion.Euler(-b * .7f, 0, 0);
             if (!panier) brasD.localRotation = Quaternion.Euler(b * .7f, 0, 0);
-            if (parle)
+            // Charge portée à deux bras, devant soi
+            if (porteDevant)
+            {
+                brasG.localRotation = Quaternion.Euler(-68f, 0, 8f);
+                brasD.localRotation = Quaternion.Euler(-68f, 0, -8f);
+            }
+            Travailler(dt);
+            if (parle && geste == Geste.Aucun && !porteDevant)
             {
                 // Gestes quand il parle
                 float g = Mathf.Sin(Time.time * 7f);
@@ -97,10 +119,97 @@ namespace Aldermark
         }
 
         /// <summary>Fait marcher le personnage jusqu'à un point, puis il s'arrête.</summary>
-        public void AllerVers(Vector2 pos)
+        public void AllerVers(Vector2 pos, float vitesse = 3.2f)
         {
             promeneur = false;
+            vitesseDestination = vitesse;
             destination = new Vector3(pos.x, 0, pos.y);
+        }
+
+        /// <summary>Animation du geste de travail, avec l'outil en main et le bruit du coup.</summary>
+        void Travailler(float dt)
+        {
+            Geste g = enMarche || porteDevant ? Geste.Aucun : geste;
+            if (g != outilAffiche) ChangerOutil(g);
+            if (g == Geste.Aucun) return;
+
+            if (regarder.HasValue)
+            {
+                Vector3 d = regarder.Value - transform.position; d.y = 0;
+                if (d.sqrMagnitude > .01f) transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), dt * 4f);
+            }
+
+            float rythme = g == Geste.Marteau ? 1.7f : g == Geste.Ramasser ? .8f : 1.05f;
+            float avant = phaseTravail;
+            phaseTravail += dt * rythme;
+            float t = Mathf.Repeat(phaseTravail, 1f);
+            float angle;
+            if (g == Geste.Ramasser)
+            {
+                // Se penche, ramasse, se relève
+                angle = -20f - 55f * Mathf.Sin(t * Mathf.PI);
+                brasG.localRotation = Quaternion.Euler(angle, 0, 6f);
+                brasD.localRotation = Quaternion.Euler(angle, 0, -6f);
+                return;
+            }
+            // Armer lentement, frapper vite
+            angle = t < .7f ? Mathf.Lerp(-35f, -165f, Mathf.SmoothStep(0, 1, t / .7f)) : Mathf.Lerp(-165f, -35f, (t - .7f) / .3f);
+            brasD.localRotation = Quaternion.Euler(angle, 0, -6f);
+            if (g != Geste.Marteau) brasG.localRotation = Quaternion.Euler(angle + 8f, 0, 14f);   // outils à deux mains
+            else brasG.localRotation = Quaternion.Euler(-40f, 0, 10f);                           // l'autre main tient la pièce
+
+            // Le coup : un « toc » dans le monde (hache sourde, pioche et marteau plus secs)
+            if (Mathf.Floor(avant) != Mathf.Floor(phaseTravail))
+                Sons.JouerA(g == Geste.Hache ? "pasTerre" : "clic", transform.position + transform.forward * .8f + Vector3.up, g == Geste.Hache ? .5f : .35f,
+                    g == Geste.Hache ? .55f : g == Geste.Pioche ? .75f : 1.1f);
+        }
+
+        void ChangerOutil(Geste g)
+        {
+            outilAffiche = g;
+            if (outil != null) Destroy(outil.gameObject);
+            outil = null;
+            if (g == Geste.Aucun || g == Geste.Ramasser) return;
+            outil = new GameObject("Outil").transform;
+            outil.SetParent(brasD, false);
+            outil.localPosition = new Vector3(0, -.46f, 0);
+            var bois = Lit(new Color(.45f, .3f, .18f));
+            var fer = Lit(new Color(.55f, .56f, .6f));
+            float l = g == Geste.Marteau ? .38f : .78f;
+            // Manche vers l'avant de la main, tête au bout
+            PieceOutil(new Vector3(0, 0, l / 2f - .08f), new Vector3(.045f, .045f, l), bois);
+            if (g == Geste.Hache) PieceOutil(new Vector3(0, -.07f, l - .1f), new Vector3(.03f, .2f, .16f), fer);
+            else if (g == Geste.Pioche) PieceOutil(new Vector3(0, 0, l - .08f), new Vector3(.05f, .5f, .06f), fer);
+            else PieceOutil(new Vector3(0, 0, l - .06f), new Vector3(.09f, .16f, .09f), fer);
+        }
+
+        void PieceOutil(Vector3 pos, Vector3 echelle, Material m)
+        {
+            var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(g.GetComponent<Collider>());
+            g.transform.SetParent(outil, false);
+            g.transform.localPosition = pos;
+            g.transform.localScale = echelle;
+            g.GetComponent<MeshRenderer>().sharedMaterial = m;
+        }
+
+        /// <summary>Porte une charge à deux bras devant soi (couleur de la ressource), ou rien.</summary>
+        public void Porter(Color? couleur)
+        {
+            porteDevant = couleur != null;
+            if (couleur == null) { if (charge != null) charge.gameObject.SetActive(false); return; }
+            if (charge == null)
+            {
+                var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Object.Destroy(g.GetComponent<Collider>());
+                g.name = "Charge";
+                charge = g.transform;
+                charge.SetParent(transform, false);
+                charge.localPosition = new Vector3(0, .9f, .32f);
+                charge.localScale = new Vector3(.46f, .3f, .34f);
+            }
+            charge.gameObject.SetActive(true);
+            charge.GetComponent<MeshRenderer>().sharedMaterial = Lit(couleur.Value);
         }
 
         void PoserAuSol()

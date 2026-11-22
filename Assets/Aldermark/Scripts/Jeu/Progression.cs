@@ -53,7 +53,7 @@ namespace Aldermark
             Actualiser();
         }
 
-        static void Actualiser()
+        public static void Actualiser()
         {
             Quete = CalculerQuete();
             Change?.Invoke();
@@ -73,7 +73,12 @@ namespace Aldermark
             if (!A("bram")) { Cible = "bram"; return "Bram a tout entendu. Parle-lui."; }
             if (!A("vu_corvin")) { Cible = "corvin"; return "Suivre la piste du sabotage avec le Sceau (E)."; }
             if (!A("pont_accepte")) { Cible = "odon"; return "Dire à Odon que tu vas rebâtir le pont."; }
-            return "Chapitre suivant : le Plan du Registre et le chantier (en développement).";
+            if (!A("plan_bois")) { Cible = "chantier"; return "Projette le Plan du Registre (P) sur les ruines du pont pour savoir ce qu'il faut."; }
+            if (!A("four_repare")) { Cible = "four"; return "Relancer le four : envoie 4 blocs de pierre et des bras au four. Organise le village avec Tab."; }
+            if (!A("pont_etape1")) { Cible = "chantier"; return "Pont en bois, étape 1 : les piles. Il faut 12 blocs, 4 sacs de chaux et des bâtisseurs au chantier."; }
+            if (!A("pont_etape2")) { Cible = "chantier"; return "Pont en bois, étape 2 : les poutres maîtresses. Il faut 24 poutres : la forêt et ses porteurs sont la clé."; }
+            if (!A("pont_ouvert")) { Cible = "chantier"; return "Pont en bois, étape 3 : le tablier. Encore 30 poutres."; }
+            return "Le pont provisoire est ouvert ! Suite du chapitre en développement.";
         }
     }
 }

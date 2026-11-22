@@ -9,7 +9,7 @@ namespace Aldermark
     /// fenêtre « Système » et étiquettes de la vue du Sceau.
     /// Tout est construit en code (uGUI).
     /// </summary>
-    public class HUD : MonoBehaviour
+    public partial class HUD : MonoBehaviour
     {
         public JoueurAldric joueur;
         public Camera cam;
@@ -113,6 +113,7 @@ namespace Aldermark
             ConstruireAide();
             ConstruireFenetre();
             ConstruireJeu();
+            ConstruireChantier();
         }
 
         void Start()
@@ -180,6 +181,7 @@ namespace Aldermark
 
             // Noms au-dessus des personnages et repère de la quête
             MettreAJourNoms(taille);
+            MettreAJourChantier(taille);
 
             // Quête, Éveil, confiance, journal
             if (Progression.Quete != queteAffichee)
@@ -189,7 +191,8 @@ namespace Aldermark
             }
             if (flashQuete > 0) flashQuete -= dt;
             texteQuete.color = Color.Lerp(Color.white, new Color(1f, .82f, .45f), Mathf.Clamp01(flashQuete));
-            texteEtat.text = $"Éveil du Sceau {Progression.Eveil:0.#} %   ·   Village : {Progression.NomConfiance}";
+            texteEtat.text = $"Éveil du Sceau {Progression.Eveil:0.#} %   ·   Village : {Progression.NomConfiance}"
+                + (Chantier.Actif ? $"   ·   Jour {Chantier.Jour}   ·   Tab : chantier" : "");
             var kb = Keyboard.current;
             if (kb != null && kb.jKey.wasPressedThisFrame && !Dialogues.EnCours) panneauJournal.SetActive(!panneauJournal.activeSelf);
             if (panneauJournal.activeSelf)
@@ -261,9 +264,14 @@ namespace Aldermark
                 if (vis)
                 {
                     n.rect.anchoredPosition = new Vector2(vp.x * taille.x, vp.y * taille.y + 6);
+                    var ouv = i.GetComponent<Ouvrier>();
+                    n.texte.text = ouv != null && ouv.Disponible ? $"{i.nom}\n<size=14>{ouv.affectation.Nom}</size>" : i.nom;
                     n.texte.color = estCible ? new Color(1f, .82f, .45f) : new Color(1, 1, 1, .85f);
                 }
             }
+            if (cibleQuete == null)
+                foreach (var p in Poste.Tous)
+                    if (p.id == Progression.Cible && Chantier.Actif) { cibleQuete = p.transform.position + Vector3.up * 2f; break; }
             if (cibleQuete == null)
                 foreach (var p in PointInteret.Tous)
                     if (p.cible == Progression.Cible && !p.decouvert) { cibleQuete = p.transform.position; if (p.Disponible) break; }

@@ -112,6 +112,7 @@ namespace Aldermark.Editeur
             if (lise != null)
                 lise.transform.rotation = Quaternion.LookRotation(new Vector3(depart.x - lisePos.x, 0, depart.y - lisePos.y));
 
+            ConstruireChantier(racine);
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -162,7 +163,147 @@ namespace Aldermark.Editeur
             p.porteeMax = portee; p.rayon = rayon; p.cible = cible;
         }
 
-        static void Personnage(Transform parent, string nom, string id, Vector2 pos, string tunique, string cheveux, float taille)
+        // ---------- chantier : postes, villageois, pont provisoire ----------
+
+        static void ConstruireChantier(Transform racine)
+        {
+            var ch = new GameObject("Chantier").transform;
+            ch.SetParent(racine, false);
+            var chantier = ch.gameObject.AddComponent<Chantier>();
+            ch.gameObject.AddComponent<PlanRegistre>().chantier = chantier;
+
+            float zp = -9f, cx = Monde.Riviere(zp);          // le pont provisoire, en aval des ruines
+            var K = Monde.Four;
+            Vector2 versVillage = (Monde.Village - K).normalized;
+
+            // Postes (positions à environ la distance prévue par la spec)
+            CreerPoste(ch, "chantier", "Chantier du pont", Ressource.Aucune, 0, 8, -1, "plan_bois", new Vector2(cx + 19f, zp - 3f));
+            CreerPoste(ch, "riviere", "Rivière", Ressource.Pierre, 4, 2, 31, "vu_blocs", new Vector2(Monde.PontX + 10f, 7f));
+            CreerPoste(ch, "carriere", "Carrière", Ressource.Pierre, 2, 4, -1, "", new Vector2(95f, -108f));
+            CreerPoste(ch, "foret", "Forêt", Ressource.Bois, 5, 4, -1, "", new Vector2(40f, 74f));
+            CreerPoste(ch, "talus", "Talus", Ressource.Calcaire, 4, 2, 40, "vu_calcaire", new Vector2(K.x - 14f, K.y + 9f));
+            CreerPoste(ch, "four", "Four", Ressource.Aucune, 0, 2, -1, "vu_four", K + versVillage * 7f);
+
+            // Décor des postes
+            DecorForet(new Vector2(40f, 74f), ch);
+            DecorCarriere(new Vector2(95f, -108f), ch);
+            Vector2 pc = new Vector2(cx + 19f, zp - 3f);
+            for (int i = 0; i < 2; i++)   // tréteaux du chantier
+            {
+                var q = pc + new Vector2(-1.5f + i * 3f, 1.5f);
+                Piece(ch, PrimitiveType.Cube, new Vector3(q.x, Sol(q.x, q.y) + .8f, q.y), new Vector3(2.4f, .12f, .6f), Vector3.zero, "#7a5636");
+                Piece(ch, PrimitiveType.Cube, new Vector3(q.x - 1f, Sol(q.x, q.y) + .4f, q.y), new Vector3(.12f, .8f, .5f), Vector3.zero, "#5a3e26");
+                Piece(ch, PrimitiveType.Cube, new Vector3(q.x + 1f, Sol(q.x, q.y) + .4f, q.y), new Vector3(.12f, .8f, .5f), Vector3.zero, "#5a3e26");
+            }
+
+            // Pont provisoire : piles, poutres maîtresses, tablier (révélés au fil des jours)
+            var pont = new GameObject("PontProvisoire").transform;
+            pont.SetParent(ch, false);
+            chantier.etape1 = Groupe(pont, "Etape1_Piles");
+            chantier.etape2 = Groupe(pont, "Etape2_Poutres");
+            chantier.etape3 = Groupe(pont, "Etape3_Tablier");
+            const float Y = 1.7f, L = 32f;
+            foreach (float dx in new[] { -8f, 0f, 8f })
+                foreach (float dz in new[] { -1.8f, 1.8f })
+                {
+                    float x = cx + dx, z = zp + dz, fond = Mathf.Max(Monde.Hauteur(x, z), -3.6f);
+                    Piece(chantier.etape1, PrimitiveType.Cube, new Vector3(x, fond + .5f, z), new Vector3(1.4f, 1.2f, 1.4f), new Vector3(0, 8f * dx, 0), "#9a948a");
+                    float h = Y - fond;
+                    Piece(chantier.etape1, PrimitiveType.Cylinder, new Vector3(x, fond + h / 2f, z), new Vector3(.45f, h / 2f, .45f), Vector3.zero, "#6b4a2e");
+                }
+            foreach (float dz in new[] { -1.6f, 1.6f })
+                for (int k = 0; k < 4; k++)
+                    Piece(chantier.etape2, PrimitiveType.Cube, new Vector3(cx - L / 2f + L / 8f + k * L / 4f, Y - .15f, zp + dz), new Vector3(L / 4f + .05f, .45f, .5f), Vector3.zero, "#7a5636");
+            int planches = 26;
+            for (int k = 0; k < planches; k++)
+            {
+                float x = cx - L / 2f + (k + .5f) * L / planches;
+                Piece(chantier.etape3, PrimitiveType.Cube, new Vector3(x, Y + .14f, zp), new Vector3(L / planches - .06f, .12f, 4.4f), new Vector3(0, (Monde.HashPublic(k, 3) - .5f) * 3f, 0), k % 3 == 0 ? "#8a6440" : "#9a7048");
+                if (k % 3 == 0)
+                    foreach (float dz in new[] { -2.1f, 2.1f })
+                        Piece(chantier.etape3, PrimitiveType.Cube, new Vector3(x, Y + .75f, zp + dz), new Vector3(.12f, 1.1f, .12f), Vector3.zero, "#5a3e26");
+            }
+            foreach (float dz in new[] { -2.1f, 2.1f })
+                Piece(chantier.etape3, PrimitiveType.Cube, new Vector3(cx, Y + 1.25f, zp + dz), new Vector3(L, .1f, .1f), Vector3.zero, "#6b4a2e");
+            var tab = new GameObject("TablierCollision").AddComponent<BoxCollider>();
+            tab.transform.SetParent(pont, false);
+            tab.transform.position = new Vector3(cx, Y + .1f, zp);
+            tab.size = new Vector3(L + 2f, .3f, 4.4f);
+            tab.enabled = false;
+            chantier.tablier = tab;
+
+            // Villageois : Odon et Bram, puis Joss, Pell, Marthe ; trois de plus quand le four est relancé
+            var V = Monde.Village;
+            CreerOuvrier(GameObject.Find("Odon"), "Odon", "pont_accepte", false, 2f);
+            CreerOuvrier(GameObject.Find("Bram"), "Bram", "bram", true, 1f);
+            CreerOuvrier(Personnage(racine, "Joss", "joss", new Vector2(V.x - 4f, V.y + 5f), "#5b6e8c", "#3a2a1e", 1f), "Joss", "pont_accepte", true, 1f);
+            CreerOuvrier(Personnage(racine, "Pell", "pell", new Vector2(V.x + 7f, V.y - 6f), "#7a5a3c", "#c8a060", .95f), "Pell", "pont_accepte", true, 1f);
+            CreerOuvrier(Personnage(racine, "Marthe", "marthe", new Vector2(V.x - 2f, V.y - 7f), "#8c5b6e", "#4a3020", .92f), "Marthe", "pont_accepte", true, 1f);
+            CreerOuvrier(Personnage(racine, "Agathe", "agathe", new Vector2(V.x - 8f, V.y - 2f), "#6e8c5b", "#2a2020", .9f), "Agathe", "four_repare", true, 1f);
+            CreerOuvrier(Personnage(racine, "Colin", "colin", new Vector2(V.x + 9f, V.y + 4f), "#8c7a5b", "#5a3a20", 1.02f), "Colin", "four_repare", true, 1f);
+            CreerOuvrier(Personnage(racine, "Firmin", "firmin", new Vector2(V.x + 2f, V.y + 9f), "#5b5b8c", "#7a7a7a", 1f), "Firmin", "four_repare", true, 1f);
+        }
+
+        static Poste CreerPoste(Transform parent, string id, string nom, Ressource produit, float rendement, int max, float reserve, string requis, Vector2 pos)
+        {
+            var go = new GameObject("Poste_" + nom);
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(pos.x, Sol(pos.x, pos.y), pos.y);
+            var p = go.AddComponent<Poste>();
+            p.id = id; p.nom = nom; p.produit = produit; p.rendement = rendement;
+            p.maxPersonnes = max; p.reserve = reserve; p.requis = requis;
+            return p;
+        }
+
+        static void CreerOuvrier(GameObject go, string nom, string requis, bool porte, float force)
+        {
+            if (go == null) { Debug.LogWarning($"Aldermark : {nom} introuvable dans la scène."); return; }
+            var o = go.GetComponent<Ouvrier>();
+            if (o == null) o = go.AddComponent<Ouvrier>();
+            o.nom = nom; o.requis = requis; o.porte = porte; o.force = force;
+        }
+
+        static Transform Groupe(Transform parent, string nom)
+        {
+            var g = new GameObject(nom).transform;
+            g.SetParent(parent, false);
+            return g;
+        }
+
+        static void DecorForet(Vector2 c, Transform parent)
+        {
+            for (int i = 0; i < 9; i++)   // quelques arbres et souches
+            {
+                float a = i * 2.39f, r = 5f + Monde.HashPublic(i, 31) * 9f;
+                var q = c + new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+                float y = Sol(q.x, q.y), h = 5f + Monde.HashPublic(i, 32) * 3f;
+                if (i % 3 == 0)
+                {
+                    Piece(parent, PrimitiveType.Cylinder, new Vector3(q.x, y + .25f, q.y), new Vector3(.6f, .25f, .6f), Vector3.zero, "#7a5636");
+                    continue;
+                }
+                Piece(parent, PrimitiveType.Cylinder, new Vector3(q.x, y + h * .3f, q.y), new Vector3(.45f, h * .3f, .45f), Vector3.zero, "#4a3424");
+                for (int k = 0; k < 3; k++)
+                    Piece(parent, PrimitiveType.Sphere, new Vector3(q.x, y + h * (.55f + k * .17f), q.y), Vector3.one * (3.2f - k * .8f), Vector3.zero, k == 1 ? "#3f6a3a" : "#365e33");
+            }
+            for (int k = 0; k < 6; k++)   // tas de poutres
+                Piece(parent, PrimitiveType.Cylinder, new Vector3(c.x + 2f, Sol(c.x + 2f, c.y - 2f) + .25f + (k / 3) * .45f, c.y - 2f + (k % 3) * .45f - .45f), new Vector3(.4f, 1.6f, .4f), new Vector3(0, 0, 90f), "#8a6440");
+        }
+
+        static void DecorCarriere(Vector2 c, Transform parent)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * 0.9f + 1.2f, r = 5f + Monde.HashPublic(i, 41) * 4f;
+                var q = c + new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+                float t = 2f + Monde.HashPublic(i, 42) * 3f;
+                Piece(parent, PrimitiveType.Cube, new Vector3(q.x, Sol(q.x, q.y) + t * .35f, q.y), new Vector3(t, t * .9f, t * 1.1f), new Vector3(Monde.HashPublic(i, 43) * 20f, i * 37f, 0), "#8e867c");
+            }
+            for (int k = 0; k < 5; k++)   // blocs taillés
+                Piece(parent, PrimitiveType.Cube, new Vector3(c.x - 2f + k * .9f, Sol(c.x - 2f + k * .9f, c.y + 2f) + .35f, c.y + 2f), new Vector3(.8f, .7f, .7f), Vector3.zero, "#a29a8e");
+        }
+
+        static GameObject Personnage(Transform parent, string nom, string id, Vector2 pos, string tunique, string cheveux, float taille)
         {
             var go = new GameObject(nom);
             go.transform.SetParent(parent, false);
@@ -175,6 +316,7 @@ namespace Aldermark.Editeur
             h.promeneur = false;
             var i = go.AddComponent<Interlocuteur>();
             i.id = id; i.nom = nom;
+            return go;
         }
     }
 }
