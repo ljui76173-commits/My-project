@@ -74,6 +74,7 @@ namespace Aldermark
 
             MettreAJourEtiquettesPostes(taille);
             MettreAJourSousTitre();
+            MettreAJourPouvoirs();
             if (fondu > 0) fondu -= Time.unscaledDeltaTime;
             float tf = fonduDuree > 0 ? 1f - Mathf.Clamp01(fondu / fonduDuree) : 1f;   // 0 → 1
             voileNoir.color = new Color(couleurVoile.r, couleurVoile.g, couleurVoile.b, fondu > 0 ? (tf < .25f ? tf / .25f : tf > .7f ? (1f - tf) / .3f : 1f) : 0f);

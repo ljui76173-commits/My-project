@@ -55,6 +55,7 @@ namespace Aldermark
                 "bram" => Bram(),
                 "lit" => Lit(),
                 "ysolde" => Ysolde(),
+                "ilse" => Ilse(),
                 "forgeron" => new Noeud("Hadrien", !A("four_repare")
                     ? "Sans charbon de bois ni fer qui arrive, ma forge dort. Relance le four, l'étranger, et on verra pour le reste."
                     : !A("pont_ouvert")
@@ -264,6 +265,55 @@ namespace Aldermark
                 }
             HUD.Message("TOBIN REJOINT LE CHANTIER", "Il est libre, et il porte. Tu peux l'affecter sur la carte du chantier (Tab).", 5f);
         }
+
+        // ---------- Ilse à l'auberge ----------
+
+        static Noeud Ilse()
+        {
+            if (A("ilse_rencontre"))
+            {
+                if (A("noeud_touche") && A("ilse_a_vu") && !A("ilse_colonne"))
+                {
+                    Progression.Mettre("ilse_colonne");
+                    return new Noeud("Ilse", "(Elle ne lève pas les yeux de son verre.) Cette nuit, une colonne d'argent a percé le ciel au-dessus de la rivière. Une seconde à peine. (Un temps.) Votre étranger devrait apprendre à respirer plus doucement.");
+                }
+                return new Noeud("Ilse", "Si vous croisez mon étranger, dites-lui ceci : il ne pourra pas affronter Vesk et Morwen en même temps. Mais avec l'aide de l'une, il pourrait survivre à l'autre.");
+            }
+            bool trouve = Pouvoirs.Presence > .55f && !A("pendentif_vide");
+            if (trouve)
+                return new Noeud("Ilse", "(Le pendentif à son cou s'agite, pivote vers toi et se fige. Elle sourit sans joie.) Tiens. Vous voilà, porteur. Ne faites pas de geste brusque : je suis du genre rapide.")
+                    .Choix("Porteur ? Je suis un simple voyageur.", () =>
+                        new Noeud("Ilse", "(Elle tapote le cristal, qui pointe toujours sur ta poitrine.) Les voyageurs ne brillent pas comme un feu dans la nuit. Asseyez-vous. Je ne suis pas là pour vous tuer. Pas encore.").Choix("(S'asseoir)", IlseParle))
+                    .Choix("(S'asseoir en face d'elle.) Parlons.", IlseParle);
+            return new Noeud("Ilse", "(Une femme en cape grise, seule à une table. Le pendentif à son cou hésite : il tourne vers toi, repart, s'immobilise sans savoir où pointer. Elle te dévisage longtemps.) Vous n'êtes pas d'ici. Je m'appelle Ilse. Je cherche quelqu'un. Asseyez-vous, je vous offre un verre.")
+                .Choix("(S'asseoir et jouer le voyageur.) Merci. La route a été longue.", () =>
+                    new Noeud("Ilse", "Elles le sont toutes, par ici. (Elle sert deux verres.) Vous avez vu passer un homme marqué ? Une marque d'argent, au bras.").Choix("Non. Mais qui cherchez-vous, au juste ?", IlseParle))
+                .Choix("(S'asseoir et la faire parler.) Vous cherchez qui ?", IlseParle)
+                .Choix("(Refuser poliment et ressortir.)", () => new Noeud("Ilse", "(Elle hausse les épaules.) Comme vous voudrez. Je reste quelques jours. On se reverra, l'étranger."));
+        }
+
+        static Noeud IlseParle() =>
+            new Noeud("Ilse", Pouvoirs.Presence > .55f
+                    ? "Vous savez très bien qui je cherche. (Elle boit une gorgée.) Je sers Dame Morwen, de la Tour d'obsidienne. On m'appelle une Lame grise."
+                    : "Un homme apparu il y a quelques jours, quelque part dans cette vallée. Un étranger qui porte une marque que des gens très puissants voudraient récupérer. J'avais sa trace, claire comme un feu dans la nuit. Puis plus rien. Comme s'il avait soufflé sa propre bougie. (Elle sourit sans joie.) Soit il est mort, soit il est malin. Je penche pour malin.")
+                .Choix("Ces gens puissants, ce sont ceux de la Tour ?", () =>
+                    new Noeud("Ilse", "Oui. Je sers Dame Morwen. Une Lame grise. (Elle te fixe.) Ça ne vous fait pas peur ? En général, les gens d'ici changent de table.")
+                        .Choix("Et les hommes en noir de Maître Vesk ? Vous servez la même cause ?", IlseVesk))
+                .Choix("Et les hommes en noir de Maître Vesk ?", IlseVesk);
+
+        static Noeud IlseVesk() =>
+            new Noeud("Ilse", "(Pour la première fois, du mépris passe sur son visage.) Vesk est un chien qu'on a lâché sur les ponts. Il obéit au Seigneur des Cendres, pas à la Tour. Ma maîtresse veut le porteur vivant. Vesk, lui, le veut mort. Il arrive bientôt, et il ne fera pas la différence entre le porteur et le village qui le cache.")
+                .Choix("D'où Vesk tire-t-il sa force ?", () =>
+                        new Noeud("Ilse", "D'un nœud de mana, sous votre rivière, là où plongent les piles du vieux pont. C'est pour ça qu'il veut cet endroit. Sans sa source, ce n'est plus qu'un homme grand et méchant avec une épée. (Elle se lève et pose une pièce d'argent sur la table.) Bonne nuit, l'étranger. Vous n'avez même pas touché votre vin."),
+                    () =>
+                    {
+                        Progression.Mettre("ilse_rencontre");
+                        foreach (var it in Interlocuteur.Tous) if (it.id == "ilse") it.nom = "Ilse";
+                        Progression.Mettre("vesk_annonce");
+                        Progression.Mettre("info_noeud");
+                        HUD.Message("INFORMATION CLÉ",
+                            "La Tour veut le porteur vivant. Vesk le veut mort, et il arrive bientôt.\nVesk puise dans le nœud de mana sous l'ancien pont.\nLe Sceau peut voir les lignes de mana. Peut-être aussi… les assécher.", 9f);
+                    });
 
         // ---------- l'Entre-Deux : Ysolde ----------
 

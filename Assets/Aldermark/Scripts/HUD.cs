@@ -269,6 +269,8 @@ namespace Aldermark
                     n.texte.color = estCible ? new Color(1f, .82f, .45f) : new Color(1, 1, 1, .85f);
                 }
             }
+            if (cibleQuete == null && Lieux.Tous.TryGetValue(Progression.Cible, out var lieu) && lieu != null && lieu.gameObject.activeInHierarchy)
+                cibleQuete = lieu.position + Vector3.up * 1.5f;
             if (cibleQuete == null)
                 foreach (var p in Poste.Tous)
                     if (p.id == Progression.Cible && Chantier.Actif) { cibleQuete = p.transform.position + Vector3.up * 2f; break; }
@@ -430,7 +432,7 @@ namespace Aldermark
         void ConstruireAide()
         {
             var bloc = Panneau("Aide", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 18), new Vector2(1180, 38), Verre);
-            var t = Texte("Texte", bloc, "ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · P — Plan · Tab — chantier · G — mana · J — journal · V — vue · Échap — souris", 16, Color.white, TextAnchor.MiddleCenter);
+            var t = Texte("Texte", bloc, "ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · P — Plan · Tab — chantier · G — mana · C — Voile · R — Siphon · J — journal · V — vue", 15, Color.white, TextAnchor.MiddleCenter);
             Etirer((RectTransform)t.transform, Vector2.zero, Vector2.zero);
         }
 

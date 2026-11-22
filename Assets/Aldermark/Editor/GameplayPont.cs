@@ -117,6 +117,7 @@ namespace Aldermark.Editeur
             ConstruireVillage(racine);
             ConstruireConvoi(racine);
             ConstruirePrologue(racine);
+            ConstruireIlseEtNoeud(racine);
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);

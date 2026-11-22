@@ -37,6 +37,9 @@ namespace Aldermark
 
         public void RemplirMana() => Mana = manaMax;
 
+        /// <summary>Fixe le mana, même au-delà du maximum (Surcharge du nœud).</summary>
+        public void FixerMana(float m) => Mana = Mathf.Max(0f, m);
+
         /// <summary>Déplace Aldric d'un coup (prologue, cinématiques).</summary>
         public void Teleporter(Vector3 position, float lacet)
         {
@@ -240,7 +243,7 @@ namespace Aldermark
             if (!fige && ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame))) BasculerSceau();
             AnalyserAvecLeSceau(dt);
             Parler(kb, pad, fige);
-            if ((kb != null && kb.rKey.wasPressedThisFrame) || (pad != null && pad.selectButton.wasPressedThisFrame)) BasculerRendu();
+            if ((kb != null && kb.f8Key.wasPressedThisFrame) || (pad != null && pad.selectButton.wasPressedThisFrame)) BasculerRendu();
 
             if (SceauActif)
             {
@@ -251,7 +254,11 @@ namespace Aldermark
                     HUD.Message("MANA ÉPUISÉ", "La vue des flux se referme.", 2.5f);
                 }
             }
-            else if (!PlanRegistre.Actif) Mana = Mathf.Min(manaMax, Mana + (Chantier.Actif ? RegenerationChantier : regenerationMana) * dt);
+            else if (!PlanRegistre.Actif && !Pouvoirs.Absorbe)
+            {
+                float regen = (Chantier.Actif ? RegenerationChantier : regenerationMana) * (Pouvoirs.VoileActif ? .5f : 1f);
+                if (Mana < manaMax) Mana = Mathf.Min(manaMax, Mana + regen * dt);
+            }
             SceauNiveau = Mathf.Lerp(SceauNiveau, SceauActif ? 1f : 0f, Mathf.Clamp01(dt * 5f));
             if (rendu != null) rendu.sceau = SceauNiveau;
 
