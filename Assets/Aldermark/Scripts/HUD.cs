@@ -422,7 +422,7 @@ namespace Aldermark
         void ConstruireAide()
         {
             var bloc = Panneau("Aide", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 18), new Vector2(1180, 38), Verre);
-            var t = Texte("Texte", bloc, "VARENNE · ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · J — journal · R — rendu · Échap — souris", 19, Color.white, TextAnchor.MiddleCenter);
+            var t = Texte("Texte", bloc, "VARENNE · ZQSD — marcher · Maj — courir · Espace — sauter · E — Sceau · F — parler · J — journal · V — vue · R — rendu · Échap — souris", 19, Color.white, TextAnchor.MiddleCenter);
             Etirer((RectTransform)t.transform, Vector2.zero, Vector2.zero);
         }
 

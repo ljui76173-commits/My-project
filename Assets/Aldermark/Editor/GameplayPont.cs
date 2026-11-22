@@ -112,6 +112,8 @@ namespace Aldermark.Editeur
             if (lise != null)
                 lise.transform.rotation = Quaternion.LookRotation(new Vector3(depart.x - lisePos.x, 0, depart.y - lisePos.y));
 
+            ModelesPersonnages.BrancherAldric();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Debug.Log("Aldermark : gameplay du pont ajouté (6 indices, Odon, Bram, dialogues). Appuie sur Play.");

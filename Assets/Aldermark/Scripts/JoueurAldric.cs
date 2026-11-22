@@ -5,9 +5,9 @@ using UnityEngine.Rendering;
 namespace Aldermark
 {
     /// <summary>
-    /// Aldric à la première personne : déplacement, regard, corps visible,
-    /// bâton de bois ferré, main gauche et marque d'argent, Sceau du Grand Registre.
-    /// Clavier : ZQSD (positions physiques), Maj pour courir, E pour le Sceau, R pour le rendu.
+    /// Aldric à la première ou à la troisième personne (V) : déplacement, saut, regard,
+    /// mains nues et marque d'argent, Sceau du Grand Registre, modèle 3D facultatif.
+    /// Clavier : ZQSD (positions physiques), Maj pour courir, Espace pour sauter, E pour le Sceau, R pour le rendu.
     /// Manette : sticks, bouton Nord pour le Sceau, Select pour le rendu.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
@@ -23,6 +23,9 @@ namespace Aldermark
         public float manaMax = 35f;
         public float consommationSceau = 1.6f;
         public float regenerationMana = 2.4f;
+        [Tooltip("Modèle 3D d'Aldric (posé par le menu Aldermark). Vide = corps en cubes.")]
+        public Transform modele;
+        public bool troisiemePersonne;
 
         public float Mana { get; private set; }
         public bool SceauActif { get; private set; }
@@ -47,6 +50,11 @@ namespace Aldermark
         int dernierPas;
         float fovBase = 68f;
         bool liseAInterpelle;
+        Transform corps;
+        Animator anim;
+        Renderer[] rendusModele;
+        Vector3 positionModele;
+        float distanceCamera = 3.6f;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
         static readonly Vector3 BrasDroitPos = new Vector3(.56f, -.56f, .95f);
@@ -59,6 +67,15 @@ namespace Aldermark
             fovBase = cam.fieldOfView;
             ConstruireCorps();
             ConstruireVue();
+            if (modele != null)
+            {
+                corps.gameObject.SetActive(false);
+                anim = modele.GetComponentInChildren<Animator>();
+                if (anim != null) anim.applyRootMotion = false;
+                rendusModele = modele.GetComponentsInChildren<Renderer>();
+                positionModele = modele.localPosition;
+            }
+            AppliquerVue();
             CreerRonds();
             CreerPoussiere();
             Verrouiller(true);
@@ -147,8 +164,13 @@ namespace Aldermark
                 }
             }
             cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fige ? fovBase - 16f : fovBase, Mathf.Clamp01(dt * 3f));
-            cam.transform.localPosition = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
-            cam.transform.localRotation = Quaternion.Euler(tangage, 0f, 0f);
+            if ((kb != null && kb.vKey.wasPressedThisFrame) || (pad != null && pad.dpad.up.wasPressedThisFrame))
+            {
+                troisiemePersonne = !troisiemePersonne;
+                AppliquerVue();
+            }
+            PlacerCamera(dt);
+            AnimerModele(dt, mouvement, bouge);
 
             // Sceau et rendu
             if (!fige && ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame))) BasculerSceau();
@@ -176,6 +198,61 @@ namespace Aldermark
             brasDroit.localPosition = BrasDroitPos + new Vector3(Mathf.Cos(balancement * .5f) * .012f, Mathf.Sin(balancement) * .012f, 0);
             brasGauche.localPosition = Vector3.Lerp(BrasGaucheRepos, BrasGaucheLeve, SceauNiveau);
             matMarque.SetColor("_BaseColor", Color.Lerp(new Color(.78f, .8f, .85f), new Color(.95f, .98f, 1f), SceauNiveau));
+        }
+
+        // ---------- vue et modèle ----------
+
+        void AppliquerVue()
+        {
+            // Première personne : le modèle ne fait que son ombre, on voit les mains.
+            // Troisième personne : le modèle est visible, les mains de la vue disparaissent.
+            if (rendusModele != null)
+                foreach (var r in rendusModele)
+                    r.shadowCastingMode = troisiemePersonne ? ShadowCastingMode.On : ShadowCastingMode.ShadowsOnly;
+            if (modele == null && corps != null)
+                foreach (var r in corps.GetComponentsInChildren<Renderer>())
+                    r.shadowCastingMode = troisiemePersonne ? ShadowCastingMode.On : ShadowCastingMode.ShadowsOnly;
+            if (brasDroit != null) brasDroit.gameObject.SetActive(!troisiemePersonne);
+            if (brasGauche != null) brasGauche.gameObject.SetActive(!troisiemePersonne);
+        }
+
+        void PlacerCamera(float dt)
+        {
+            var rot = Quaternion.Euler(tangage, 0f, 0f);
+            Vector3 tete = new Vector3(0f, hauteurYeux + Mathf.Sin(balancement) * .04f, 0f);
+            if (!troisiemePersonne)
+            {
+                cam.transform.localPosition = tete;
+                cam.transform.localRotation = rot;
+                return;
+            }
+            // Caméra d'épaule, rapprochée si un mur ou le sol est derrière
+            Vector3 pivot = new Vector3(0f, hauteurYeux + .1f, 0f);
+            Vector3 voulu = pivot + rot * new Vector3(.55f, 0f, -3.6f);
+            Vector3 a = transform.TransformPoint(pivot), b = transform.TransformPoint(voulu);
+            float cible = 3.6f;
+            if (Physics.SphereCast(a, .25f, (b - a).normalized, out var hit, (b - a).magnitude, ~0, QueryTriggerInteraction.Ignore)
+                && hit.transform != transform && !hit.transform.IsChildOf(transform))
+                cible = Mathf.Max(.6f, hit.distance - .1f);
+            distanceCamera = cible < distanceCamera ? cible : Mathf.Lerp(distanceCamera, cible, Mathf.Clamp01(dt * 4f));
+            cam.transform.localPosition = pivot + rot * new Vector3(.55f * distanceCamera / 3.6f, 0f, -distanceCamera);
+            cam.transform.localRotation = rot;
+        }
+
+        void AnimerModele(float dt, Vector3 mouvement, bool bouge)
+        {
+            if (modele == null) return;
+            float v = new Vector3(mouvement.x, 0, mouvement.z).magnitude;
+            if (anim != null && anim.runtimeAnimatorController != null)
+            {
+                anim.SetFloat("Vitesse", v, .12f, dt);
+                return;
+            }
+            // Pas d'animations dans le fichier : léger balancement de marche
+            float b = bouge && cc.isGrounded ? Mathf.Abs(Mathf.Sin(balancement * .5f)) * .05f : 0f;
+            float roulis = bouge ? Mathf.Sin(balancement * .5f) * 2.5f : 0f;
+            modele.localPosition = Vector3.Lerp(modele.localPosition, positionModele + Vector3.up * b, Mathf.Clamp01(dt * 12f));
+            modele.localRotation = Quaternion.Slerp(modele.localRotation, Quaternion.Euler(0, 0, roulis), Mathf.Clamp01(dt * 8f));
         }
 
         // ---------- indices et dialogues ----------
@@ -421,7 +498,7 @@ namespace Aldermark
         void ConstruireCorps()
         {
             var lin = Lit(Hex("#d8cba8"));
-            var corps = Groupe("Corps", transform, Vector3.zero);
+            corps = Groupe("Corps", transform, Vector3.zero);
             jambeGauche = Groupe("JambeG", corps, new Vector3(-.12f, .88f, .02f));
             jambeDroite = Groupe("JambeD", corps, new Vector3(.12f, .88f, .02f));
             foreach (var j in new[] { jambeGauche, jambeDroite })

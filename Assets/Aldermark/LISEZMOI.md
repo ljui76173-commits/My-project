@@ -18,6 +18,7 @@ Les retouches faites à la main dans la scène sont alors perdues.
 | Marcher | ZQSD ou flèches | stick gauche |
 | Courir | Maj gauche | clic stick gauche |
 | Sauter | Espace | bouton Sud (A / Croix) |
+| Vue 1re / 3e personne | V | croix directionnelle haut |
 | Regarder | souris | stick droit |
 | Sceau du Grand Registre | E | bouton Nord (Y / Triangle) |
 | Rendu brut / peint | R | Select |
@@ -65,5 +66,10 @@ voix des dialogues) sont fabriqués par le code : rien à installer.
 
 ## Personnages
 
-Nomme les modèles `lise.fbx`, `odon.fbx`, `bram.fbx` et `aldric.fbx` dans `Models`.
-Ils seront branchés sur les personnages dans une prochaine mise à jour.
+Aldric : mets un fichier dont le nom contient `aldric` dans `Models` (un sous-dossier
+avec ses textures convient), puis lance **Aldermark > Brancher le modèle d'Aldric**
+(fait aussi par « Ajouter le gameplay du pont »). Le menu le met à 1,80 m, crée un
+matériau mat avec les textures voisines (couleur + normale) et un Animator si le
+fichier contient des animations (idle / walk / run). Touche V : troisième personne.
+
+Lise, Odon, Bram : `lise.fbx`, `odon.fbx`, `bram.fbx`, branchés dans une prochaine mise à jour.
