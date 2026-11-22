@@ -41,6 +41,9 @@ namespace Aldermark
         float minuterieRonds;
         ParticleSystem poussiere;
         float minuteriePoussiere;
+        PointInteret cibleAnalyse;
+        float tempsAnalyse;
+        const float DureeAnalyse = 1.5f;
         static readonly Vector3 BrasGaucheRepos = new Vector3(-.5f, -1f, .5f);
         static readonly Vector3 BrasGaucheLeve = new Vector3(-.3f, -.24f, .62f);
         static readonly Vector3 BrasDroitPos = new Vector3(.56f, -.56f, .95f);
@@ -76,23 +79,25 @@ namespace Aldermark
             if (kb != null && kb.escapeKey.wasPressedThisFrame) Verrouiller(false);
             if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) Verrouiller(true);
 
+            bool fige = Dialogues.EnCours;
+
             // Regard
             Vector2 regard = Vector2.zero;
-            if (souris != null && Cursor.lockState == CursorLockMode.Locked) regard += souris.delta.ReadValue() * sensibiliteSouris;
-            if (pad != null) regard += pad.rightStick.ReadValue() * sensibiliteManette * dt;
+            if (!fige && souris != null && Cursor.lockState == CursorLockMode.Locked) regard += souris.delta.ReadValue() * sensibiliteSouris;
+            if (!fige && pad != null) regard += pad.rightStick.ReadValue() * sensibiliteManette * dt;
             transform.Rotate(0f, regard.x, 0f);
             tangage = Mathf.Clamp(tangage - regard.y, -80f, 75f);
 
             // Déplacement
             Vector2 dep = Vector2.zero;
-            if (kb != null)
+            if (kb != null && !fige)
             {
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed) dep.y += 1;
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) dep.y -= 1;
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dep.x += 1;
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) dep.x -= 1;
             }
-            if (pad != null) dep += pad.leftStick.ReadValue();
+            if (pad != null && !fige) dep += pad.leftStick.ReadValue();
             dep = Vector2.ClampMagnitude(dep, 1f);
             bool course = (kb != null && kb.leftShiftKey.isPressed) || (pad != null && pad.leftStickButton.isPressed);
             float vitesse = course ? vitesseCourse : vitesseMarche;
@@ -111,7 +116,9 @@ namespace Aldermark
             cam.transform.localRotation = Quaternion.Euler(tangage, 0f, 0f);
 
             // Sceau et rendu
-            if ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame)) BasculerSceau();
+            if (!fige && ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame))) BasculerSceau();
+            AnalyserAvecLeSceau(dt);
+            Parler(kb, pad, fige);
             if ((kb != null && kb.rKey.wasPressedThisFrame) || (pad != null && pad.selectButton.wasPressedThisFrame)) BasculerRendu();
 
             if (SceauActif)
@@ -134,6 +141,61 @@ namespace Aldermark
             brasDroit.localPosition = BrasDroitPos + new Vector3(Mathf.Cos(balancement * .5f) * .012f, Mathf.Sin(balancement) * .012f, 0);
             brasGauche.localPosition = Vector3.Lerp(BrasGaucheRepos, BrasGaucheLeve, SceauNiveau);
             matMarque.SetColor("_BaseColor", Color.Lerp(new Color(.78f, .8f, .85f), new Color(.95f, .98f, 1f), SceauNiveau));
+        }
+
+        // ---------- indices et dialogues ----------
+
+        void AnalyserAvecLeSceau(float dt)
+        {
+            PointInteret cible = null;
+            if (SceauNiveau > .5f && !Dialogues.EnCours)
+            {
+                float meilleur = float.MaxValue;
+                Vector3 oeil = cam.transform.position, regard = cam.transform.forward;
+                foreach (var p in PointInteret.Tous)
+                {
+                    if (!p.Disponible) continue;
+                    Vector3 d = p.transform.position - oeil;
+                    float dist = d.magnitude;
+                    if (dist > p.porteeMax) continue;
+                    float angle = Vector3.Angle(regard, d);
+                    float seuil = Mathf.Max(5f, Mathf.Atan2(p.rayon, dist) * Mathf.Rad2Deg);
+                    if (angle < seuil && angle < meilleur) { meilleur = angle; cible = p; }
+                }
+            }
+            if (cible != cibleAnalyse) { cibleAnalyse = cible; tempsAnalyse = 0f; }
+            if (cible == null) { HUD.Analyse(-1f); return; }
+            tempsAnalyse += dt;
+            HUD.Analyse(tempsAnalyse / DureeAnalyse);
+            if (tempsAnalyse >= DureeAnalyse)
+            {
+                cible.Decouvrir();
+                cibleAnalyse = null;
+                tempsAnalyse = 0f;
+                HUD.Analyse(-1f);
+            }
+        }
+
+        void Parler(Keyboard kb, Gamepad pad, bool fige)
+        {
+            if (fige) { HUD.Invite(null); return; }
+            Interlocuteur proche = null;
+            float meilleur = float.MaxValue;
+            foreach (var i in Interlocuteur.Tous)
+            {
+                Vector3 d = i.transform.position + Vector3.up * 1.1f - cam.transform.position;
+                float dist = d.magnitude;
+                if (dist > 3.5f || Vector3.Angle(cam.transform.forward, d) > 35f) continue;
+                if (dist < meilleur) { meilleur = dist; proche = i; }
+            }
+            HUD.Invite(proche != null ? $"[F]  Parler à {proche.nom}" : null);
+            if (proche != null && ((kb != null && kb.fKey.wasPressedThisFrame) || (pad != null && pad.buttonWest.wasPressedThisFrame)))
+            {
+                var vers = transform.position - proche.transform.position;
+                vers.y = 0;
+                if (vers.sqrMagnitude > .01f) proche.transform.rotation = Quaternion.LookRotation(vers);
+                Dialogues.Commencer(proche);
+            }
         }
 
         // ---------- poussière sous les pas ----------

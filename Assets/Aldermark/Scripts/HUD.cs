@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Aldermark
 {
@@ -17,6 +18,10 @@ namespace Aldermark
         Font police;
         RectTransform toile, bandeBoussole, remplissageMana, fenetre;
         UnityEngine.UI.Text texteMana, titreFenetre, corpsFenetre;
+        UnityEngine.UI.Text texteQuete, texteEtat, texteInvite, texteAnalyse, nomDialogue, corpsDialogue, choixDialogue, texteJournal;
+        GameObject panneauDialogue, panneauJournal;
+        string queteAffichee;
+        float flashQuete;
         CanvasGroup groupeFenetre;
         float minuteurFenetre;
         readonly List<(EtiquetteSceau source, RectTransform rect, UnityEngine.UI.Text texte)> etiquettes = new List<(EtiquetteSceau, RectTransform, UnityEngine.UI.Text)>();
@@ -29,6 +34,35 @@ namespace Aldermark
             instance.titreFenetre.text = titre;
             instance.corpsFenetre.text = corps;
             instance.minuteurFenetre = duree;
+        }
+
+        public static void Invite(string texte)
+        {
+            if (instance == null) return;
+            instance.texteInvite.text = texte ?? "";
+        }
+
+        public static void Analyse(float progression)
+        {
+            if (instance == null) return;
+            instance.texteAnalyse.text = progression < 0 ? "" : $"Analyse du Sceau… {Mathf.RoundToInt(Mathf.Clamp01(progression) * 100)} %";
+        }
+
+        public static void AfficherDialogue(string qui, string texte, List<string> choix)
+        {
+            if (instance == null) return;
+            instance.panneauDialogue.SetActive(true);
+            instance.nomDialogue.text = qui;
+            instance.corpsDialogue.text = texte;
+            var lignes = new System.Text.StringBuilder();
+            for (int i = 0; i < choix.Count; i++) lignes.AppendLine($"[{i + 1}]  {choix[i]}");
+            instance.choixDialogue.text = lignes.ToString();
+        }
+
+        public static void FermerDialogue()
+        {
+            if (instance == null) return;
+            instance.panneauDialogue.SetActive(false);
         }
 
         void Awake()
@@ -50,6 +84,7 @@ namespace Aldermark
             ConstruireMana();
             ConstruireAide();
             ConstruireFenetre();
+            ConstruireJeu();
         }
 
         void Start()
@@ -87,6 +122,24 @@ namespace Aldermark
                 texteMana.text = $"Mana {Mathf.FloorToInt(joueur.Mana)} / {joueur.manaMax:0}";
             }
 
+            // Quête, Éveil, confiance, journal
+            if (Progression.Quete != queteAffichee) { queteAffichee = Progression.Quete; texteQuete.text = queteAffichee; flashQuete = 1.5f; }
+            if (flashQuete > 0) flashQuete -= dt;
+            texteQuete.color = Color.Lerp(Color.white, new Color(1f, .82f, .45f), Mathf.Clamp01(flashQuete));
+            texteEtat.text = $"Éveil du Sceau {Progression.Eveil:0.#} %   ·   Village : {Progression.NomConfiance}";
+            var kb = Keyboard.current;
+            if (kb != null && kb.jKey.wasPressedThisFrame && !Dialogues.EnCours) panneauJournal.SetActive(!panneauJournal.activeSelf);
+            if (panneauJournal.activeSelf)
+            {
+                var j = new System.Text.StringBuilder();
+                j.AppendLine("QUÊTE EN COURS").AppendLine(Progression.Quete).AppendLine();
+                j.AppendLine($"Éveil du Sceau : {Progression.Eveil:0.#} %   ·   Village : {Progression.NomConfiance}").AppendLine();
+                j.AppendLine("INDICES TROUVÉS");
+                if (Progression.Indices.Count == 0) j.AppendLine("Aucun pour l'instant. Active le Sceau (E) et fixe ce qui t'intrigue.");
+                foreach (var i in Progression.Indices) j.AppendLine("·  " + i);
+                texteJournal.text = j.ToString();
+            }
+
             // Fenêtre Système
             if (minuteurFenetre > 0) minuteurFenetre -= dt;
             groupeFenetre.alpha = Mathf.MoveTowards(groupeFenetre.alpha, minuteurFenetre > 0 ? 1 : 0, dt * 3f);
@@ -95,9 +148,14 @@ namespace Aldermark
             bool visibles = joueur != null && joueur.SceauNiveau > .5f && cam != null;
             var places = new List<Rect>();
             etiquettes.Sort((a, b) => Distance(a.source).CompareTo(Distance(b.source)));
-            foreach (var (source, rect, _) in etiquettes)
+            foreach (var (source, rect, texteE) in etiquettes)
             {
-                bool vis = visibles;
+                if (texteE.text != source.texte)
+                {
+                    texteE.text = source.texte;
+                    rect.sizeDelta = new Vector2(texteE.preferredWidth + 26, 34);
+                }
+                bool vis = visibles && !string.IsNullOrEmpty(source.texte);
                 Vector2 pos = Vector2.zero;
                 if (vis)
                 {
@@ -114,6 +172,52 @@ namespace Aldermark
                 rect.gameObject.SetActive(vis);
                 if (vis) rect.anchoredPosition = pos;
             }
+        }
+
+        void ConstruireJeu()
+        {
+            // Quête en haut à droite
+            var q = Panneau("Quete", toile, Vector2.one, Vector2.one, Vector2.one, new Vector2(-24, -24), new Vector2(560, 96), Verre);
+            var tq = Texte("Titre", q, "QUÊTE", 16, new Color(1f, .82f, .45f), TextAnchor.UpperLeft);
+            Etirer((RectTransform)tq.transform, new Vector2(16, 8), new Vector2(-16, -8));
+            texteQuete = Texte("Texte", q, "", 20, Color.white, TextAnchor.UpperLeft);
+            texteQuete.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Etirer((RectTransform)texteQuete.transform, new Vector2(16, 8), new Vector2(-16, -32));
+
+            // Éveil et confiance au-dessus du mana
+            var e = Panneau("Etat", toile, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24, 76), new Vector2(700, 30), new Color(0, 0, 0, 0));
+            texteEtat = Texte("Texte", e, "", 18, new Color(.92f, .9f, 1f), TextAnchor.MiddleLeft);
+            Etirer((RectTransform)texteEtat.transform, Vector2.zero, Vector2.zero);
+
+            // Invite d'interaction et analyse
+            var inv = Panneau("Invite", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 120), new Vector2(700, 40), new Color(0, 0, 0, 0));
+            texteInvite = Texte("Texte", inv, "", 24, Color.white, TextAnchor.MiddleCenter);
+            Etirer((RectTransform)texteInvite.transform, Vector2.zero, Vector2.zero);
+            var an = Panneau("Analyse", toile, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(0, -70), new Vector2(600, 40), new Color(0, 0, 0, 0));
+            texteAnalyse = Texte("Texte", an, "", 22, new Color(.75f, .88f, 1f), TextAnchor.MiddleCenter);
+            Etirer((RectTransform)texteAnalyse.transform, Vector2.zero, Vector2.zero);
+
+            // Dialogue
+            var d = Panneau("Dialogue", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 70), new Vector2(1240, 300), new Color(.055f, .047f, .12f, .88f));
+            panneauDialogue = d.gameObject;
+            nomDialogue = Texte("Nom", d, "", 24, new Color(1f, .82f, .45f), TextAnchor.UpperLeft);
+            nomDialogue.fontStyle = FontStyle.Bold;
+            Etirer((RectTransform)nomDialogue.transform, new Vector2(28, 20), new Vector2(-28, -18));
+            corpsDialogue = Texte("Texte", d, "", 22, Color.white, TextAnchor.UpperLeft);
+            corpsDialogue.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Etirer((RectTransform)corpsDialogue.transform, new Vector2(28, 120), new Vector2(-28, -54));
+            choixDialogue = Texte("Choix", d, "", 21, new Color(.85f, .9f, 1f), TextAnchor.UpperLeft);
+            choixDialogue.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Etirer((RectTransform)choixDialogue.transform, new Vector2(28, 14), new Vector2(-28, -190));
+            panneauDialogue.SetActive(false);
+
+            // Journal (touche J)
+            var jn = Panneau("Journal", toile, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(900, 600), new Color(.055f, .047f, .12f, .92f));
+            panneauJournal = jn.gameObject;
+            texteJournal = Texte("Texte", jn, "", 21, Color.white, TextAnchor.UpperLeft);
+            texteJournal.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Etirer((RectTransform)texteJournal.transform, new Vector2(36, 30), new Vector2(-36, -30));
+            panneauJournal.SetActive(false);
         }
 
         float Distance(EtiquetteSceau e) => cam == null ? 0 : Vector3.Distance(cam.transform.position, e.transform.position);
@@ -160,7 +264,7 @@ namespace Aldermark
         void ConstruireAide()
         {
             var bloc = Panneau("Aide", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 18), new Vector2(1180, 38), Verre);
-            var t = Texte("Texte", bloc, "VARENNE · ZQSD — marcher · Maj — courir · E — Sceau du Grand Registre · R — rendu brut / peint · Échap — souris", 19, Color.white, TextAnchor.MiddleCenter);
+            var t = Texte("Texte", bloc, "VARENNE · ZQSD — marcher · Maj — courir · E — Sceau · F — parler · J — journal · R — rendu · Échap — souris", 19, Color.white, TextAnchor.MiddleCenter);
             Etirer((RectTransform)t.transform, Vector2.zero, Vector2.zero);
         }
 
