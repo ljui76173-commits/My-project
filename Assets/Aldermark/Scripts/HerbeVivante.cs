@@ -68,7 +68,7 @@ namespace Aldermark
         static Matrix4x4 Placer(int i, float x, float z)
         {
             float y = Monde.Hauteur(x, z);
-            if (y < .9f || y > 48f || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f) return Vide;
+            if (y < .9f || y > 48f || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f || Vector2.Distance(new Vector2(x, z), Monde.MaisonHeros) < 5.5f) return Vide;
             if (Mathf.Abs(Monde.Hauteur(x + .8f, z) - Monde.Hauteur(x - .8f, z)) > 1.2f) return Vide;
             float sy = .35f + Monde.HashPublic(i, 4.1f) * .3f, sxz = .8f + Monde.HashPublic(i, 4.2f) * .5f;
             if (Monde.DansChamp(x, z))

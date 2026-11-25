@@ -159,3 +159,26 @@ Les décors sont construits 600 m sous la vallée par « Ajouter le gameplay du 
 - Raccourci de test (éditeur) : **F7** saute à la veille de la bataille, F7 encore lance l'aube.
 - Équilibrage : `Outils/simulation_bataille.py` (pièges parfaits : 1 Cendré passe ; sans chaîne : 5 ;
   sans rien : 11, la ligne plie).
+
+## Le monde ouvert (mode RPG) — étape 1a
+
+Le jeu repart en monde ouvert, sans scénario : un héros niveau 1 qui grandit sans plafond.
+Le document de conception complet décrit toutes les étapes.
+
+**Générer** : menu **Aldermark > Nouveau monde (RPG)**. La scène est enregistrée dans
+`Assets/Scenes/Aldermark.unity` (l'ancienne vallée scénarisée reste dans `Varenne.unity`).
+
+**Ce que contient l'étape 1a**
+
+- Tu te réveilles dans ta maison, au fond d'un petit hameau à l'ouest de la rivière.
+  Le lit (F) : dormir jusqu'au matin, se reposer, sauvegarder.
+- **Horloge du monde** : 1 jour = 48 minutes, 4 saisons de 7 jours ; le soleil la suit.
+- **Stats sans plafond** : FOR, AGI, END, INT, ESP, PER = (base + points + entraînement) × 1,09 par niveau.
+  Elles montent en s'en servant (courir, sauter, explorer, dépenser du mana) et avec 3 points par niveau.
+- **Vie, mana, endurance** en bas à gauche ; courir et sauter coûtent de l'endurance.
+- **Statut (C)** : toutes les stats, d'où elles viennent, et la répartition des points (clic sur + ou 1 à 6).
+- **Sauvegarde** du monde entier : automatique toutes les 5 minutes, en dormant et en quittant ;
+  F5 pour sauvegarder, F9 pour recharger. La partie reprend toute seule au lancement.
+- **Console de debug** (touche ² ou F1) : `aide`, `xp 500`, `niveau 50`, `points 10`, `stat FOR 10`,
+  `heure 21`, `vitesse 20`, `tp varenne`, `tp hameau`, `soigner`, `sauver`, `charger`, `nouvelle`, `infos`.
+- Les habitants du hameau et de Varenne ont un nom et répondent quand on leur parle.

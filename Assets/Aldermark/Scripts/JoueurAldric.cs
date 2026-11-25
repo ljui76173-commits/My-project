@@ -60,10 +60,12 @@ namespace Aldermark
         {
             if (Mana < q) { Mana = 0f; return false; }
             Mana -= q;
+            if (stats != null && MondeRPG.Actif) stats.ManaDepense(q);   // l'Esprit s'entraîne
             return true;
         }
 
         CharacterController cc;
+        StatsHeros stats;
         float tangage, vitesseVerticale, balancement, tempsDepuisDebut;
         bool bienvenueAffichee, sceauDejaUtilise;
         Transform brasDroit, brasGauche, jambeGauche, jambeDroite;
@@ -98,6 +100,8 @@ namespace Aldermark
         {
             cc = GetComponent<CharacterController>();
             if (cam == null) cam = GetComponentInChildren<Camera>();
+            stats = GetComponent<StatsHeros>();
+            if (MondeRPG.Actif && stats != null) manaMax = (float)stats.ManaMax;
             Mana = manaMax;
             fovBase = cam.fieldOfView;
             ConstruireCorps();
@@ -145,6 +149,13 @@ namespace Aldermark
             CreerRonds();
             CreerPoussiere();
             Verrouiller(true);
+            if (MondeRPG.Actif)
+            {
+                // Monde ouvert : ni Sceau ni marque d'argent, l'accueil vient du monde
+                bienvenueAffichee = true;
+                foreach (var t in GetComponentsInChildren<Transform>(true))
+                    if (t.name == "Marque" || t.name == "Sigle") t.gameObject.SetActive(false);
+            }
         }
 
         void Update()
@@ -165,9 +176,10 @@ namespace Aldermark
 
             // Souris : Échap libère, clic reprend
             if (kb != null && kb.escapeKey.wasPressedThisFrame) Verrouiller(false);
-            if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && !HUD.TableauOuvert) Verrouiller(true);
+            if (souris != null && souris.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && !HUD.TableauOuvert && !HUD.MenuOuvert) Verrouiller(true);
 
-            bool fige = Dialogues.EnCours || HUD.TableauOuvert;
+            bool fige = Dialogues.EnCours || HUD.TableauOuvert || HUD.MenuOuvert;
+            bool rpg = MondeRPG.Actif && stats != null;
 
             // Regard
             Vector2 regard = Vector2.zero;
@@ -188,7 +200,9 @@ namespace Aldermark
             if (pad != null && !fige) dep += pad.leftStick.ReadValue();
             dep = Vector2.ClampMagnitude(dep, 1f);
             bool course = (kb != null && kb.leftShiftKey.isPressed) || (pad != null && pad.leftStickButton.isPressed);
+            if (rpg && course) course = dep.sqrMagnitude > .01f && stats.PeutCourir(dt);   // courir coûte de l'endurance
             float vitesse = course ? vitesseCourse : vitesseMarche;
+            if (rpg) vitesse *= stats.MultiplicateurVitesse;
             Vector3 p = transform.position;
             // Dans l'eau seulement si les pieds sont sous la surface (pas sur un pont ou une pierre)
             bool dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
@@ -199,13 +213,20 @@ namespace Aldermark
             if (cc.isGrounded)
             {
                 if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .3f, .8f);   // réception
-                vitesseVerticale = saute ? 6.2f : -1f;
+                if (saute && rpg) saute = stats.PeutSauter();
+                vitesseVerticale = saute ? 6.2f * (rpg ? stats.MultiplicateurSaut : 1f) : -1f;
                 if (saute) Sons.Jouer("pasHerbe", .18f, .9f);
             }
             else vitesseVerticale -= 18f * dt;
             mouvement.y = vitesseVerticale;
+            Vector3 avant = transform.position;
             cc.Move(mouvement * dt);
             bool bouge = dep.sqrMagnitude > .01f;
+            if (rpg && bouge && cc.isGrounded)
+            {
+                Vector3 fait = transform.position - avant; fait.y = 0;
+                stats.Deplacement(fait.magnitude, course);   // l'entraînement : marcher, courir
+            }
             if (bouge) balancement += dt * vitesse * 1.6f;
             int numeroPas = Mathf.FloorToInt(balancement / Mathf.PI);
             if (numeroPas != dernierPas)
@@ -234,7 +255,7 @@ namespace Aldermark
                 }
             }
             cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fige ? fovBase - 16f : fovBase, Mathf.Clamp01(dt * 3f));
-            if ((kb != null && kb.vKey.wasPressedThisFrame) || (pad != null && pad.dpad.up.wasPressedThisFrame))
+            if (!HUD.MenuOuvert && ((kb != null && kb.vKey.wasPressedThisFrame) || (pad != null && pad.dpad.up.wasPressedThisFrame)))
             {
                 troisiemePersonne = !troisiemePersonne;
                 AppliquerVue();
@@ -243,10 +264,10 @@ namespace Aldermark
             AnimerModele(dt, mouvement, bouge);
 
             // Sceau et rendu
-            if (!fige && ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame))) BasculerSceau();
+            if (!fige && !rpg && ((kb != null && kb.eKey.wasPressedThisFrame) || (pad != null && pad.buttonNorth.wasPressedThisFrame))) BasculerSceau();
             AnalyserAvecLeSceau(dt);
             Parler(kb, pad, fige);
-            if ((kb != null && kb.f8Key.wasPressedThisFrame) || (pad != null && pad.selectButton.wasPressedThisFrame)) BasculerRendu();
+            if (!HUD.MenuOuvert && ((kb != null && kb.f8Key.wasPressedThisFrame) || (pad != null && pad.selectButton.wasPressedThisFrame))) BasculerRendu();
 
             if (SceauActif)
             {
@@ -256,6 +277,11 @@ namespace Aldermark
                     Mana = 0f; SceauActif = false;
                     HUD.Message("MANA ÉPUISÉ", "La vue des flux se referme.", 2.5f);
                 }
+            }
+            else if (rpg)
+            {
+                manaMax = (float)stats.ManaMax;
+                if (Mana < manaMax && !fige) Mana = Mathf.Min(manaMax, Mana + (float)stats.RegenMana * dt);
             }
             else if (!PlanRegistre.Actif && !Pouvoirs.Absorbe)
             {

@@ -50,7 +50,7 @@ namespace Aldermark
         /// </summary>
         void Heure()
         {
-            float h = Chantier.Heure;
+            float h = MondeRPG.Actif ? Horloge.Heure : Chantier.Heure;
             float jour = Mathf.Clamp01((h - 6f) / 14f);                 // 0 au lever, 1 au coucher
             float elev = (6f + 44f * Mathf.Sin(jour * Mathf.PI)) * Mathf.Deg2Rad;
             float az = Mathf.Lerp(.15f, Mathf.PI - .15f, jour);
