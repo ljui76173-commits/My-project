@@ -31,6 +31,7 @@ namespace Aldermark
             Instance = this;
             if (joueur == null) joueur = FindFirstObjectByType<JoueurAldric>();
             if (joueur != null && joueur.GetComponent<CombatHeros>() == null) joueur.gameObject.AddComponent<CombatHeros>();
+            if (GetComponent<CarteMonde>() == null) gameObject.AddComponent<CarteMonde>();
         }
 
         void OnDestroy() { if (Instance == this) { Actif = false; Instance = null; } }

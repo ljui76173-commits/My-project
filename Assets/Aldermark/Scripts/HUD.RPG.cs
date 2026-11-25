@@ -11,7 +11,7 @@ namespace Aldermark
     public partial class HUD
     {
         /// <summary>Un menu plein écran est ouvert (Statut, console) : le héros et le temps s'arrêtent.</summary>
-        public static bool MenuOuvert => instance != null && (instance.statutOuvert || ConsoleDebug.Ouverte || instance.inventaireOuvert || Coffre.Ouvert != null);
+        public static bool MenuOuvert => instance != null && (instance.statutOuvert || ConsoleDebug.Ouverte || instance.inventaireOuvert || Coffre.Ouvert != null || instance.carteOuverte);
 
         bool rpgConstruit, statutOuvert;
         RectTransform remplVie, remplMana, remplEndurance, remplXP, panneauStatut, remplXPStatut, panneauConsole;
@@ -60,7 +60,7 @@ namespace Aldermark
             if (aide != null)
             {
                 aide.GetComponent<UnityEngine.UI.Text>().text =
-                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · C Statut · V vue · ² console";
+                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · M carte · C Statut · V vue · ² console";
                 ((RectTransform)aide.parent).sizeDelta = new Vector2(1560, 38);
             }
 
@@ -195,11 +195,12 @@ namespace Aldermark
             texteToasts.text = sb.ToString();
 
             // Statut : C pour ouvrir ou fermer, Échap pour fermer
-            if (kb != null && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
+            if (kb != null && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && !carteOuverte && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
             if (statutOuvert && kb != null && kb.escapeKey.wasPressedThisFrame) OuvrirStatut(false);
             if (statutOuvert && s != null) MettreAJourStatut(s, kb);
 
             MettreAJourInventaire();
+            MettreAJourCarte();
             MettreAJourCombat();
         }
 

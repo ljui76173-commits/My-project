@@ -200,7 +200,7 @@ namespace Aldermark
             if (panneauCoffre.gameObject.activeSelf) FermerCoffre();
 
             bool basculer = kb != null && !ConsoleDebug.Ouverte && !Dialogues.EnCours && kb.iKey.wasPressedThisFrame;
-            if (basculer && !statutOuvert) OuvrirInventaire(!inventaireOuvert);
+            if (basculer && !statutOuvert && !carteOuverte) OuvrirInventaire(!inventaireOuvert);
             if (inventaireOuvert && kb != null && kb.escapeKey.wasPressedThisFrame) OuvrirInventaire(false);
             if (!inventaireOuvert) return;
 

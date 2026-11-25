@@ -41,6 +41,7 @@ namespace Aldermark.Editeur
             monde.joueur = aldric.GetComponent<JoueurAldric>();
 
             var reveil = ConstruireHameau(racine);
+            ConstruireBourg(racine);
             monde.reveil = reveil;
             aldric.transform.SetPositionAndRotation(reveil.position + Vector3.up * .1f, reveil.rotation);
             NommerHabitantsDeVarenne();
@@ -62,6 +63,8 @@ namespace Aldermark.Editeur
             hameau.gameObject.AddComponent<Entite>().id = "lieu-hameau";
 
             var reveil = MaisonDuHeros(hameau, Monde.MaisonHeros, H);
+            MarquerLieu(hameau, "Ton hameau", TypeLieu.Hameau, true);
+            MarquerLieu(reveil.parent, "Ta maison", TypeLieu.Maison, true);
 
             // Quatre maisons de voisins, portes vers le puits
             string[] murs = { "#e2d3b4", "#d9c9a8", "#eadfc6", "#c9b48f" }, toits = { "#7a4a33", "#94403a", "#4f6b8f", "#6b5a3a" };
@@ -76,6 +79,7 @@ namespace Aldermark.Editeur
             }
 
             Puits(hameau, H);
+            MarquerLieu(hameau.Find("PuitsDuHameau"), "Puits du hameau", TypeLieu.Puits, true);
             Potager(hameau, H + new Vector2(14f, -19f));
             TasDeBois(hameau, H + new Vector2(-4.5f, -9.5f));
 
@@ -86,6 +90,7 @@ namespace Aldermark.Editeur
             q.transform.position = new Vector3(pq.x, Sol(pq.x, pq.y), pq.y);
             q.AddComponent<Quintaine>();
             q.AddComponent<Entite>().id = "quintaine-hameau";
+            MarquerLieu(q.transform, "Quintaine", TypeLieu.Quintaine, true);
 
             // Le garde du hameau, à l'entrée du chemin
             var garde = new GameObject("GardeDuHameau");
@@ -217,18 +222,55 @@ namespace Aldermark.Editeur
             return m;
         }
 
+        // ---------- le bourg de Varenne ----------
+
+        /// <summary>Varenne revit : marché, auberge, forge, chapelle, lavoir, moulin, enclos ; chaque lieu figure sur la carte.</summary>
+        static void ConstruireBourg(Transform racine)
+        {
+            ConstruireVillage(racine);
+            var village = racine.Find("VillageVivant");
+            if (village != null)
+            {
+                var forgeron = village.Find("Forgeron");
+                if (forgeron != null && forgeron.GetComponent<Interlocuteur>() != null) forgeron.GetComponent<Interlocuteur>().id = "villageois";
+                MarquerLieu(village.Find("Marche"), "Marché de Varenne", TypeLieu.Marche, false);
+                MarquerLieu(village.Find("Auberge"), "Auberge de Varenne", TypeLieu.Auberge, false);
+                MarquerLieu(village.Find("Forge"), "Forge d'Hadrien", TypeLieu.Forge, false);
+                MarquerLieu(village.Find("Chapelle"), "Chapelle de Varenne", TypeLieu.Chapelle, false);
+                MarquerLieu(village.Find("Lavoir"), "Lavoir de Varenne", TypeLieu.Lavoir, false);
+                MarquerLieu(village.Find("Moulin"), "Moulin à eau", TypeLieu.Moulin, false);
+            }
+            var bourg = new GameObject("Varenne");
+            bourg.transform.SetParent(racine, false);
+            bourg.transform.position = new Vector3(Monde.Village.x, Sol(Monde.Village.x, Monde.Village.y), Monde.Village.y);
+            MarquerLieu(bourg.transform, "Varenne", TypeLieu.Village, true);
+        }
+
+        static void MarquerLieu(Transform t, string nom, TypeLieu type, bool connu)
+        {
+            if (t == null) { Debug.LogWarning($"Aldermark : lieu introuvable pour la carte : {nom}"); return; }
+            var l = t.GetComponent<Lieu>();
+            if (l == null) l = t.gameObject.AddComponent<Lieu>();
+            l.nom = nom; l.type = type; l.connu = connu;
+            if (t.GetComponent<Entite>() == null) t.gameObject.AddComponent<Entite>().id = "lieu-" + type.ToString().ToLower();
+        }
+
         // ---------- les repaires ----------
 
         static void ConstruireRepaires(Transform racine)
         {
             var groupe = new GameObject("Repaires").transform;
             groupe.SetParent(racine, false);
-            Repaire(groupe, "RepaireDesGelees", Monde.RepaireGelees, Aldermark.Repaire.Espece.Gelee, 4, 1, 2, 7f, 4f);
-            Repaire(groupe, "TaniereDesLoups", Monde.RepaireLoups, Aldermark.Repaire.Espece.Loup, 4, 3, 4, 6f, 8f);
+            var gelees = Repaire(groupe, "RepaireDesGelees", Monde.RepaireGelees, Aldermark.Repaire.Espece.Gelee, 4, 1, 2, 7f, 4f);
+            MarquerLieu(gelees, "Mare aux gelées", TypeLieu.Gelees, false);
+            var loups = Repaire(groupe, "TaniereDesLoups", Monde.RepaireLoups, Aldermark.Repaire.Espece.Loup, 4, 3, 4, 6f, 8f);
+            MarquerLieu(loups, "Tanière des loups", TypeLieu.Loups, false);
             var camp = Repaire(groupe, "CampGobelin", Monde.CampGobelins, Aldermark.Repaire.Espece.Gobelin, 4, 4, 6, 3.5f, 10f);
             CampGobelin(camp);
+            MarquerLieu(camp, "Camp gobelin", TypeLieu.Gobelins, false);
             var antre = Repaire(groupe, "AntreDuTroll", Monde.AntreTroll, Aldermark.Repaire.Espece.Troll, 1, 12, 12, 2f, 24f);
             AntreDuTroll(antre);
+            MarquerLieu(antre, "Antre du troll", TypeLieu.Troll, false);
         }
 
         static Transform Repaire(Transform parent, string nom, Vector2 p, Aldermark.Repaire.Espece e, int nombre, int nivMin, int nivMax, float rayon, float heures)

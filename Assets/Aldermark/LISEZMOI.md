@@ -261,3 +261,25 @@ Tu te réveilles les mains vides. **Le coffre au pied du lit** (E) contient l'é
 - **Manger** : le pain rend 20 % de la vie, la viande crue 8 %.
 - **Sauvegarde** : le sac, la bourse, l'arme et le contenu du coffre sont sauvegardés. Les objets laissés au sol, non.
 - **Console** : `objets` liste les objets, `donner gourdin_gobelin` en ajoute un.
+
+## La carte (mode RPG)
+
+**M** ouvre la grande carte, **N** affiche ou cache la mini-carte (ronde, sous l'horloge, elle tourne avec toi).
+
+- **Peinte à partir du vrai terrain** au lancement (quelques secondes) : relief ombré, courbes de niveau tous les 5 m,
+  rivière, routes, champs, forêts, bâtiments. Un **brouillard** couvre ce que tu n'as pas encore vu ; il se lève
+  à 40 m autour de toi.
+- **Légende à onglets** : Tout · Lieux · Commerces · Services · Dangers · Mes repères. Chaque type a son icône
+  (chope : auberge, enclume : forge, bourse : marché, roue : moulin, croix : chapelle, goutte : lavoir, seau : puits,
+  épée : quintaine, gelée, patte, tente, crâne pour les repaires). Clic sur une ligne : la carte s'y centre ;
+  clic droit : itinéraire vers ce lieu.
+- **Commandes** : molette pour zoomer (autour du curseur), glisser pour se déplacer, Espace pour te retrouver,
+  clic pour poser ou retirer un repère, clic droit pour fixer une **destination**.
+- **Itinéraire** : il suit les routes (et le pont) quand c'est plus court en pratique, sinon il coupe à travers champs.
+  Il s'affiche sur la carte, la mini-carte et la **boussole** (drapeau et distance). Il s'efface à l'arrivée.
+- **Lieux découverts** : les repaires et les lieux du bourg apparaissent quand tu passes près d'eux (+8 XP).
+  Ta maison, ton hameau et Varenne sont connus d'emblée.
+- **Varenne revit** en monde ouvert : marché garni, auberge, forge d'Hadrien, chapelle, lavoir, moulin qui tourne,
+  enclos ; les villageois suivent l'horloge (champs, marché à midi, auberge le soir). On ne peut pas encore y acheter :
+  les boutiques arrivent avec la vie du monde.
+- **Sauvegarde** : le brouillard levé, les lieux découverts, tes repères et ta destination.
