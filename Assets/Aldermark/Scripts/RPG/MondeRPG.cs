@@ -30,6 +30,7 @@ namespace Aldermark
             Actif = true;
             Instance = this;
             if (joueur == null) joueur = FindFirstObjectByType<JoueurAldric>();
+            if (joueur != null && joueur.GetComponent<CombatHeros>() == null) joueur.gameObject.AddComponent<CombatHeros>();
         }
 
         void OnDestroy() { if (Instance == this) { Actif = false; Instance = null; } }
@@ -97,6 +98,21 @@ namespace Aldermark
         {
             HUD.Fondu(2f);
             if (Instance != null) Instance.StartCoroutine(Instance.Sommeil(() => Horloge.AvancerHeures(heures)));
+        }
+
+        /// <summary>Le héros tombe : tout devient noir, il se réveille dans son lit quatre heures plus tard, soigné.</summary>
+        public IEnumerator Mort()
+        {
+            HUD.Message("TU T'ÉCROULES", "Tout devient noir…", 3f);
+            Sons.Jouer("onde", .5f, .55f);
+            yield return new WaitForSecondsRealtime(1.3f);
+            HUD.Fondu(3.4f);
+            yield return new WaitForSecondsRealtime(1.1f);   // l'écran est noir
+            if (reveil != null) joueur.Teleporter(reveil.position, reveil.eulerAngles.y);
+            Horloge.AvancerHeures(4f);
+            if (StatsHeros.Instance != null) StatsHeros.Instance.Soigner();
+            yield return new WaitForSecondsRealtime(1.2f);
+            HUD.Message("TU TE RÉVEILLES", $"{Horloge.Texte}\nQuelqu'un t'a ramené chez toi. Quatre heures ont passé.", 6f);
         }
 
         IEnumerator Sommeil(System.Action avancer)

@@ -20,6 +20,8 @@ namespace Aldermark
         public const float RayonHameau = 26f;
         /// <summary>La maison du héros dans le hameau (pas d'herbe sous son plancher).</summary>
         public static Vector2 MaisonHeros => Hameau + new Vector2(-10f, -6f);
+        /// <summary>La quintaine d'entraînement, dans la cour à l'ouest du hameau.</summary>
+        public static Vector2 Quintaine => Hameau + new Vector2(-13f, 2f);
 
         // Routes (x, z)
         public static readonly Vector2[][] Routes = new[]

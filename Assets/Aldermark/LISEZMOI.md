@@ -182,3 +182,31 @@ Le document de conception complet décrit toutes les étapes.
 - **Console de debug** (touche ² ou F1) : `aide`, `xp 500`, `niveau 50`, `points 10`, `stat FOR 10`,
   `heure 21`, `vitesse 20`, `tp varenne`, `tp hameau`, `soigner`, `sauver`, `charger`, `nouvelle`, `infos`.
 - Les habitants du hameau et de Varenne ont un nom et répondent quand on leur parle.
+
+## Le combat (mode RPG) — étape 1b
+
+Pour tester sans monstres : la **quintaine** dans la cour à l'ouest du hameau (console : `tp quintaine`).
+Frappe-la : son bras tourne et le sac de sable revient te cogner si tu restes dans sa course.
+
+| Geste | Clavier / souris | Manette |
+|---|---|---|
+| Enchaînement de 3 coups (taille, revers, estoc) | clic gauche | RB |
+| Coup lourd (repousse, sonne) | clic gauche maintenu | RB maintenu |
+| Fente (avale 3 m) | clic gauche en courant | RB en courant |
+| Coup plongeant (onde de choc) | clic gauche en l'air, d'assez haut | RB en l'air |
+| Garde (réduit les dégâts de 75 %) | clic droit maintenu | LB |
+| Parade parfaite (0 dégât, l'ennemi est sonné) | clic droit juste avant l'impact | LB juste avant |
+| Riposte (critique ×3, au ralenti) | clic gauche juste après une parade parfaite | RB |
+| Roulade (invulnérable un instant) | Alt | B |
+| Se relever d'une roulade quand on est projeté | Alt juste avant de toucher le sol | B |
+| Verrouiller la cible | clic molette | stick droit enfoncé |
+
+- **Le recul** : un coup fort te repousse ; ton épée se plante dans le sol et tu glisses en arrière
+  (étincelles, terre, sillon dans l'herbe). Plus l'ennemi est fort par rapport à ta défense, plus tu recules.
+  Paré, un coup énorme te fait encore glisser. Sans garde, un coup très fort te **projette**.
+- **Ressenti** : figeage d'image à chaque impact, tremblement de caméra, traînée de lame, chiffres de dégâts
+  (blancs, dorés en critique, rouges sur toi), éclair blanc à la parade, bords rouges quand tu es touché.
+- **Endurance** : chaque coup, roulade ou garde qui encaisse en coûte ; à zéro tu es essoufflé.
+- **Entraînement** : frapper fait monter la FOR, esquiver et parer l'AGI, encaisser l'END.
+- **Tomber à zéro** : tu te réveilles dans ton lit quatre heures plus tard, soigné.
+- Les sons de combat sont fabriqués en code pour l'instant (de vrais enregistrements à l'étape 1e).

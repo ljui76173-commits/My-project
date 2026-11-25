@@ -57,8 +57,12 @@ namespace Aldermark
                 if (t != null) t.gameObject.SetActive(false);
             }
             var aide = toile.Find("Aide/Texte");
-            if (aide != null) aide.GetComponent<UnityEngine.UI.Text>().text =
-                "ZQSD — marcher · Maj — courir · Espace — sauter · F — interagir · C — Statut · V — vue · F5 — sauvegarder · F9 — recharger · ² — console";
+            if (aide != null)
+            {
+                aide.GetComponent<UnityEngine.UI.Text>().text =
+                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · F interagir · C Statut · V vue · F5 / F9 sauvegarde · ² console";
+                ((RectTransform)aide.parent).sizeDelta = new Vector2(1560, 38);
+            }
 
             // Barres en bas à gauche
             var bloc = Panneau("BarresRPG", toile, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24, 70), new Vector2(380, 130), new Color(0, 0, 0, 0));
@@ -194,6 +198,8 @@ namespace Aldermark
             if (kb != null && !ConsoleDebug.Ouverte && !Dialogues.EnCours && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
             if (statutOuvert && kb != null && kb.escapeKey.wasPressedThisFrame) OuvrirStatut(false);
             if (statutOuvert && s != null) MettreAJourStatut(s, kb);
+
+            MettreAJourCombat();
         }
 
         static void Remplir(RectTransform r, UnityEngine.UI.Text t, double v, double max, string nom)

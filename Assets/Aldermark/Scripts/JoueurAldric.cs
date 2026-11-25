@@ -64,6 +64,44 @@ namespace Aldermark
             return true;
         }
 
+        // ---------- combat : élan, projection, tremblement, verrouillage ----------
+
+        /// <summary>Interdit la course (pendant un coup, une garde, une glissade).</summary>
+        [System.NonSerialized] public bool courseInterdite;
+        /// <summary>Cible verrouillée : le regard la suit.</summary>
+        [System.NonSerialized] public Transform verrou;
+        /// <summary>Décalage de la caméra (plongée de la roulade, chute).</summary>
+        [System.NonSerialized] public Vector3 decalageCamera;
+        /// <summary>Où la main droite du modèle riggé doit aller (la poignée de l'épée), et avec quel poids.</summary>
+        [System.NonSerialized] public Vector3 cibleMainDroite;
+        [System.NonSerialized] public float poidsMainDroite;
+
+        public Transform BrasDroit => brasDroit;
+        public bool AuSol => cc != null && cc.isGrounded;
+        public bool EnCourse { get; private set; }
+        public float VitesseVerticale { get => vitesseVerticale; set => vitesseVerticale = value; }
+
+        Vector3 elan;
+        float elanTemps, elanFrein, impulsionVerticale, secousse, yeuxLisses = -1f;
+
+        /// <summary>Une vitesse imposée pendant un moment (roulade, fente, recul), freinée peu à peu.</summary>
+        public void Elan(Vector3 vitesse, float duree, float frein)
+        {
+            elan = new Vector3(vitesse.x, 0, vitesse.z);
+            elanTemps = duree;
+            elanFrein = frein;
+        }
+
+        /// <summary>Projeté : soulevé du sol et lancé en arrière.</summary>
+        public void Projeter(Vector3 horizontal, float vertical)
+        {
+            Elan(horizontal, 3f, 0f);
+            impulsionVerticale = vertical;
+        }
+
+        /// <summary>Fait trembler la caméra (force ≈ amplitude en mètres).</summary>
+        public void Secouer(float force) => secousse = Mathf.Min(.3f, Mathf.Max(secousse, force));
+
         CharacterController cc;
         StatsHeros stats;
         float tangage, vitesseVerticale, balancement, tempsDepuisDebut;
@@ -185,8 +223,23 @@ namespace Aldermark
             Vector2 regard = Vector2.zero;
             if (!fige && souris != null && Cursor.lockState == CursorLockMode.Locked) regard += souris.delta.ReadValue() * sensibiliteSouris;
             if (!fige && pad != null) regard += pad.rightStick.ReadValue() * sensibiliteManette * dt;
-            transform.Rotate(0f, regard.x, 0f);
-            tangage = Mathf.Clamp(tangage - regard.y, -80f, 75f);
+            if (verrou != null && !fige)
+            {
+                // Cible verrouillée : le regard la suit
+                Vector3 vers = verrou.position + Vector3.up * 1.1f - cam.transform.position;
+                Vector3 horiz = new Vector3(vers.x, 0, vers.z);
+                if (horiz.sqrMagnitude > .04f)
+                {
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(horiz), Mathf.Clamp01(dt * 10f));
+                    float vise = -Mathf.Atan2(vers.y, horiz.magnitude) * Mathf.Rad2Deg + (troisiemePersonne ? 8f : 3f);
+                    tangage = Mathf.Lerp(tangage, Mathf.Clamp(vise, -80f, 75f), Mathf.Clamp01(dt * 6f));
+                }
+            }
+            else
+            {
+                transform.Rotate(0f, regard.x, 0f);
+                tangage = Mathf.Clamp(tangage - regard.y, -80f, 75f);
+            }
 
             // Déplacement
             Vector2 dep = Vector2.zero;
@@ -200,6 +253,7 @@ namespace Aldermark
             if (pad != null && !fige) dep += pad.leftStick.ReadValue();
             dep = Vector2.ClampMagnitude(dep, 1f);
             bool course = (kb != null && kb.leftShiftKey.isPressed) || (pad != null && pad.leftStickButton.isPressed);
+            if (courseInterdite) course = false;
             if (rpg && course) course = dep.sqrMagnitude > .01f && stats.PeutCourir(dt);   // courir coûte de l'endurance
             float vitesse = course ? vitesseCourse : vitesseMarche;
             if (rpg) vitesse *= stats.MultiplicateurVitesse;
@@ -209,8 +263,16 @@ namespace Aldermark
             if (dansLEau) vitesse *= .5f;
             vitesse *= entrave;
             Vector3 mouvement = (transform.forward * dep.y + transform.right * dep.x) * vitesse;
+            if (elanTemps > 0f)
+            {
+                mouvement += elan;
+                elanTemps -= dt;
+                elan = Vector3.MoveTowards(elan, Vector3.zero, elanFrein * dt);
+                if (elanTemps <= 0f) elan = Vector3.zero;
+            }
             bool saute = !fige && ((kb != null && kb.spaceKey.wasPressedThisFrame) || (pad != null && pad.buttonSouth.wasPressedThisFrame));
-            if (cc.isGrounded)
+            if (impulsionVerticale > 0f) { vitesseVerticale = impulsionVerticale; impulsionVerticale = 0f; }
+            else if (cc.isGrounded)
             {
                 if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .3f, .8f);   // réception
                 if (saute && rpg) saute = stats.PeutSauter();
@@ -222,6 +284,7 @@ namespace Aldermark
             Vector3 avant = transform.position;
             cc.Move(mouvement * dt);
             bool bouge = dep.sqrMagnitude > .01f;
+            EnCourse = course && bouge;
             if (rpg && bouge && cc.isGrounded)
             {
                 Vector3 fait = transform.position - avant; fait.y = 0;
@@ -334,11 +397,11 @@ namespace Aldermark
                 if (corpsComplet)
                 {
                     // Les yeux suivent la tête animée, un peu en avant pour ne pas voir l'intérieur du cou
-                    float hy = transform.InverseTransformPoint(teteOs.position).y;
-                    tete = new Vector3(0f, Mathf.Lerp(cam.transform.localPosition.y, hy + .1f, Mathf.Clamp01(dt * 10f)), .16f);
+                    float hy = transform.InverseTransformPoint(teteOs.position).y + .1f;
+                    yeuxLisses = yeuxLisses < 0f ? hy : Mathf.Lerp(yeuxLisses, hy, Mathf.Clamp01(dt * 10f));
+                    tete = new Vector3(0f, yeuxLisses, .16f);
                 }
-                cam.transform.localPosition = tete;
-                cam.transform.localRotation = rot;
+                PoserCamera(tete, rot);
                 return;
             }
             // Caméra d'épaule, rapprochée si un mur ou le sol est derrière
@@ -350,8 +413,23 @@ namespace Aldermark
                 && hit.transform != transform && !hit.transform.IsChildOf(transform))
                 cible = Mathf.Max(.6f, hit.distance - .1f);
             distanceCamera = cible < distanceCamera ? cible : Mathf.Lerp(distanceCamera, cible, Mathf.Clamp01(dt * 4f));
-            cam.transform.localPosition = pivot + rot * new Vector3(.55f * distanceCamera / 3.6f, 0f, -distanceCamera);
-            cam.transform.localRotation = rot;
+            PoserCamera(pivot + rot * new Vector3(.55f * distanceCamera / 3.6f, 0f, -distanceCamera), rot);
+        }
+
+        /// <summary>Place la caméra, avec le tremblement des chocs et le décalage (roulade, chute).</summary>
+        void PoserCamera(Vector3 position, Quaternion rotation)
+        {
+            if (secousse > 0f)
+            {
+                float t = Time.unscaledTime * 38f;
+                Vector3 n = new Vector3(Mathf.PerlinNoise(t, .3f) - .5f, Mathf.PerlinNoise(.7f, t) - .5f, Mathf.PerlinNoise(t, t * .7f) - .5f) * 2f;
+                position += n * secousse * .5f;
+                rotation *= Quaternion.Euler(n.y * secousse * 30f, n.x * secousse * 30f, n.z * secousse * 40f);
+                secousse *= Mathf.Exp(-Time.unscaledDeltaTime * 10f);
+                if (secousse < .001f) secousse = 0f;
+            }
+            cam.transform.localPosition = position + decalageCamera;
+            cam.transform.localRotation = rotation;
         }
 
         void AnimerModele(float dt, Vector3 mouvement, bool bouge)

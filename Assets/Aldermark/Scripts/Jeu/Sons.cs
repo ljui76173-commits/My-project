@@ -8,7 +8,7 @@ namespace Aldermark
     /// vent, rivière, oiseaux, pas, Sceau, analyse, découverte, voix des dialogues.
     /// Joue aussi la musique déposée dans Assets/Aldermark/Audio (assignée par le menu Gameplay).
     /// </summary>
-    public class Sons : MonoBehaviour
+    public partial class Sons : MonoBehaviour
     {
         public AudioClip[] musiques;
         [Range(0, 1)] public float volumeMusique = .35f;
@@ -19,6 +19,8 @@ namespace Aldermark
         const int Freq = 44100;
         readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
         AudioSource sourceUI, sourceAnalyse, sourceMusique, sourceVoix;
+        readonly AudioSource[] reserve = new AudioSource[8];   // plusieurs sons à la fois, chacun à sa hauteur
+        int prochaineSource;
         Transform auditeur;
         float minuterieOiseau = 3f;
         int indexMusique = -1;
@@ -42,8 +44,10 @@ namespace Aldermark
             clips["quete"] = Carillon(new[] { 587.33f, 880f });
             clips["voix"] = Bip();
             clips["clic"] = Pas(.012f, 4000f);
+            ClipsCombat();
 
             sourceUI = Source(false, false, 1f);
+            for (int k = 0; k < reserve.Length; k++) reserve[k] = Source(false, false, 1f);
             sourceVoix = Source(false, false, .5f);
             sourceAnalyse = Source(true, false, 0f);
             sourceAnalyse.clip = clips["analyse"];
@@ -98,8 +102,9 @@ namespace Aldermark
         public static void Jouer(string id, float volume = 1f, float hauteur = 1f)
         {
             if (instance == null || !instance.clips.TryGetValue(id, out var c)) return;
-            instance.sourceUI.pitch = hauteur;
-            instance.sourceUI.PlayOneShot(c, volume);
+            var s = instance.reserve[instance.prochaineSource++ % instance.reserve.Length];
+            s.pitch = hauteur;
+            s.PlayOneShot(c, volume);
         }
 
         public static void JouerA(string id, Vector3 position, float volume = 1f, float hauteur = 1f)

@@ -143,6 +143,19 @@ namespace Aldermark
             return true;
         }
 
+        /// <summary>
+        /// Une action de combat coûte de l'endurance (coup, roulade, garde qui encaisse).
+        /// Possible tant qu'il en reste ; tombé à zéro, on est essoufflé. Renvoie faux s'il n'en restait plus.
+        /// </summary>
+        public bool Depenser(double q)
+        {
+            if (Endurance <= 0) return false;
+            Endurance = Math.Max(0, Endurance - q);
+            repitEndurance = 1f;
+            if (Endurance <= 0) { Essouffle = true; HUD.Toast("Essoufflé"); }
+            return true;
+        }
+
         /// <summary>Appelé par le joueur à chaque image où il avance au sol.</summary>
         public void Deplacement(float distance, bool course)
         {

@@ -7,8 +7,8 @@ namespace Aldermark.Editeur
 {
     /// <summary>
     /// Menu « Aldermark > Nouveau monde (RPG) » : génère la vallée puis le monde ouvert, sans scénario :
-    /// le hameau de départ (ta maison, ton lit, quatre voisins), l'horloge du monde, la sauvegarde,
-    /// les stats du héros et la console de debug. La scène est enregistrée dans Assets/Scenes/Aldermark.unity.
+    /// le hameau de départ (ta maison, ton lit, quatre voisins, une quintaine), l'horloge du monde, la sauvegarde,
+    /// les stats et le combat du héros, la console de debug. La scène est enregistrée dans Assets/Scenes/Aldermark.unity.
     /// </summary>
     public static partial class GameplayPont
     {
@@ -35,6 +35,7 @@ namespace Aldermark.Editeur
             var aldric = GameObject.Find("Aldric");
             if (aldric == null) { Debug.LogError("Aldermark : pas d'Aldric dans la scène. Lance « Nouveau monde (RPG) »."); return; }
             if (aldric.GetComponent<StatsHeros>() == null) aldric.AddComponent<StatsHeros>();
+            if (aldric.GetComponent<CombatHeros>() == null) aldric.AddComponent<CombatHeros>();
             monde.joueur = aldric.GetComponent<JoueurAldric>();
 
             var reveil = ConstruireHameau(racine);
@@ -75,6 +76,14 @@ namespace Aldermark.Editeur
             Puits(hameau, H);
             Potager(hameau, H + new Vector2(14f, -19f));
             TasDeBois(hameau, H + new Vector2(-4.5f, -9.5f));
+
+            // La quintaine d'entraînement (elle se construit au lancement)
+            var q = new GameObject("Quintaine");
+            q.transform.SetParent(hameau, false);
+            var pq = Monde.Quintaine;
+            q.transform.position = new Vector3(pq.x, Sol(pq.x, pq.y), pq.y);
+            q.AddComponent<Quintaine>();
+            q.AddComponent<Entite>().id = "quintaine-hameau";
 
             // Les voisins
             string[] noms = { "Mère Agnès", "Thibault", "Colette", "Le vieux Gaspard" };
