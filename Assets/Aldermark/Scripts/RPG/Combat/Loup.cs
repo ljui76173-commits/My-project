@@ -21,6 +21,9 @@ namespace Aldermark
             vitesseMarche = 2.2f; vitesseCourse = 7.5f; perception = 20f; laisse = 45f; rayonRepos = 9f;
             rayonCorps = .38f; hauteurCorps = .95f; hauteurCentre = .62f; hauteurTete = 1f;
             rotationPreparation = 420f; maxAttaquants = 1; frequencePas = 2.6f;
+            butin.Add(("peau_loup", .8f, 1, 1));
+            butin.Add(("croc_loup", .5f, 1, 2));
+            butin.Add(("viande_crue", .5f, 1, 1));
             attaques.Add(new AttaqueMonstre
             {
                 nom = "Morsure", portee = 2.6f, preparation = .45f, frappe = .22f, recuperation = .55f,

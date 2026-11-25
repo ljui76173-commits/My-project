@@ -17,6 +17,10 @@ namespace Aldermark
             vitesseMarche = 1.9f; vitesseCourse = 5.2f; perception = 16f; laisse = 34f; rayonRepos = 8f;
             rayonCorps = .32f; hauteurCorps = 1.3f; hauteurCentre = .75f; hauteurTete = 1.45f;
             maxAttaquants = 2; fuyard = true; croiseLeFer = true; frequencePas = 5.5f;
+            butin.Add((Objets.Pieces, .9f, 2, 9));
+            butin.Add(("oreille_gobelin", .6f, 1, 1));
+            butin.Add(("gourdin_gobelin", .22f, 1, 1));
+            butin.Add(("pain", .2f, 1, 1));
             attaques.Add(new AttaqueMonstre
             {
                 nom = "Coup de gourdin", portee = 2.1f, preparation = .5f, frappe = .18f, recuperation = .6f,

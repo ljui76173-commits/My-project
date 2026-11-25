@@ -43,6 +43,8 @@ namespace Aldermark
         public ICible Cible => cible;
 
         protected readonly List<AttaqueMonstre> attaques = new List<AttaqueMonstre>();
+        /// <summary>Ce qu'elle peut lâcher en mourant : objet, chance, quantité min et max.</summary>
+        protected readonly List<(string id, float chance, int min, int max)> butin = new List<(string, float, int, int)>();
         protected CharacterController cc;
         protected Transform corps;
         protected ICible cible;
@@ -475,7 +477,20 @@ namespace Aldermark
             etoiles.gameObject.SetActive(false);
             if (repaire != null) repaire.Perdu(this);
             CriDeMort();
+            LacherButin();
             if (c.auteur is CombatHeros h && !AutreEnnemiDuHeros(h)) h.RalentiFinal();
+        }
+
+        void LacherButin()
+        {
+            foreach (var (id, chance, min, max) in butin)
+            {
+                if (Random.value > chance) continue;
+                int n = Random.Range(min, max + 1);
+                if (n <= 0) continue;
+                Vector2 r = Random.insideUnitCircle.normalized * Random.Range(1.2f, 2.6f);
+                ObjetAuSol.Creer(id, n, Centre + Vector3.up * .3f, new Vector3(r.x, 0, r.y));
+            }
         }
 
         bool AutreEnnemiDuHeros(CombatHeros h)

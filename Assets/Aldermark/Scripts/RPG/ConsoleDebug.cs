@@ -86,7 +86,7 @@ namespace Aldermark
                 case "help":
                     Ecrire("xp N · niveau N · points N · stat FOR N · soigner · heure H · vitesse X");
                     Ecrire("tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
-                    Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · sauver · charger · nouvelle · infos");
+                    Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
                     break;
                 case "xp":
                     if (s != null && m.Length > 1 && Nombre(m[1], out v)) { s.GagnerXP(v, "console"); Ecrire($"+{Nombres.Court(v)} XP"); }
@@ -152,6 +152,18 @@ namespace Aldermark
                         var cree = Repaire.Creer(e, p, niv);
                         Ecrire($"{cree.nom} niveau {niv} créé devant toi.");
                     }
+                    break;
+                case "donner":
+                    {
+                        var inv = Inventaire.Instance;
+                        if (inv == null || m.Length < 2 || Objets.Def(m[1]) == null) { Ecrire("Usage : donner <objet> [nombre]  ·  la liste : objets"); break; }
+                        int nb = m.Length > 2 && Nombre(m[2], out var vq) ? (int)vq : 1;
+                        inv.Ajouter(m[1], nb);
+                        Ecrire($"{Objets.Def(m[1]).nom} ×{nb} ajouté.");
+                    }
+                    break;
+                case "objets":
+                    foreach (var d in Objets.Toutes) Ecrire($"{d.id}  ·  {d.nom}  ·  {Objets.NomCategorie(d.categorie)}  ·  {d.valeur} p.");
                     break;
                 case "tuer":
                     {

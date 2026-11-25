@@ -25,6 +25,23 @@ namespace Aldermark
             clips["ricanement"] = Ricanement();
             clips["rugissement"] = Rugissement();
             clips["gelee"] = Gelee();
+            clips["frottement"] = Frottement();
+        }
+
+        /// <summary>Des pieds qui glissent sur la terre : un grain sourd, sans métal.</summary>
+        AudioClip Frottement()
+        {
+            float b1 = 0, b2 = 0, grain = 0;
+            const float d = .9f;
+            return Creer("Frottement", d, (i, t) =>
+            {
+                b1 += (Bruit() - b1) * .3f;
+                b2 += (b1 - b2) * .1f;
+                if (Bruit() > .993f) grain = 1f;
+                grain *= .993f;
+                float env = Mathf.Clamp01(t / .02f) * Mathf.Pow(1f - t / d, 1.4f);
+                return (b1 - b2) * (1.3f + grain * 1.6f) * env;
+            });
         }
 
         /// <summary>Une lame qui fend l'air : un souffle dont le filtre s'ouvre au milieu du geste.</summary>

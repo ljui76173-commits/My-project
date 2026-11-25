@@ -19,6 +19,9 @@ namespace Aldermark
             vitesseMarche = 1.4f; vitesseCourse = 3.6f; perception = 14f; laisse = 28f; rayonRepos = 6f;
             rayonCorps = .85f; hauteurCorps = 2.8f; hauteurCentre = 1.6f; hauteurTete = 3.2f;
             rotationPreparation = 110f; croiseLeFer = true; frequencePas = 2.2f; voute = 18f;
+            butin.Add(("sang_troll", 1f, 2, 3));
+            butin.Add(("croc_troll", .7f, 1, 1));
+            butin.Add((Objets.Pieces, 1f, 30, 60));
             attaques.Add(new AttaqueMonstre
             {
                 nom = "Massue", portee = 3.7f, preparation = 1f, frappe = .22f, recuperation = 1.1f,

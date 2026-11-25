@@ -75,8 +75,12 @@ namespace Aldermark
         /// <summary>Où la main droite du modèle riggé doit aller (la poignée de l'épée), et avec quel poids.</summary>
         [System.NonSerialized] public Vector3 cibleMainDroite;
         [System.NonSerialized] public float poidsMainDroite;
+        /// <summary>Main gauche (combat à mains nues), pied droit et jambe droite (coup de pied).</summary>
+        [System.NonSerialized] public Vector3 cibleMainGauche, ciblePiedDroit;
+        [System.NonSerialized] public float poidsMainGauche, poidsPiedDroit, leverJambeDroite;
 
         public Transform BrasDroit => brasDroit;
+        public Transform BrasGauche => brasGauche;
         public bool AuSol => cc != null && cc.isGrounded;
         public bool EnCourse { get; private set; }
         public float VitesseVerticale { get => vitesseVerticale; set => vitesseVerticale = value; }
@@ -256,7 +260,13 @@ namespace Aldermark
             if (courseInterdite) course = false;
             if (rpg && course) course = dep.sqrMagnitude > .01f && stats.PeutCourir(dt);   // courir coûte de l'endurance
             float vitesse = course ? vitesseCourse : vitesseMarche;
-            if (rpg) vitesse *= stats.MultiplicateurVitesse;
+            if (rpg)
+            {
+                vitesse *= stats.MultiplicateurVitesse;
+                var inv = Inventaire.Instance;
+                if (inv != null && inv.Surcharge) vitesse *= .55f;          // trop chargé
+                else if (inv != null && inv.ArmeEnMain == null) vitesse *= 1.05f;   // arme rangée : plus léger
+            }
             Vector3 p = transform.position;
             // Dans l'eau seulement si les pieds sont sous la surface (pas sur un pont ou une pierre)
             bool dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
@@ -357,7 +367,7 @@ namespace Aldermark
             // Animation du corps et des bras
             float pas = bouge ? Mathf.Sin(balancement * .5f) * 35f : 0f;
             jambeGauche.localRotation = Quaternion.Euler(pas, 0, 0);
-            jambeDroite.localRotation = Quaternion.Euler(-pas, 0, 0);
+            jambeDroite.localRotation = Quaternion.Euler(-pas - leverJambeDroite * 85f, 0, 0);
             brasDroit.localPosition = BrasDroitPos + new Vector3(Mathf.Cos(balancement * .5f) * .012f, Mathf.Sin(balancement) * .012f, 0);
             brasGauche.localPosition = Vector3.Lerp(BrasGaucheRepos, BrasGaucheLeve, SceauNiveau);
             matMarque.SetColor("_BaseColor", Color.Lerp(new Color(.78f, .8f, .85f), new Color(.95f, .98f, 1f), SceauNiveau));

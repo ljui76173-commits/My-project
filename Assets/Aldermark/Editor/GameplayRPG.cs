@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -35,6 +36,7 @@ namespace Aldermark.Editeur
             var aldric = GameObject.Find("Aldric");
             if (aldric == null) { Debug.LogError("Aldermark : pas d'Aldric dans la scène. Lance « Nouveau monde (RPG) »."); return; }
             if (aldric.GetComponent<StatsHeros>() == null) aldric.AddComponent<StatsHeros>();
+            if (aldric.GetComponent<Inventaire>() == null) aldric.AddComponent<Inventaire>();
             if (aldric.GetComponent<CombatHeros>() == null) aldric.AddComponent<CombatHeros>();
             monde.joueur = aldric.GetComponent<JoueurAldric>();
 
@@ -168,7 +170,18 @@ namespace Aldermark.Editeur
             it.id = "lit_rpg"; it.nom = "le lit"; it.verbe = "Utiliser";
 
             // Coffre au pied du lit, table et tabouret, cheminée sur le mur de droite
-            Local(m, PrimitiveType.Cube, new Vector3(-W / 2 + .8f, .5f, .05f), new Vector3(1f, .6f, .55f), "#5a3a22", true);
+            var coffre = new GameObject("Coffre").transform;   // l'épée, du pain, quelques pièces
+            coffre.SetParent(m, false);
+            coffre.localPosition = new Vector3(-W / 2 + .8f, .2f, .05f);
+            Local(coffre, PrimitiveType.Cube, new Vector3(0, .26f, 0), new Vector3(1f, .52f, .55f), "#5a3a22", true);
+            var couvercle = new GameObject("Couvercle").transform;
+            couvercle.SetParent(coffre, false);
+            couvercle.localPosition = new Vector3(0, .52f, -.275f);
+            Local(couvercle, PrimitiveType.Cube, new Vector3(0, .05f, .275f), new Vector3(1.04f, .1f, .58f), "#6b4a30", false);
+            Local(coffre, PrimitiveType.Cube, new Vector3(0, .32f, .285f), new Vector3(.12f, .14f, .03f), "#c8a040", false);
+            var cf = coffre.gameObject.AddComponent<Coffre>();
+            cf.nom = "Ton coffre"; cf.idSauvegarde = "coffre-maison"; cf.couvercle = couvercle;
+            cf.contenu = new List<Pile> { new Pile("epee_courte", 1), new Pile("pain", 2), new Pile(Objets.Pieces, 5) };
             Local(m, PrimitiveType.Cube, new Vector3(1.1f, .98f, -.4f), new Vector3(1.4f, .08f, .85f), bois, true);
             foreach (float x in new[] { .5f, 1.7f })
                 foreach (float z in new[] { -.75f, -.05f })

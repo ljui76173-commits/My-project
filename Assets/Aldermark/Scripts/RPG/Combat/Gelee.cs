@@ -26,6 +26,8 @@ namespace Aldermark
             vitesseMarche = 1.3f; vitesseCourse = 3.4f; perception = 12f; laisse = 30f; rayonRepos = 6f;
             rayonCorps = .42f * taille; hauteurCorps = .8f * taille; hauteurCentre = .4f * taille; hauteurTete = .85f * taille;
             frequencePas = 5f;
+            butin.Add(("gelee", .75f, 1, grosse ? 2 : 1));
+            if (grosse) butin.Add(("noyau_gelee", .12f, 1, 1));
             attaques.Add(new AttaqueMonstre
             {
                 nom = "Bond", portee = 3.4f, preparation = .65f, frappe = .5f, recuperation = .8f,

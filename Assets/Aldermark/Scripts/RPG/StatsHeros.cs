@@ -171,6 +171,9 @@ namespace Aldermark
             repitVie = 8f;
         }
 
+        /// <summary>Rend de la vie (nourriture, potion).</summary>
+        public void Rendre(double vie) => Vie = Math.Min(VieMax, Vie + Math.Max(0, vie));
+
         public void Soigner() { Vie = VieMax; Endurance = EnduranceMax; Essouffle = false; joueur.FixerMana((float)ManaMax); }
 
         // ---------- progression ----------

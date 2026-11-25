@@ -29,6 +29,21 @@ namespace Aldermark
                 anim.SetIKHintPosition(AvatarIKHint.RightElbow, j.position + j.up * 1.05f + j.right * .45f - j.forward * .1f);
             }
 
+            // Pied droit : le coup de pied
+            float wp = joueur.poidsPiedDroit;
+            anim.SetIKPositionWeight(AvatarIKGoal.RightFoot, wp);
+            if (wp > .001f) anim.SetIKPosition(AvatarIKGoal.RightFoot, joueur.ciblePiedDroit);
+
+            // Main gauche : le poing gauche à mains nues
+            if (joueur.poidsMainGauche > joueur.SceauNiveau)
+            {
+                anim.SetIKPositionWeight(AvatarIKGoal.LeftHand, joueur.poidsMainGauche);
+                anim.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, joueur.poidsMainGauche * .6f);
+                anim.SetIKPosition(AvatarIKGoal.LeftHand, joueur.cibleMainGauche);
+                anim.SetIKHintPosition(AvatarIKHint.LeftElbow, j.position + j.up * 1.05f - j.right * .45f - j.forward * .1f);
+                return;
+            }
+
             // Main gauche : montre la marque d'argent quand le Sceau s'active
             float w = joueur.SceauNiveau;
             anim.SetIKPositionWeight(AvatarIKGoal.LeftHand, w);

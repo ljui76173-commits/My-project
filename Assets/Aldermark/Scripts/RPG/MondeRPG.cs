@@ -50,7 +50,7 @@ namespace Aldermark
                 yield return new WaitForSeconds(1.6f);
                 Sons.Jouer("decouverte", .8f, .8f);
                 HUD.Message("STATUT — " + (s != null ? s.nomHeros.ToUpper() : "ALDRIC"),
-                    "Niveau 1 · Titre : Nouveau venu\n\nTu te réveilles dans une petite maison que tu ne connais pas.\nDehors, un monde entier, et rien ne t'y oblige.\n\nC : Statut   ·   F : interagir   ·   F5 : sauvegarder", 9f);
+                    "Niveau 1 · Titre : Nouveau venu\n\nTu te réveilles dans une petite maison que tu ne connais pas, les mains vides.\nUn coffre est posé au pied du lit (E).\nDehors, un monde entier, et rien ne t'y oblige.\n\nI : inventaire   ·   C : Statut   ·   F : parler   ·   F5 : sauvegarder", 10f);
             }
             pret = true;
         }

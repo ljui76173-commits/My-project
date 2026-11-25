@@ -237,3 +237,27 @@ jamais sous tes yeux.
 - **Expérience** : seul le coup qui achève compte. Une gelée ≈ 12 XP, un loup ≈ 23, un gobelin ≈ 37, le troll ≈ 300.
 - **Console** : `creer gelee|loup|gobelin|troll [niveau]` fait apparaître une créature devant toi ;
   `tuer` abat les créatures hostiles à moins de 40 m.
+
+## Inventaire, butin et mains nues (mode RPG) — étape 1d
+
+Tu te réveilles les mains vides. **Le coffre au pied du lit** (E) contient l'épée courte, deux pains et 5 pièces.
+
+| Touche | Action |
+|---|---|
+| E | ramasser un objet au sol, ouvrir un coffre (les pièces se ramassent seules) |
+| I | inventaire : survole un objet ; E ou clic droit équipe ou mange ; X jette (Maj+X : toute la pile) |
+| H | ranger ou dégainer l'arme équipée |
+| T | dans un coffre : tout prendre ; un clic fait passer une pile de l'autre côté |
+
+- **Charge** : 20 kg + 2 par point de FOR. Surchargé, tu avances à 55 %. Arme rangée, tu cours un peu plus vite.
+- **Mains nues** (arme rangée ou aucune) : direct du gauche, direct du droit, crochet ; maintenu, **coup de pied**
+  qui repousse fort (parfait pour envoyer contre un mur) ; en courant, **charge à l'épaule** ; après une parade parfaite,
+  **uppercut**. **Garde bras en croix** : encaisse la moitié des dégâts (75 % avec une lame) et coûte plus d'endurance ;
+  la parade parfaite marche toujours. Pas de choc des lames sans lame.
+- **Armes** : épée courte (rapide, précise), gourdin de gobelin (plus de dégâts, repousse plus loin, moins de critiques).
+- **Butin** : gelée et parfois un noyau ; peau, crocs et viande de loup ; pièces, oreilles, pain et parfois un gourdin
+  chez les gobelins ; sang et croc de troll avec une bourse bien garnie. Le butin brille d'un fin rayon pour le retrouver
+  dans l'herbe. Chaque objet a un poids et une valeur estimée (la vente viendra avec les boutiques).
+- **Manger** : le pain rend 20 % de la vie, la viande crue 8 %.
+- **Sauvegarde** : le sac, la bourse, l'arme et le contenu du coffre sont sauvegardés. Les objets laissés au sol, non.
+- **Console** : `objets` liste les objets, `donner gourdin_gobelin` en ajoute un.

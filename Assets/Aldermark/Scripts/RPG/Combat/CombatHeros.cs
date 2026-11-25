@@ -5,8 +5,9 @@ using UnityEngine.InputSystem;
 namespace Aldermark
 {
     /// <summary>
-    /// Le combat d'action du héros.
-    /// Clic gauche : enchaînement de 3 coups (taille, revers, estoc). Maintenu : coup lourd.
+    /// Le combat d'action du héros, l'arme en main ou à mains nues (H range ou dégaine l'arme équipée).
+    /// Clic gauche : enchaînement de 3 coups (taille, revers, estoc ; à mains nues : direct, direct, crochet).
+    /// Maintenu : coup lourd (à mains nues : coup de pied qui repousse fort).
     /// En courant : fente (un estoc qui avale 3 m). En tombant : coup plongeant et onde de choc.
     /// Clic droit : garde ; levée juste avant l'impact, parade parfaite, et le coup suivant est une riposte (×3).
     /// Alt : roulade (invulnérable un instant). Clic molette : verrouiller la cible.
@@ -19,21 +20,13 @@ namespace Aldermark
     {
         public static CombatHeros Instance { get; private set; }
 
-        [System.Serializable]
-        public class Arme
-        {
-            public string nom = "Épée courte";
-            public double degats = 4;
-            public float portee = 2.2f;
-        }
-        public Arme arme = new Arme();
-
         enum Etat { Libre, Preparation, Frappe, Recuperation, Roulade, Sonne, Glissade, Projete, Plongeon, Choc }
 
         class Mouvement
         {
-            public string nom; public float prep, frappe, recup, mult, poussee, cout, cone, elan; public bool lourde, critiqueSur;
-            public Vector3 g0, g1, d0, d1;   // la main (repère caméra) et la direction de la lame, au début et à la fin de la frappe
+            public string nom; public float prep, frappe, recup, mult, poussee, cout, cone, elan; public bool lourde, critiqueSur, pied;
+            public Vector3 g0, g1, d0, d1;   // la main droite (repère caméra) et la direction de la lame, au début et à la fin de la frappe
+            public Vector3 gg0, gg1;          // la main gauche (zéro : au repos)
         }
 
         static readonly Mouvement[] Enchainement =
@@ -70,6 +63,40 @@ namespace Aldermark
             nom = "Coup de grâce", prep = .12f, frappe = .16f, recup = .55f, mult = 4f, poussee = 2.4f, cout = 10f, cone = 70f, lourde = true, critiqueSur = true,
             g0 = new Vector3(.15f, .35f, .35f), d0 = new Vector3(0f, .8f, -.4f), g1 = new Vector3(.05f, -.5f, .8f), d1 = new Vector3(0f, -.85f, .5f),
         };
+        // ---------- à mains nues ----------
+        static readonly Vector3 PoingD = new Vector3(.27f, -.3f, .55f), PoingG = new Vector3(-.27f, -.28f, .58f);
+        static readonly Vector3 CroixD = new Vector3(-.09f, -.1f, .42f), CroixG = new Vector3(.09f, -.15f, .44f);   // garde bras en croix
+        static readonly Vector3 GaucheBas = new Vector3(-.5f, -1f, .5f);   // main gauche hors champ quand l'épée est en main
+        static readonly Mouvement[] Poings =
+        {
+            new Mouvement { nom = "Direct du gauche", prep = .06f, frappe = .1f, recup = .16f, mult = .7f, poussee = .2f, cout = 5f, cone = 60f,
+                g0 = PoingD, g1 = PoingD, gg0 = new Vector3(-.3f, -.3f, .48f), gg1 = new Vector3(-.1f, -.13f, 1f) },
+            new Mouvement { nom = "Direct du droit", prep = .07f, frappe = .1f, recup = .18f, mult = .8f, poussee = .25f, cout = 5f, cone = 60f,
+                g0 = new Vector3(.32f, -.3f, .46f), g1 = new Vector3(.06f, -.11f, 1.02f), gg0 = PoingG, gg1 = PoingG },
+            new Mouvement { nom = "Crochet", prep = .1f, frappe = .12f, recup = .3f, mult = 1.1f, poussee = .5f, cout = 7f, cone = 85f,
+                g0 = new Vector3(.6f, -.15f, .5f), g1 = new Vector3(-.18f, -.1f, .8f), gg0 = PoingG, gg1 = PoingG },
+        };
+        static readonly Mouvement CoupDePied = new Mouvement
+        {
+            nom = "Coup de pied", prep = .3f, frappe = .15f, recup = .42f, mult = 1.5f, poussee = 2.1f, cout = 16f, cone = 50f, lourde = true, pied = true,
+            g0 = PoingD, g1 = PoingD, gg0 = PoingG, gg1 = PoingG,
+        };
+        static readonly Mouvement Charge = new Mouvement
+        {
+            nom = "Charge à l'épaule", prep = .06f, frappe = .25f, recup = .45f, mult = 1.2f, poussee = 1.8f, cout = 14f, cone = 45f, elan = 13f,
+            g0 = new Vector3(.18f, -.28f, .4f), g1 = new Vector3(.18f, -.28f, .4f), gg0 = new Vector3(-.18f, -.26f, .42f), gg1 = new Vector3(-.18f, -.26f, .42f),
+        };
+        static readonly Mouvement Uppercut = new Mouvement
+        {
+            nom = "Uppercut", prep = .05f, frappe = .12f, recup = .3f, mult = 2.6f, poussee = 1.4f, cout = 4f, cone = 70f, critiqueSur = true,
+            g0 = new Vector3(.2f, -.62f, .55f), g1 = new Vector3(.05f, .08f, .85f), gg0 = PoingG, gg1 = PoingG,
+        };
+        static readonly Mouvement GraceMainsNues = new Mouvement
+        {
+            nom = "Coup de grâce", prep = .15f, frappe = .15f, recup = .55f, mult = 3.5f, poussee = 2.4f, cout = 10f, cone = 70f, lourde = true, critiqueSur = true,
+            g0 = new Vector3(.62f, .12f, .3f), g1 = new Vector3(0f, -.12f, 1.02f), gg0 = PoingG, gg1 = PoingG,
+        };
+
         static readonly Vector3 GardeRepos = new Vector3(.42f, -.42f, .75f), LameRepos = new Vector3(-.15f, .75f, .65f);
         static readonly Vector3 GardeHaute = new Vector3(.12f, -.22f, .6f), LameGarde = new Vector3(-.92f, .3f, .2f);
         static readonly Vector3 MainPlantee = new Vector3(.28f, -.5f, .62f), LamePlantee = new Vector3(.05f, -.95f, .35f);
@@ -78,6 +105,12 @@ namespace Aldermark
 
         JoueurAldric j;
         StatsHeros stats;
+        Inventaire inv;
+        Transform modeleArme, botte;
+        string armeConstruite;
+        Vector3 mainG = GaucheBas;
+        float tRangement = -1f;   // > 0 : on range ou on dégaine
+        bool rangementBascule;
         Etat etat;
         Mouvement courante;
         float tEtat, appui = -1f, debutGarde = -9f, finFige, finRalenti, sonne, finRiposte, dureeGlissade, prochainSillon, demandeRelevement = -9f, hauteurPlongeon;
@@ -86,7 +119,6 @@ namespace Aldermark
         Vector3 dirGlissade;
         readonly HashSet<ICible> touches = new HashSet<ICible>();
         ICible verrou;
-        Transform epee;
         Vector3 main = GardeRepos, lame = LameRepos;
         Material matTrace;
         Monstre adversaire;   // choc des lames en cours
@@ -95,9 +127,27 @@ namespace Aldermark
 
         public bool Occupe => etat != Etat.Libre || garde;
         public bool EnGarde => garde;
-        public double Attaque => stats != null ? stats.Valeur(Stat.FOR) + arme.degats * stats.Facteur : arme.degats;
+        /// <summary>L'arme en main (null : mains nues, arme rangée ou aucune).</summary>
+        public DefObjet ArmeEnMain => inv != null ? inv.ArmeEnMain : null;
+        public bool MainsNues => ArmeEnMain == null;
+        float Portee => MainsNues ? 1.6f : ArmeEnMain.portee;
+        public double Attaque
+        {
+            get
+            {
+                if (stats == null) return 5;
+                var a = ArmeEnMain;
+                return a == null ? stats.Valeur(Stat.FOR) * 1.1 : stats.Valeur(Stat.FOR) + a.degats * stats.Facteur;
+            }
+        }
         public double Defense => stats != null ? stats.Valeur(Stat.END) * .6 : 2;
-        public double ChanceCritique => stats == null ? .05 : Mathf.Min(.5f, .05f + .02f * Mathf.Log(Mathf.Max(1f, (float)(stats.Valeur(Stat.AGI) / stats.baseStat))));
+        public double ChanceCritique => stats == null ? .05 : Mathf.Clamp(.05f + .02f * Mathf.Log(Mathf.Max(1f, (float)(stats.Valeur(Stat.AGI) / stats.baseStat))) + (ArmeEnMain != null ? ArmeEnMain.critique : 0f), 0f, .5f);
+
+        Mouvement[] Combo => MainsNues ? Poings : Enchainement;
+        Mouvement MvLourd => MainsNues ? CoupDePied : Lourde;
+        Mouvement MvFente => MainsNues ? Charge : Fente;
+        Mouvement MvRiposte => MainsNues ? Uppercut : Riposte;
+        Mouvement MvGrace => MainsNues ? GraceMainsNues : CoupDeGrace;
         public ICible Verrou => verrou;
 
         // ---------- ICible (le héros reçoit des coups) ----------
@@ -116,11 +166,13 @@ namespace Aldermark
             Instance = this;
             j = GetComponent<JoueurAldric>();
             stats = GetComponent<StatsHeros>();
+            inv = GetComponent<Inventaire>();
+            if (inv == null && stats != null) inv = gameObject.AddComponent<Inventaire>();
         }
 
         void Start()
         {
-            epee = ConstruireEpee().transform;
+            botte = ConstruireBotte();
             matTrace = Effets.Transparent(Color.white);
         }
 
@@ -161,6 +213,19 @@ namespace Aldermark
                 j.entrave = 0f;
                 return;
             }
+            bool rangerPresse = libreDeJouer && ((kb != null && kb.hKey.wasPressedThisFrame) || (pad != null && pad.dpad.down.wasPressedThisFrame));
+            if (rangerPresse && etat == Etat.Libre && tRangement < 0f)
+            {
+                if (inv == null || inv.Arme == null) HUD.Toast("Pas d'arme équipée : ouvre l'inventaire (I)");
+                else { tRangement = .32f; rangementBascule = false; garde = false; }
+            }
+            if (tRangement >= 0f)
+            {
+                tRangement -= dt;
+                if (!rangementBascule && tRangement < .16f) { rangementBascule = true; inv.BasculerDegaine(); }
+                if (tRangement < 0f) tRangement = -1f;
+                appui = -1f; attaquePressee = false; gardeEnfoncee = false;   // on ne frappe pas en rangeant
+            }
             grace = etat == Etat.Libre && libreDeJouer ? CibleDeGrace() : null;
             if (grace != null) HUD.InviteForte("[Clic gauche]  Coup de grâce");
             if (verrouPresse) BasculerVerrou();
@@ -185,7 +250,7 @@ namespace Aldermark
                 }
                 else if (appui >= SeuilLourd && (etat == Etat.Libre || etat == Etat.Recuperation))
                 {
-                    Lancer(Lourde);
+                    Lancer(MvLourd);
                     appui = -1f;
                 }
             }
@@ -232,7 +297,7 @@ namespace Aldermark
 
         void LateUpdate()
         {
-            if (!MondeRPG.Actif || epee == null) return;
+            if (!MondeRPG.Actif || botte == null) return;
             PoserLame();
         }
 
@@ -261,11 +326,11 @@ namespace Aldermark
         {
             if (etat == Etat.Libre)
             {
-                if (grace != null) { Lancer(CoupDeGrace); Ralentir(.5f); return; }
-                if (Time.time < finRiposte) { finRiposte = 0; Lancer(Riposte); Ralentir(.3f); return; }
-                if (j.EnCourse) { Lancer(Fente); return; }
+                if (grace != null) { Lancer(MvGrace); Ralentir(.5f); return; }
+                if (Time.time < finRiposte) { finRiposte = 0; Lancer(MvRiposte); Ralentir(.3f); return; }
+                if (j.EnCourse) { Lancer(MvFente); return; }
                 etapeCombo = 0;
-                Lancer(Enchainement[0]);
+                Lancer(Combo[0]);
             }
             else if ((etat == Etat.Frappe || etat == Etat.Recuperation || etat == Etat.Preparation) && courante != null && !courante.lourde && courante.elan <= 0) comboDemande = true;
         }
@@ -317,8 +382,12 @@ namespace Aldermark
                     if (tEtat >= courante.prep)
                     {
                         etat = Etat.Frappe; tEtat = 0f;
-                        Sons.Jouer(courante.lourde ? "lameLourde" : "lame", .6f, Random.Range(.92f, 1.08f));
-                        Trace(courante);
+                        if (MainsNues) Sons.Jouer("lame", courante.pied ? .5f : .35f, Random.Range(1.5f, 1.8f));
+                        else
+                        {
+                            Sons.Jouer(courante.lourde ? "lameLourde" : "lame", .6f, Random.Range(.92f, 1.08f) * (ArmeEnMain.forme == FormeArme.Gourdin ? .8f : 1f));
+                            Trace(courante);
+                        }
                         if (courante.elan > 0) j.Elan(Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up).normalized * courante.elan, courante.frappe, 3f);
                     }
                     break;
@@ -327,10 +396,10 @@ namespace Aldermark
                     if (tEtat >= courante.frappe) { etat = Etat.Recuperation; tEtat = 0f; }
                     break;
                 case Etat.Recuperation:
-                    if (comboDemande && !courante.lourde && courante.elan <= 0 && etapeCombo < Enchainement.Length - 1 && tEtat > courante.recup * .25f)
+                    if (comboDemande && !courante.lourde && courante.elan <= 0 && etapeCombo < Combo.Length - 1 && tEtat > courante.recup * .25f)
                     {
                         etapeCombo++;
-                        Lancer(Enchainement[etapeCombo]);
+                        Lancer(Combo[etapeCombo]);
                     }
                     else if (tEtat >= courante.recup) { etat = Etat.Libre; courante = null; etapeCombo = 0; }
                     break;
@@ -374,14 +443,15 @@ namespace Aldermark
             Vector3 avant = Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up).normalized;
             if (avant.sqrMagnitude < .01f) avant = transform.forward;
             Vector3 origine = transform.position + Vector3.up * 1.1f;
-            Vector3 centre = origine + avant * arme.portee * .55f;
-            foreach (var c in Physics.OverlapSphere(centre, arme.portee * .65f, ~0, QueryTriggerInteraction.Collide))
+            float portee = Portee + (a.pied ? .3f : 0f);
+            Vector3 centre = origine + avant * portee * .55f;
+            foreach (var c in Physics.OverlapSphere(centre, portee * .65f, ~0, QueryTriggerInteraction.Collide))
             {
                 var cible = c.GetComponentInParent<ICible>();
                 if (cible == null || ReferenceEquals(cible, this) || !cible.Vivant || touches.Contains(cible)) continue;
                 if (cible.Camp == Camp.Heros || cible.Camp == Camp.Allie) continue;
                 Vector3 plat = Vector3.ProjectOnPlane(cible.Centre - origine, Vector3.up);
-                if (plat.magnitude > arme.portee + .8f || Vector3.Angle(avant, plat) > a.cone) continue;
+                if (plat.magnitude > portee + .8f || Vector3.Angle(avant, plat) > a.cone) continue;
                 touches.Add(cible);
                 Frapper(cible, a, plat.normalized);
             }
@@ -391,14 +461,16 @@ namespace Aldermark
         {
             bool critique = a.critiqueSur || Random.value < ChanceCritique;
             double atq = Attaque * a.mult * bonus * (critique ? 1.75 : 1);
-            cible.Recevoir(new Coup { degats = atq, direction = direction, poussee = a.poussee, lourd = a.lourde, critique = critique, auteur = this, nom = a.nom });
+            float poussee = a.poussee * (ArmeEnMain != null ? ArmeEnMain.poussee : 1f);
+            cible.Recevoir(new Coup { degats = atq, direction = direction, poussee = poussee, lourd = a.lourde, critique = critique, auteur = this, nom = a.nom });
             Figer(a.lourde || a.critiqueSur ? .1f : critique ? .07f : .05f);
             j.Secouer(a.lourde ? .09f : critique ? .06f : .035f);
             bool bois = cible is Quintaine;
-            Sons.JouerA(bois ? "impactBois" : "impactChair", cible.Centre, .9f, Random.Range(.9f, 1.1f));
+            Sons.JouerA(bois ? "impactBois" : "impactChair", cible.Centre, .9f, Random.Range(.9f, 1.1f) * (MainsNues ? 1.2f : 1f));
             Effets.Eclat(cible.Centre, bois ? new Color(.75f, .6f, .4f) : new Color(1f, .9f, .75f), critique ? 14 : 7, 3.5f, .1f, 1f, .35f, direction);
             if (a.critiqueSur) HUD.ChiffreTexte(cible.Centre + Vector3.up * .9f, a.nom + " !", new Color(1f, .85f, .4f));
-            stats.Exercer(Stat.FOR, a.lourde ? 2 : 1);
+            stats.Exercer(Stat.FOR, (a.lourde ? 2 : 1) * (MainsNues ? .8 : 1));
+            if (MainsNues) stats.Exercer(Stat.AGI, .3);
             if (critique) stats.Exercer(Stat.AGI, .5);
         }
 
@@ -438,7 +510,7 @@ namespace Aldermark
                 Vector3 d = Vector3.Slerp(DirMonde(a.d0).normalized, DirMonde(a.d1).normalized, u);
                 Vector3 g = Vector3.Lerp(VersMonde(a.g0), VersMonde(a.g1), u);
                 v[k * 2] = g + d * .35f;
-                v[k * 2 + 1] = g + d * (arme.portee * .62f);
+                v[k * 2 + 1] = g + d * (Portee * .62f);
                 float alpha = Mathf.Sin(u * Mathf.PI) * (a.lourde || a.critiqueSur ? .75f : .5f);
                 col[k * 2] = new Color(1, 1, 1, 0);
                 col[k * 2 + 1] = new Color(1f, .97f, .9f, alpha);
@@ -510,8 +582,16 @@ namespace Aldermark
             {
                 // Parade parfaite : aucun dégât, l'attaquant est sonné, le temps ralentit, la riposte est prête
                 if (cb != null) cb.Etourdir(1.4f);
-                Sons.Jouer("parade", 1f, Random.Range(.95f, 1.05f));
-                Effets.Etincelles(VersMonde(GardeHaute) + DirMonde(LameGarde) * .4f, versAttaquant.normalized + Vector3.up * .3f);
+                if (MainsNues)
+                {
+                    Sons.Jouer("impactChair", 1f, 1.4f);
+                    Effets.Eclat(VersMonde(CroixD), new Color(1f, .95f, .85f), 10, 3f, .08f, .5f, .3f, versAttaquant.normalized);
+                }
+                else
+                {
+                    Sons.Jouer("parade", 1f, Random.Range(.95f, 1.05f));
+                    Effets.Etincelles(VersMonde(GardeHaute) + DirMonde(LameGarde) * .4f, versAttaquant.normalized + Vector3.up * .3f);
+                }
                 HUD.EclairCombat(new Color(1f, .97f, .9f, .35f), .18f, false);
                 HUD.ChiffreTexte(SurSoi(), "Parade parfaite !", new Color(1f, .85f, .4f));
                 Ralentir(.35f);
@@ -525,10 +605,15 @@ namespace Aldermark
             double reel = Degats.Calculer(c.degats, Defense);
             if (garde && face)
             {
-                reel *= .25;
-                Sons.Jouer("parade", .7f, .8f);
-                Effets.Etincelles(VersMonde(GardeHaute) + DirMonde(LameGarde) * .4f, versAttaquant.normalized);
-                if (!stats.Depenser(CoutGarde))
+                // Bras en croix : encaisse moitié moins bien qu'une lame
+                reel *= MainsNues ? .5 : .25;
+                if (MainsNues) Sons.Jouer("impactChair", .8f, .9f);
+                else
+                {
+                    Sons.Jouer("parade", .7f, .8f);
+                    Effets.Etincelles(VersMonde(GardeHaute) + DirMonde(LameGarde) * .4f, versAttaquant.normalized);
+                }
+                if (!stats.Depenser(MainsNues ? CoutGarde * 1.4f : CoutGarde))
                 {
                     garde = false;
                     Sonner(.7f);
@@ -566,12 +651,30 @@ namespace Aldermark
             etat = Etat.Glissade; tEtat = 0f; courante = null;
             garde = enGarde;
             prochainSillon = 0f;
-            Sons.Jouer("raclement", .8f, Mathf.Lerp(1.1f, .8f, distance / 6f));
+            Sons.Jouer(MainsNues ? "frottement" : "raclement", .8f, Mathf.Lerp(1.1f, .8f, distance / 6f));
             j.Secouer(.08f);
         }
 
         void Glisser()
         {
+            if (MainsNues)
+            {
+                // Sans lame à planter : les pieds labourent le sol
+                if (tEtat >= prochainSillon && tEtat < dureeGlissade * .85f)
+                {
+                    prochainSillon = tEtat + .06f;
+                    foreach (float cote in new[] { -.18f, .18f })
+                    {
+                        Vector3 pied = transform.position + transform.right * cote;
+                        Vector3 sol = new Vector3(pied.x, Monde.Hauteur(pied.x, pied.z), pied.z);
+                        Effets.Terre(sol, -dirGlissade + Vector3.up);
+                        Effets.Sillon(sol, dirGlissade);
+                    }
+                    Effets.Poussiere(transform.position - dirGlissade * .3f, 3);
+                    j.Secouer(.02f);
+                }
+                return;
+            }
             Vector3 pointe = VersMonde(MainPlantee) + DirMonde(LamePlantee).normalized * .95f;
             pointe.y = Mathf.Max(Monde.Hauteur(pointe.x, pointe.z), pointe.y - 1f);
             if (tEtat >= prochainSillon && tEtat < dureeGlissade * .85f)
@@ -627,7 +730,7 @@ namespace Aldermark
         /// </summary>
         public bool TenterChoc(Monstre m)
         {
-            if (etat != Etat.Frappe || courante == null || courante == Plongeante || mort || m == null) return false;
+            if (etat != Etat.Frappe || courante == null || courante == Plongeante || mort || m == null || MainsNues) return false;
             Vector3 vers = Vector3.ProjectOnPlane(m.Centre - Centre, Vector3.up);
             if (vers.magnitude > 4.2f) return false;
             Vector3 avant = Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up);
@@ -749,74 +852,138 @@ namespace Aldermark
 
         void LacherVerrou() { verrou = null; if (j != null) j.verrou = null; }
 
-        // ---------- la lame dans l'espace ----------
+        // ---------- le corps dans l'espace : mains, arme, pied ----------
+
+        static readonly Vector3 Hanche = new Vector3(-.12f, -.75f, .35f);
+        static Vector3 Gauche(Vector3 v, Vector3 repos) => v == Vector3.zero ? repos : v;
 
         void PoserLame()
         {
             float dt = Time.unscaledDeltaTime;
-            Vector3 gCible, dCible;
-            float vitesse = 14f;
+            bool nues = MainsNues;
+            Vector3 reposD = nues ? PoingD : GardeRepos, reposG = nues ? PoingG : GaucheBas;
+            Vector3 gCible, ggCible, dCible = LameRepos;
+            float vitesse = 14f, uPied = 0f;
+            bool pied = false;
             switch (etat)
             {
                 case Etat.Preparation:
                     float up = Mathf.Clamp01(tEtat / Mathf.Max(.01f, courante.prep));
                     gCible = Vector3.Lerp(main, courante.g0, up); dCible = Vector3.Slerp(lame, courante.d0, up);
+                    ggCible = Vector3.Lerp(mainG, Gauche(courante.gg0, reposG), up);
                     vitesse = 30f;
+                    if (courante.pied) { pied = true; uPied = up * .45f; }
                     break;
                 case Etat.Frappe:
                     float uf = Mathf.Clamp01(tEtat / Mathf.Max(.01f, courante.frappe));
                     uf = 1f - (1f - uf) * (1f - uf);   // rapide au départ, freine à la fin
                     main = Vector3.Lerp(courante.g0, courante.g1, uf); lame = Vector3.Slerp(courante.d0, courante.d1, uf);
-                    Appliquer();
+                    mainG = Vector3.Lerp(Gauche(courante.gg0, reposG), Gauche(courante.gg1, reposG), uf);
+                    if (courante.pied) { pied = true; uPied = .45f + .55f * uf; }
+                    Appliquer(pied, uPied);
                     return;
                 case Etat.Plongeon:
-                    gCible = Plongeante.g1; dCible = Plongeante.d1; vitesse = 25f;
+                    gCible = nues ? new Vector3(.15f, -.55f, .7f) : Plongeante.g1; dCible = Plongeante.d1;
+                    ggCible = nues ? new Vector3(-.15f, -.55f, .7f) : reposG; vitesse = 25f;
                     break;
                 case Etat.Glissade:
-                    gCible = MainPlantee; dCible = LamePlantee; vitesse = 40f;
+                    if (nues) { gCible = garde ? CroixD : reposD; ggCible = garde ? CroixG : reposG; }
+                    else { gCible = MainPlantee; dCible = LamePlantee; ggCible = reposG; }
+                    vitesse = 40f;
                     break;
                 case Etat.Choc:
                     gCible = GardeHaute + new Vector3(Mathf.Sin(Time.unscaledTime * 47f), Mathf.Sin(Time.unscaledTime * 39f), 0) * .012f;
-                    dCible = new Vector3(-.55f, .6f, .6f); vitesse = 30f;
+                    dCible = new Vector3(-.55f, .6f, .6f); ggCible = reposG; vitesse = 30f;
                     break;
                 case Etat.Projete:
-                    gCible = GardeRepos + new Vector3(.15f, .2f, -.2f); dCible = new Vector3(.4f, .5f, -.6f); vitesse = 12f;
+                    gCible = reposD + new Vector3(.15f, .3f, -.2f); dCible = new Vector3(.4f, .5f, -.6f);
+                    ggCible = reposG + new Vector3(-.15f, .3f, -.2f); vitesse = 12f;
                     break;
                 case Etat.Recuperation:
-                    gCible = GardeRepos; dCible = LameRepos; vitesse = 8f;
+                    gCible = reposD; ggCible = reposG; vitesse = 8f;
+                    if (courante != null && courante.pied) { pied = true; uPied = 1f - Mathf.Clamp01(tEtat / (courante.recup * .6f)); }
                     break;
                 case Etat.Roulade:
-                    gCible = GardeRepos + new Vector3(0, -.2f, -.15f); dCible = LameRepos;
+                    gCible = reposD + new Vector3(0, -.2f, -.15f); ggCible = reposG + new Vector3(0, -.2f, -.15f);
                     break;
                 default:
-                    gCible = garde ? GardeHaute : GardeRepos; dCible = garde ? LameGarde : LameRepos;
+                    if (nues) { gCible = garde ? CroixD : reposD; ggCible = garde ? CroixG : reposG; }
+                    else { gCible = garde ? GardeHaute : GardeRepos; dCible = garde ? LameGarde : LameRepos; ggCible = reposG; }
                     vitesse = garde ? 22f : 10f;
                     break;
             }
+            if (tRangement >= 0f) { gCible = Hanche; vitesse = 26f; }   // ranger ou dégainer : la main passe par la hanche
             float k = Mathf.Clamp01(dt * vitesse);
             main = Vector3.Lerp(main, gCible, k);
+            mainG = Vector3.Lerp(mainG, ggCible, k);
             lame = Vector3.Slerp(lame, dCible, k);
-            Appliquer();
+            Appliquer(pied, uPied);
         }
 
-        void Appliquer()
+        void Appliquer(bool pied, float uPied)
         {
-            Vector3 poignee = VersMonde(main), dir = DirMonde(lame).normalized;
-            Vector3 haut = Vector3.Cross(dir, j.troisiemePersonne ? transform.right : j.cam.transform.right);
-            if (haut.sqrMagnitude < .01f) haut = Vector3.up;
-            epee.SetPositionAndRotation(poignee, Quaternion.LookRotation(dir, haut));
-
-            // Le corps suit : bras en cubes à la première personne, main droite du modèle riggé par IK
-            j.cibleMainDroite = poignee;
-            j.poidsMainDroite = 1f;
-            var bras = j.BrasDroit;
-            if (bras != null && bras.gameObject.activeSelf)
+            // L'arme : dans la main (dégainée), à la hanche (rangée), nulle part (aucune)
+            var def = inv != null ? inv.Arme : null;
+            string id = def?.id;
+            if (id != armeConstruite)
             {
-                Vector3 coude = new Vector3(.5f, -.75f, .15f);
-                bras.localPosition = main;
-                Vector3 avantBras = main - coude;
-                if (avantBras.sqrMagnitude > .001f) bras.localRotation = Quaternion.LookRotation(avantBras.normalized, Vector3.up);
+                if (modeleArme != null) Destroy(modeleArme.gameObject);
+                modeleArme = null;
+                armeConstruite = id;
+                if (def != null)
+                {
+                    modeleArme = new GameObject("Arme_" + id).transform;
+                    modeleArme.SetParent(transform, false);
+                    Objets.ConstruireArme(def.forme, modeleArme);
+                }
             }
+            if (modeleArme != null)
+            {
+                if (inv.Degainee)
+                {
+                    Vector3 poignee = VersMonde(main), dir = DirMonde(lame).normalized;
+                    Vector3 haut = Vector3.Cross(dir, j.troisiemePersonne ? transform.right : j.cam.transform.right);
+                    if (haut.sqrMagnitude < .01f) haut = Vector3.up;
+                    modeleArme.SetPositionAndRotation(poignee, Quaternion.LookRotation(dir, haut));
+                }
+                else
+                {
+                    Vector3 hanche = transform.TransformPoint(new Vector3(-.22f, .95f, .1f));
+                    Vector3 dir = (-transform.up * .85f - transform.forward * .45f).normalized;
+                    modeleArme.SetPositionAndRotation(hanche, Quaternion.LookRotation(dir, transform.forward));
+                }
+            }
+
+            // Les mains : bras en cubes à la première personne, mains du modèle riggé par IK
+            j.cibleMainDroite = VersMonde(main);
+            j.poidsMainDroite = 1f;
+            j.cibleMainGauche = VersMonde(mainG);
+            j.poidsMainGauche = MainsNues ? 1f : 0f;
+            PoserBras(j.BrasDroit, main, new Vector3(.5f, -.75f, .15f));
+            PoserBras(j.BrasGauche, mainG, new Vector3(-.5f, -.75f, .15f));
+
+            // Le pied : une botte devant la caméra (première personne), la jambe du corps sinon
+            bool premiere = !j.troisiemePersonne;
+            if (botte.gameObject.activeSelf != (pied && premiere)) botte.gameObject.SetActive(pied && premiere);
+            if (pied)
+            {
+                Vector3 a = new Vector3(.14f, -1.3f, .3f), b = new Vector3(.12f, -.95f, .5f), c = new Vector3(.08f, -.62f, 1.15f);
+                Vector3 p = uPied < .45f ? Vector3.Lerp(a, b, uPied / .45f) : Vector3.Lerp(b, c, (uPied - .45f) / .55f);
+                Vector3 avant = Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up);
+                if (premiere && avant.sqrMagnitude > .001f) botte.SetPositionAndRotation(j.cam.transform.TransformPoint(p), Quaternion.LookRotation(avant.normalized));
+                j.ciblePiedDroit = transform.TransformPoint(new Vector3(.12f, Mathf.Lerp(.1f, 1f, uPied), Mathf.Lerp(.1f, .95f, uPied)));
+                j.poidsPiedDroit = 1f;
+                j.leverJambeDroite = uPied;
+            }
+            else { j.poidsPiedDroit = 0f; j.leverJambeDroite = 0f; }
+        }
+
+        static void PoserBras(Transform bras, Vector3 main, Vector3 coude)
+        {
+            if (bras == null || !bras.gameObject.activeSelf) return;
+            bras.localPosition = main;
+            Vector3 avantBras = main - coude;
+            if (avantBras.sqrMagnitude > .001f) bras.localRotation = Quaternion.LookRotation(avantBras.normalized, Vector3.up);
         }
 
         /// <summary>Une pose du repère « caméra » vers le monde : devant les yeux à la première personne, devant le corps à la troisième.</summary>
@@ -828,36 +995,19 @@ namespace Aldermark
 
         Vector3 DirMonde(Vector3 d) => j.troisiemePersonne ? transform.TransformDirection(d) : j.cam.transform.TransformDirection(d);
 
-        GameObject ConstruireEpee()
+        /// <summary>La botte et le bas de la jambe qu'on voit passer devant soi au coup de pied.</summary>
+        Transform ConstruireBotte()
         {
-            var racine = new GameObject("Epee");
-            racine.transform.SetParent(transform, false);
-            Material Mat(Color c, float lisse)
-            {
-                var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                m.SetColor("_BaseColor", c); m.SetFloat("_Smoothness", lisse);
-                return m;
-            }
-            var acier = Mat(new Color(.78f, .8f, .84f), .65f);
-            var fer = Mat(new Color(.3f, .3f, .33f), .3f);
-            var cuir = Mat(new Color(.36f, .24f, .15f), .1f);
-            Piece(racine.transform, PrimitiveType.Cube, new Vector3(0, 0, -.02f), new Vector3(.035f, .035f, .2f), cuir);
-            Piece(racine.transform, PrimitiveType.Sphere, new Vector3(0, 0, -.13f), Vector3.one * .055f, fer);
-            Piece(racine.transform, PrimitiveType.Cube, new Vector3(0, 0, .1f), new Vector3(.2f, .035f, .045f), fer);
-            Piece(racine.transform, PrimitiveType.Cube, new Vector3(0, 0, .55f), new Vector3(.05f, .012f, .85f), acier);
-            Piece(racine.transform, PrimitiveType.Cube, new Vector3(0, 0, .985f), new Vector3(.032f, .01f, .04f), acier, new Vector3(0, 45f, 0));
-            return racine;
-        }
-
-        static void Piece(Transform parent, PrimitiveType type, Vector3 pos, Vector3 taille, Material m, Vector3 rot = default)
-        {
-            var g = GameObject.CreatePrimitive(type);
-            Destroy(g.GetComponent<Collider>());
-            g.transform.SetParent(parent, false);
-            g.transform.localPosition = pos;
-            g.transform.localRotation = Quaternion.Euler(rot);
-            g.transform.localScale = taille;
-            g.GetComponent<MeshRenderer>().sharedMaterial = m;
+            var b = new GameObject("Botte").transform;
+            b.SetParent(transform, false);
+            var cuir = Pantin.Mat("#3a2a1e", .2f);
+            var toile = Pantin.Mat("#6b5240", .05f);
+            Pantin.Bloc(b, PrimitiveType.Cube, Vector3.zero, new Vector3(.17f, .13f, .32f), cuir);
+            Pantin.Bloc(b, PrimitiveType.Cube, new Vector3(0, .12f, -.08f), new Vector3(.15f, .22f, .16f), cuir);
+            Pantin.Bloc(b, PrimitiveType.Cube, new Vector3(0, .42f, -.1f), new Vector3(.15f, .42f, .15f), toile);
+            foreach (var r in b.GetComponentsInChildren<MeshRenderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            b.gameObject.SetActive(false);
+            return b;
         }
     }
 
