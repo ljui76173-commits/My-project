@@ -30,6 +30,16 @@ namespace Aldermark
         bool eclairVignette;
         Color eclairCouleur;
         ICible cibleAffichee;
+        RectTransform panneauBrasDeFer, curseurBrasDeFer;
+        float brasDeFer = -1f;
+
+        /// <summary>La jauge du choc des lames (0 : l'ennemi gagne, 1 : tu gagnes) ; négatif : cachée.</summary>
+        public static void BrasDeFer(float equilibre)
+        {
+            if (instance == null) return;
+            instance.ConstruireCombat();
+            instance.brasDeFer = equilibre;
+        }
 
         /// <summary>Un chiffre de dégâts au-dessus d'un point du monde.</summary>
         public static void ChiffreDegats(Vector3 position, double valeur, bool critique, bool surLeHeros)
@@ -94,6 +104,20 @@ namespace Aldermark
             eclairBords = Panneau("EclairBords", toile, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color(0, 0, 0, 0)).GetComponent<UnityEngine.UI.Image>();
             eclairBords.rectTransform.offsetMin = eclairBords.rectTransform.offsetMax = Vector2.zero;
             eclairBords.sprite = Vignette();
+
+            // Le choc des lames : une jauge au milieu de l'écran
+            panneauBrasDeFer = Panneau("BrasDeFer", toile, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(0, -170), new Vector2(520, 16), new Color(0, 0, 0, .6f));
+            var gauche = Panneau("Ennemi", panneauBrasDeFer, Vector2.zero, new Vector2(.5f, 1), new Vector2(0, .5f), Vector2.zero, Vector2.zero, new Color(.85f, .25f, .2f, .85f));
+            gauche.offsetMin = gauche.offsetMax = Vector2.zero;
+            var droite = Panneau("Heros", panneauBrasDeFer, new Vector2(.5f, 0), Vector2.one, new Vector2(1, .5f), Vector2.zero, Vector2.zero, new Color(1f, .82f, .45f, .85f));
+            droite.offsetMin = droite.offsetMax = Vector2.zero;
+            curseurBrasDeFer = Panneau("Curseur", panneauBrasDeFer, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(8, 30), Color.white);
+            var titre = Texte("Titre", panneauBrasDeFer, "CHOC DES LAMES", 18, Color.white, TextAnchor.LowerCenter);
+            var rt = (RectTransform)titre.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(.5f, 1);
+            rt.anchoredPosition = new Vector2(0, 30); rt.sizeDelta = new Vector2(520, 26);
+            titre.fontStyle = FontStyle.Bold;
+            panneauBrasDeFer.gameObject.SetActive(false);
         }
 
         /// <summary>Un dégradé transparent au centre, opaque sur les bords.</summary>
@@ -210,6 +234,15 @@ namespace Aldermark
                 }
             }
             if (marqueVerrou.gameObject.activeSelf != marque) marqueVerrou.gameObject.SetActive(marque);
+
+            // Choc des lames
+            bool choc = brasDeFer >= 0f;
+            if (panneauBrasDeFer.gameObject.activeSelf != choc) panneauBrasDeFer.gameObject.SetActive(choc);
+            if (choc)
+            {
+                curseurBrasDeFer.anchoredPosition = new Vector2((Mathf.Clamp01(brasDeFer) - .5f) * 520f, 0);
+                panneauBrasDeFer.localScale = Vector3.one * (1f + Mathf.Sin(Time.unscaledTime * 30f) * .015f);
+            }
 
             // Éclairs d'écran
             eclairAge += dt;

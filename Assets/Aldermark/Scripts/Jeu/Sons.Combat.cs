@@ -20,6 +20,11 @@ namespace Aldermark
             clips["blesse"] = Blesse();
             clips["raclement"] = Raclement();
             clips["onde"] = OndeDeChoc();
+            clips["hurlement"] = Hurlement();
+            clips["grognement"] = Grognement();
+            clips["ricanement"] = Ricanement();
+            clips["rugissement"] = Rugissement();
+            clips["gelee"] = Gelee();
         }
 
         /// <summary>Une lame qui fend l'air : un souffle dont le filtre s'ouvre au milieu du geste.</summary>
@@ -141,6 +146,89 @@ namespace Aldermark
                 b1 += (Bruit() - b1) * .04f;
                 b2 += (b1 - b2) * .04f;
                 return Mathf.Sin(phase) * Mathf.Exp(-t * 3.2f) + b2 * 5f * Mathf.Exp(-t * 4.5f) + Bruit() * Mathf.Exp(-t * 60f) * .4f;
+            });
+        }
+
+        /// <summary>Le hurlement du loup : une note qui monte, tient en vibrant, retombe.</summary>
+        AudioClip Hurlement()
+        {
+            float phase = 0, b = 0;
+            const float d = 2.2f;
+            return Creer("Hurlement", d, (i, t) =>
+            {
+                float u = t / d;
+                float f = u < .25f ? Mathf.Lerp(380f, 610f, u / .25f) : u < .75f ? 610f + 12f * Mathf.Sin(t * 30f) : Mathf.Lerp(610f, 420f, (u - .75f) / .25f);
+                phase += f / Freq;
+                float voix = Mathf.Sin(2f * Mathf.PI * phase) + .35f * Mathf.Sin(4f * Mathf.PI * phase) + .12f * Mathf.Sin(6f * Mathf.PI * phase);
+                b += (Bruit() - b) * .3f;
+                float env = Mathf.Clamp01(t / .25f) * Mathf.Clamp01((d - t) / .5f);
+                return (voix * .45f + b * .06f) * env;
+            });
+        }
+
+        /// <summary>Un grognement : un bruit grave qui roule.</summary>
+        AudioClip Grognement()
+        {
+            float b1 = 0, b2 = 0, phase = 0;
+            const float d = .55f;
+            return Creer("Grognement", d, (i, t) =>
+            {
+                b1 += (Bruit() - b1) * .08f;
+                b2 += (b1 - b2) * .08f;
+                phase += 95f / Freq;
+                float roule = .55f + .45f * Mathf.Sin(t * 2f * Mathf.PI * 28f);
+                float env = Mathf.Clamp01(t / .05f) * Mathf.Clamp01((d - t) / .15f);
+                return (b2 * 4f * roule + Mathf.Sin(2f * Mathf.PI * phase) * .25f * roule) * env;
+            });
+        }
+
+        /// <summary>Le ricanement du gobelin : une rafale de petits cris aigus.</summary>
+        AudioClip Ricanement()
+        {
+            float phase = 0;
+            const float d = .7f;
+            return Creer("Ricanement", d, (i, t) =>
+            {
+                int n = (int)(t / .1f);
+                float u = t - n * .1f;
+                float f = 520f + (n % 2) * 90f - n * 18f;
+                phase += f / Freq;
+                float scie = (phase % 1f) * 2f - 1f;
+                float env = u < .07f ? Mathf.Sin(u / .07f * Mathf.PI) : 0f;
+                return scie * .4f * env * Mathf.Clamp01((d - t) / .2f);
+            });
+        }
+
+        /// <summary>Le rugissement du troll : une voix énorme et grave, du souffle.</summary>
+        AudioClip Rugissement()
+        {
+            float phase = 0, b1 = 0, b2 = 0, filtre = 0;
+            const float d = 1.6f;
+            return Creer("Rugissement", d, (i, t) =>
+            {
+                float f = Mathf.Lerp(85f, 62f, t / d) * (1f + .04f * Mathf.Sin(t * 37f));
+                phase += f / Freq;
+                float scie = (phase % 1f) * 2f - 1f;
+                filtre += (scie - filtre) * .1f;
+                b1 += (Bruit() - b1) * .15f;
+                b2 += (b1 - b2) * .15f;
+                float env = Mathf.Clamp01(t / .12f) * Mathf.Clamp01((d - t) / .5f);
+                return (filtre * 1.3f + b2 * 2f) * env;
+            });
+        }
+
+        /// <summary>Une gelée : un « splotch » mouillé.</summary>
+        AudioClip Gelee()
+        {
+            float phase = 0, b = 0;
+            const float d = .3f;
+            return Creer("Gelee", d, (i, t) =>
+            {
+                float f = Mathf.Lerp(420f, 110f, Mathf.Sqrt(t / d));
+                phase += f / Freq;
+                b += (Bruit() - b) * .35f;
+                float env = Mathf.Exp(-t * 11f);
+                return (Mathf.Sin(2f * Mathf.PI * phase) * .7f + b * .4f * Mathf.Exp(-t * 30f)) * env;
             });
         }
     }

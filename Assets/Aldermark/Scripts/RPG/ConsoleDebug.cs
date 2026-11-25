@@ -85,7 +85,8 @@ namespace Aldermark
                 case "aide":
                 case "help":
                     Ecrire("xp N · niveau N · points N · stat FOR N · soigner · heure H · vitesse X");
-                    Ecrire("tp hameau · tp quintaine · tp varenne · tp X Z · sauver · charger · nouvelle · infos");
+                    Ecrire("tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
+                    Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · sauver · charger · nouvelle · infos");
                     break;
                 case "xp":
                     if (s != null && m.Length > 1 && Nombre(m[1], out v)) { s.GagnerXP(v, "console"); Ecrire($"+{Nombres.Court(v)} XP"); }
@@ -122,11 +123,44 @@ namespace Aldermark
                     Vector2 cible;
                     if (m.Length > 1 && m[1] == "hameau") cible = Monde.Hameau + new Vector2(0, 12);
                     else if (m.Length > 1 && m[1] == "quintaine") cible = Monde.Quintaine + new Vector2(2.2f, 0);
+                    else if (m.Length > 1 && m[1] == "gelees") cible = Monde.RepaireGelees + new Vector2(0, -16);
+                    else if (m.Length > 1 && m[1] == "loups") cible = Monde.RepaireLoups + new Vector2(0, -22);
+                    else if (m.Length > 1 && m[1] == "gobelins") cible = Monde.CampGobelins + new Vector2(0, -22);
+                    else if (m.Length > 1 && m[1] == "troll") cible = Monde.AntreTroll + new Vector2(0, 22);
                     else if (m.Length > 1 && m[1] == "varenne") cible = Monde.Village + new Vector2(0, -14);
                     else if (m.Length > 2 && Nombre(m[1], out var x) && Nombre(m[2], out var z)) cible = new Vector2((float)x, (float)z);
-                    else { Ecrire("Usage : tp hameau · tp quintaine · tp varenne · tp 10 -40"); break; }
+                    else { Ecrire("Usage : tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp 10 -40"); break; }
                     j.Teleporter(new Vector3(cible.x, Mathf.Max(Monde.Hauteur(cible.x, cible.y), 0f) + .3f, cible.y), j.transform.eulerAngles.y);
                     Ecrire($"Téléporté en {cible.x:0}, {cible.y:0}");
+                    break;
+                case "creer":
+                    {
+                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll [niveau]"); break; }
+                        Repaire.Espece e;
+                        switch (m[1])
+                        {
+                            case "gelee": e = Repaire.Espece.Gelee; break;
+                            case "loup": e = Repaire.Espece.Loup; break;
+                            case "gobelin": e = Repaire.Espece.Gobelin; break;
+                            case "troll": e = Repaire.Espece.Troll; break;
+                            default: Ecrire("Espèces : gelee, loup, gobelin, troll"); e = (Repaire.Espece)(-1); break;
+                        }
+                        if ((int)e < 0) break;
+                        int niv = m.Length > 2 && Nombre(m[2], out var vn) ? (int)vn : 1;
+                        Vector3 p = j.transform.position + j.transform.forward * 7f;
+                        p.y = Mathf.Max(Monde.Hauteur(p.x, p.z), p.y - 3f) + .3f;
+                        var cree = Repaire.Creer(e, p, niv);
+                        Ecrire($"{cree.nom} niveau {niv} créé devant toi.");
+                    }
+                    break;
+                case "tuer":
+                    {
+                        int n = 0;
+                        foreach (var mo in Monstre.Actifs.ToArray())
+                            if (mo.camp == Camp.Hostile && mo.Vivant && j != null && (mo.transform.position - j.transform.position).sqrMagnitude < 40f * 40f)
+                            { mo.Infliger(mo.VieMax * 10, null); n++; }
+                        Ecrire($"{n} créature(s) abattue(s).");
+                    }
                     break;
                 case "sauver":
                     MondeRPG.Sauver(false); Ecrire("Sauvegardé : " + Sauvegarde.Chemin);

@@ -210,3 +210,30 @@ Frappe-la : son bras tourne et le sac de sable revient te cogner si tu restes da
 - **Entraînement** : frapper fait monter la FOR, esquiver et parer l'AGI, encaisser l'END.
 - **Tomber à zéro** : tu te réveilles dans ton lit quatre heures plus tard, soigné.
 - Les sons de combat sont fabriqués en code pour l'instant (de vrais enregistrements à l'étape 1e).
+
+## Monstres et alliés (mode RPG) — étape 1c
+
+Quatre repaires autour du hameau, de plus en plus dangereux en s'éloignant. Ils se repeuplent avec le temps,
+jamais sous tes yeux.
+
+| Repaire | Où | Niveau | Comportement |
+|---|---|---|---|
+| Gelées | au nord-est, vers la route (`tp gelees`) | 1–2 | avancent par bonds et se jettent sur toi ; une grosse se divise en deux |
+| Tanière des loups | au nord (`tp loups`) | 3–4 | le premier hurle et appelle la meute ; un seul mord à la fois, les autres tournent autour ; bond de loin |
+| Camp gobelin | au nord-est, après la route (`tp gobelins`) | 4–6 | gourdin, coup à deux mains ; s'enfuient blessés |
+| Antre du troll | au sud, contre la montagne (`tp troll`) | 12 | massue qui projette, balayage large, piétinement en onde de choc — trop fort au début |
+
+- **Attaques annoncées** : une lueur au-dessus de la tête grossit pendant la préparation. Jaune : coup normal.
+  Rouge : coup lourd (il te fait glisser ou te projette). C'est le moment de parer ou de rouler.
+- **Choc des lames** : si un gobelin ou le troll frappe en même temps que toi, face à face, les armes se bloquent.
+  Martèle le clic gauche ; plus tu es fort par rapport à lui, plus chaque clic pèse. Gagné : il est sonné.
+- **Coup de grâce** : un ennemi sonné pour de bon (parade parfaite, choc gagné, projeté contre un mur)
+  montre des étoiles ; approche-toi, l'invite apparaît, un clic l'achève (dégâts ×7).
+- **Contre le mur** : un ennemi repoussé contre un mur, un rocher ou une paroi prend un choc et reste sonné.
+- **Un coup lourd ou critique** interrompt une attaque annoncée (sauf celles du troll).
+- **Ralenti final** quand le dernier ennemi du combat tombe.
+- **Le garde du hameau** patrouille et se bat contre les créatures qui approchent des maisons.
+  Il ne meurt pas : mis à terre, il se relève.
+- **Expérience** : seul le coup qui achève compte. Une gelée ≈ 12 XP, un loup ≈ 23, un gobelin ≈ 37, le troll ≈ 300.
+- **Console** : `creer gelee|loup|gobelin|troll [niveau]` fait apparaître une créature devant toi ;
+  `tuer` abat les créatures hostiles à moins de 40 m.

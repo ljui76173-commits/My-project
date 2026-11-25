@@ -208,6 +208,8 @@ namespace Aldermark
         void MonteeDeNiveau(int gagnes)
         {
             Soigner();
+            Effets.Eclat(transform.position + Vector3.up, new Color(1f, .85f, .45f), 40, 4f, .16f, -.35f, 1.4f);
+            HUD.EclairCombat(new Color(1f, .85f, .45f, .22f), .9f, false);
             Sons.Jouer("decouverte", .9f, .9f);
             Sons.Jouer("quete", .7f, 1.2f);
             HUD.Message($"NIVEAU {Niveau}",

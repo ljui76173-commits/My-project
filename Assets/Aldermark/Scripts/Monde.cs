@@ -22,6 +22,9 @@ namespace Aldermark
         public static Vector2 MaisonHeros => Hameau + new Vector2(-10f, -6f);
         /// <summary>La quintaine d'entraînement, dans la cour à l'ouest du hameau.</summary>
         public static Vector2 Quintaine => Hameau + new Vector2(-13f, 2f);
+        /// <summary>Les repaires autour du hameau, de plus en plus dangereux en s'éloignant.</summary>
+        public static readonly Vector2 RepaireGelees = new Vector2(-63f, -49f), RepaireLoups = new Vector2(-65f, -12f),
+            CampGobelins = new Vector2(-29f, 45f), AntreTroll = new Vector2(-62f, -164f);
 
         // Routes (x, z)
         public static readonly Vector2[][] Routes = new[]

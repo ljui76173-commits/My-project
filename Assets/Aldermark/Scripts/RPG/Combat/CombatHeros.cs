@@ -28,7 +28,7 @@ namespace Aldermark
         }
         public Arme arme = new Arme();
 
-        enum Etat { Libre, Preparation, Frappe, Recuperation, Roulade, Sonne, Glissade, Projete, Plongeon }
+        enum Etat { Libre, Preparation, Frappe, Recuperation, Roulade, Sonne, Glissade, Projete, Plongeon, Choc }
 
         class Mouvement
         {
@@ -65,6 +65,11 @@ namespace Aldermark
             nom = "Coup plongeant", prep = 0f, frappe = 99f, recup = .45f, mult = 1.6f, poussee = 2f, cout = 12f, cone = 360f, lourde = true,
             g0 = new Vector3(.1f, .1f, .5f), d0 = new Vector3(0f, -.9f, .45f), g1 = new Vector3(.05f, -.5f, .7f), d1 = new Vector3(0f, -.95f, .3f),
         };
+        static readonly Mouvement CoupDeGrace = new Mouvement
+        {
+            nom = "Coup de grâce", prep = .12f, frappe = .16f, recup = .55f, mult = 4f, poussee = 2.4f, cout = 10f, cone = 70f, lourde = true, critiqueSur = true,
+            g0 = new Vector3(.15f, .35f, .35f), d0 = new Vector3(0f, .8f, -.4f), g1 = new Vector3(.05f, -.5f, .8f), d1 = new Vector3(0f, -.85f, .5f),
+        };
         static readonly Vector3 GardeRepos = new Vector3(.42f, -.42f, .75f), LameRepos = new Vector3(-.15f, .75f, .65f);
         static readonly Vector3 GardeHaute = new Vector3(.12f, -.22f, .6f), LameGarde = new Vector3(-.92f, .3f, .2f);
         static readonly Vector3 MainPlantee = new Vector3(.28f, -.5f, .62f), LamePlantee = new Vector3(.05f, -.95f, .35f);
@@ -84,6 +89,9 @@ namespace Aldermark
         Transform epee;
         Vector3 main = GardeRepos, lame = LameRepos;
         Material matTrace;
+        Monstre adversaire;   // choc des lames en cours
+        Combattant grace;     // ennemi sonné à portée : coup de grâce possible
+        float equilibre, debutChoc, prochaineEtincelle, ratioChoc = 1f;
 
         public bool Occupe => etat != Etat.Libre || garde;
         public bool EnGarde => garde;
@@ -145,6 +153,16 @@ namespace Aldermark
             bool verrouPresse = libreDeJouer && ((souris != null && souris.middleButton.wasPressedThisFrame) || (pad != null && pad.rightStickButton.wasPressedThisFrame));
 
             if (!libreDeJouer) appui = -1f;
+            if (etat == Etat.Choc)
+            {
+                MettreAJourChoc(attaquePressee);
+                appui = -1f;
+                j.courseInterdite = true;
+                j.entrave = 0f;
+                return;
+            }
+            grace = etat == Etat.Libre && libreDeJouer ? CibleDeGrace() : null;
+            if (grace != null) HUD.InviteForte("[Clic gauche]  Coup de grâce");
             if (verrouPresse) BasculerVerrou();
             if (verrou != null && (!Cibles.Existe(verrou) || !verrou.Vivant || Vector3.Distance(verrou.Centre, transform.position) > 25f)) LacherVerrou();
 
@@ -207,6 +225,7 @@ namespace Aldermark
                 case Etat.Glissade:
                 case Etat.Projete: return 0f;
                 case Etat.Plongeon: return .4f;
+                case Etat.Choc: return 0f;
                 default: return 1f;
             }
         }
@@ -242,6 +261,7 @@ namespace Aldermark
         {
             if (etat == Etat.Libre)
             {
+                if (grace != null) { Lancer(CoupDeGrace); Ralentir(.5f); return; }
                 if (Time.time < finRiposte) { finRiposte = 0; Lancer(Riposte); Ralentir(.3f); return; }
                 if (j.EnCourse) { Lancer(Fente); return; }
                 etapeCombo = 0;
@@ -377,7 +397,7 @@ namespace Aldermark
             bool bois = cible is Quintaine;
             Sons.JouerA(bois ? "impactBois" : "impactChair", cible.Centre, .9f, Random.Range(.9f, 1.1f));
             Effets.Eclat(cible.Centre, bois ? new Color(.75f, .6f, .4f) : new Color(1f, .9f, .75f), critique ? 14 : 7, 3.5f, .1f, 1f, .35f, direction);
-            if (a.critiqueSur) HUD.ChiffreTexte(cible.Centre + Vector3.up * .9f, "Riposte !", new Color(1f, .85f, .4f));
+            if (a.critiqueSur) HUD.ChiffreTexte(cible.Centre + Vector3.up * .9f, a.nom + " !", new Color(1f, .85f, .4f));
             stats.Exercer(Stat.FOR, a.lourde ? 2 : 1);
             if (critique) stats.Exercer(Stat.AGI, .5);
         }
@@ -470,6 +490,7 @@ namespace Aldermark
         public void Recevoir(Coup c)
         {
             if (!Vivant) return;
+            if (etat == Etat.Choc) FinirChoc(false);
             var cb = c.auteur as Combattant;
             Vector3 depuis = cb != null ? cb.Centre : transform.position - c.direction;
             Vector3 recul = Vector3.ProjectOnPlane(c.direction, Vector3.up).normalized;
@@ -598,6 +619,111 @@ namespace Aldermark
             j.decalageCamera = Vector3.zero;
         }
 
+        // ---------- choc des lames, coup de grâce, ralenti final ----------
+
+        /// <summary>
+        /// Une créature armée frappe pendant que tu frappes, face à face : les lames se bloquent.
+        /// Martèle le clic gauche pour l'emporter (plus tu es fort par rapport à elle, plus chaque clic pèse).
+        /// </summary>
+        public bool TenterChoc(Monstre m)
+        {
+            if (etat != Etat.Frappe || courante == null || courante == Plongeante || mort || m == null) return false;
+            Vector3 vers = Vector3.ProjectOnPlane(m.Centre - Centre, Vector3.up);
+            if (vers.magnitude > 4.2f) return false;
+            Vector3 avant = Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up);
+            if (Vector3.Angle(avant, vers) > 55f || Vector3.Angle(m.transform.forward, -vers) > 65f) return false;
+            adversaire = m;
+            etat = Etat.Choc; tEtat = 0f; courante = null; garde = false;
+            equilibre = .5f;
+            debutChoc = Time.unscaledTime;
+            ratioChoc = Mathf.Clamp((float)(Attaque / System.Math.Max(1.0, m.Attaque * 1.3)), .35f, 3f);
+            finFige = finRalenti = 0f;
+            Time.timeScale = .3f;
+            Sons.Jouer("parade", 1f, .8f);
+            Sons.Jouer("raclement", .6f, 1.2f);
+            HUD.ChiffreTexte(SurSoi(), "Choc des lames !", new Color(1f, .85f, .4f));
+            HUD.EclairCombat(new Color(1f, .97f, .9f, .3f), .25f, false);
+            j.Secouer(.1f);
+            return true;
+        }
+
+        void MettreAJourChoc(bool presse)
+        {
+            if (adversaire == null || !adversaire.Vivant || adversaire.Etat != EtatMonstre.Choc) { FinirChoc(true); return; }
+            float dt = Time.unscaledDeltaTime;
+            if (presse)
+            {
+                equilibre += .09f * ratioChoc;
+                Sons.Jouer("clic", .35f, 1.5f + Random.value * .4f);
+                j.Secouer(.025f);
+            }
+            equilibre -= dt * .22f / ratioChoc;
+            if (Time.unscaledTime >= prochaineEtincelle)
+            {
+                prochaineEtincelle = Time.unscaledTime + .07f;
+                Effets.Etincelles(VersMonde(main) + DirMonde(lame).normalized * .8f, Vector3.up + Random.insideUnitSphere * .6f);
+            }
+            HUD.BrasDeFer(equilibre);
+            HUD.InviteForte("Choc des lames : martèle le clic gauche !");
+            float ecoule = Time.unscaledTime - debutChoc;
+            if (equilibre >= 1f) FinirChoc(true);
+            else if (equilibre <= 0f) FinirChoc(false);
+            else if (ecoule > 2.4f) FinirChoc(equilibre >= .5f);
+        }
+
+        void FinirChoc(bool gagne)
+        {
+            Time.timeScale = 1f;
+            HUD.BrasDeFer(-1f);
+            var m = adversaire;
+            adversaire = null;
+            Vector3 dir = m != null ? Vector3.ProjectOnPlane(m.Centre - Centre, Vector3.up).normalized : transform.forward;
+            etat = Etat.Libre; tEtat = 0f;
+            if (gagne)
+            {
+                if (m != null) m.FinChoc(true, dir);
+                Figer(.08f);
+                j.Secouer(.1f);
+                Sons.Jouer("parade", 1f, 1.15f);
+                HUD.ChiffreTexte(SurSoi(), "Tu l'emportes !", new Color(1f, .85f, .4f));
+                finRiposte = Time.time + FenetreRiposte * 1.5f;
+                stats.Exercer(Stat.FOR, 3);
+            }
+            else
+            {
+                if (m != null) m.FinChoc(false, dir);
+                HUD.ChiffreTexte(SurSoi(), "Repoussé !", new Color(1f, .6f, .45f));
+                CommencerGlissade(-dir, 2.4f + (1f - Mathf.Min(1f, ratioChoc)) * 2f, true);
+                stats.Exercer(Stat.END, 1.5);
+            }
+        }
+
+        /// <summary>Un ennemi sonné pour de bon, juste devant : le prochain clic l'achève (dégâts ×7).</summary>
+        Combattant CibleDeGrace()
+        {
+            Vector3 avant = Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up);
+            Combattant meilleur = null;
+            float best = 2.9f;
+            foreach (var c in Combattant.Tous)
+            {
+                if (!c.Vulnerable || !Monstre.Ennemis(Camp.Heros, c.Camp)) continue;
+                Vector3 v = Vector3.ProjectOnPlane(c.Centre - Centre, Vector3.up);
+                float d = v.magnitude;
+                if (d < best && Vector3.Angle(avant, v) < 55f) { best = d; meilleur = c; }
+            }
+            return meilleur;
+        }
+
+        /// <summary>Le dernier ennemi du combat tombe : un instant de ralenti.</summary>
+        public void RalentiFinal()
+        {
+            Ralentir(1.1f);
+            HUD.EclairCombat(new Color(1f, 1f, 1f, .16f), .6f, false);
+            j.Secouer(.05f);
+        }
+
+        public void Secousse(float force) { if (j != null) j.Secouer(force); }
+
         // ---------- verrouillage ----------
 
         void BasculerVerrou()
@@ -648,6 +774,10 @@ namespace Aldermark
                     break;
                 case Etat.Glissade:
                     gCible = MainPlantee; dCible = LamePlantee; vitesse = 40f;
+                    break;
+                case Etat.Choc:
+                    gCible = GardeHaute + new Vector3(Mathf.Sin(Time.unscaledTime * 47f), Mathf.Sin(Time.unscaledTime * 39f), 0) * .012f;
+                    dCible = new Vector3(-.55f, .6f, .6f); vitesse = 30f;
                     break;
                 case Etat.Projete:
                     gCible = GardeRepos + new Vector3(.15f, .2f, -.2f); dCible = new Vector3(.4f, .5f, -.6f); vitesse = 12f;

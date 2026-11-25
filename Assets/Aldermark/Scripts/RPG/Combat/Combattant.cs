@@ -22,11 +22,17 @@ namespace Aldermark
         [Tooltip("Ne meurt jamais (quintaine, mannequin) : on compte les dégâts.")]
         public bool invincible;
         public float resistanceRecul = 1f;
+        [Tooltip("0 : un coup lourd le fait chanceler ; 1 : rien ne l'ébranle (troll).")]
+        public float stature;
+        [Tooltip("Ne tombe jamais sous 1 point de vie (gardes) : il est mis à terre.")]
+        public bool increvable;
         public double xpBase = 20;
 
         public double Vie { get; private set; }
         public double DegatsCumules { get; private set; }
         public float Etourdi { get; private set; }
+        /// <summary>Sonné pour de bon (parade parfaite, choc gagné, mur) : le coup de grâce est possible.</summary>
+        public bool Vulnerable => Etourdi > .15f && dureeEtourdi >= 1f && Vivant && !invincible;
         public float DernierCoup { get; private set; } = -99f;
         public event Action<Coup> Touche;
         public event Action<Coup> Mort;
@@ -34,8 +40,9 @@ namespace Aldermark
         static readonly int IdCouleur = Shader.PropertyToID("_BaseColor");
         Renderer[] rendus;
         MaterialPropertyBlock bloc;
-        float eclair;
-        Vector3 recul;
+        float eclair, dureeEtourdi;
+        protected Vector3 recul;
+        protected ICible dernierAuteur;
 
         public double Facteur => Math.Pow(StatsHeros.CroissanceMonde, niveau - 1);
         public double VieMax => vieBase * Facteur;
@@ -85,22 +92,41 @@ namespace Aldermark
             transform.position = p;
         }
 
-        public void Etourdir(float secondes) => Etourdi = Mathf.Max(Etourdi, secondes);
+        public void Etourdir(float secondes)
+        {
+            if (secondes > Etourdi) { Etourdi = secondes; dureeEtourdi = secondes; }
+        }
+
+        /// <summary>Fixe le niveau (à l'apparition) et remet la vie au maximum.</summary>
+        public void FixerNiveau(int n) { niveau = Mathf.Max(1, n); Vie = VieMax; }
+
+        protected void Soigner(double q) => Vie = Math.Min(VieMax, Vie + q);
+
+        /// <summary>Dégâts directs, sans défense (choc contre un mur, chute).</summary>
+        public void Infliger(double degats, ICible auteur)
+        {
+            if (!Vivant || invincible) { DegatsCumules += degats; return; }
+            DegatsCumules += degats;
+            Vie = Math.Max(increvable ? 1 : 0, Vie - degats);
+            HUD.ChiffreDegats(Centre + Vector3.up * .5f, degats, false, false);
+            if (Vie <= 0) Mourir(new Coup { degats = degats, auteur = auteur, nom = "choc" });
+        }
 
         public virtual void Recevoir(Coup c)
         {
             if (!Vivant) return;
             DernierCoup = Time.time;
+            if (c.auteur != null) dernierAuteur = c.auteur;
             double reel = Degats.Calculer(c.degats, Defense);   // le coup arrive brut, la défense s'applique ici
             c.degats = reel;
             DegatsCumules += reel;
-            if (!invincible) Vie = Math.Max(0, Vie - reel);
+            if (!invincible) Vie = Math.Max(increvable ? 1 : 0, Vie - reel);
             Eclairer(true);
             eclair = .08f;
             if (c.poussee > 0) recul += new Vector3(c.direction.x, 0, c.direction.z).normalized * c.poussee / Mathf.Max(.1f, resistanceRecul);
-            if (c.lourd) Etourdir(.5f);
+            if (c.lourd && stature < 1f) Etourdir(.5f * (1f - stature));
             HUD.ChiffreDegats(Centre + Vector3.up * .4f, c.degats, c.critique, false);
-            CibleCombat.Signaler(this);
+            if (c.auteur is CombatHeros) CibleCombat.Signaler(this);
             Touche?.Invoke(c);
             if (!invincible && Vie <= 0) Mourir(c);
         }

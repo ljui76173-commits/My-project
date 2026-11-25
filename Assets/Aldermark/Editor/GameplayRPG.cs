@@ -85,6 +85,16 @@ namespace Aldermark.Editeur
             q.AddComponent<Quintaine>();
             q.AddComponent<Entite>().id = "quintaine-hameau";
 
+            // Le garde du hameau, à l'entrée du chemin
+            var garde = new GameObject("GardeDuHameau");
+            garde.transform.SetParent(hameau, false);
+            var pg = H + new Vector2(2f, 13f);
+            garde.transform.position = new Vector3(pg.x, Sol(pg.x, pg.y) + .1f, pg.y);
+            garde.AddComponent<GardeDuHameau>().niveau = 8;
+            garde.AddComponent<Entite>().id = "garde-hameau";
+
+            ConstruireRepaires(racine);
+
             // Les voisins
             string[] noms = { "Mère Agnès", "Thibault", "Colette", "Le vieux Gaspard" };
             string[] tuniques = { "#8c5a3c", "#5b6e8c", "#a0484a", "#6a6a5a" };
@@ -192,6 +202,74 @@ namespace Aldermark.Editeur
             m.SetColor("_BaseColor", c);
             AssetDatabase.CreateAsset(m, chemin);
             return m;
+        }
+
+        // ---------- les repaires ----------
+
+        static void ConstruireRepaires(Transform racine)
+        {
+            var groupe = new GameObject("Repaires").transform;
+            groupe.SetParent(racine, false);
+            Repaire(groupe, "RepaireDesGelees", Monde.RepaireGelees, Aldermark.Repaire.Espece.Gelee, 4, 1, 2, 7f, 4f);
+            Repaire(groupe, "TaniereDesLoups", Monde.RepaireLoups, Aldermark.Repaire.Espece.Loup, 4, 3, 4, 6f, 8f);
+            var camp = Repaire(groupe, "CampGobelin", Monde.CampGobelins, Aldermark.Repaire.Espece.Gobelin, 4, 4, 6, 3.5f, 10f);
+            CampGobelin(camp);
+            var antre = Repaire(groupe, "AntreDuTroll", Monde.AntreTroll, Aldermark.Repaire.Espece.Troll, 1, 12, 12, 2f, 24f);
+            AntreDuTroll(antre);
+        }
+
+        static Transform Repaire(Transform parent, string nom, Vector2 p, Aldermark.Repaire.Espece e, int nombre, int nivMin, int nivMax, float rayon, float heures)
+        {
+            var go = new GameObject(nom);
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(p.x, Sol(p.x, p.y), p.y);
+            var r = go.AddComponent<Aldermark.Repaire>();
+            r.espece = e; r.nombre = nombre; r.niveauMin = nivMin; r.niveauMax = nivMax; r.rayon = rayon; r.heuresRepeuplement = heures;
+            go.AddComponent<Entite>().id = "repaire-" + e.ToString().ToLower();
+            return go.transform;
+        }
+
+        /// <summary>Un camp de gobelins : trois tentes de peaux, un feu, des os.</summary>
+        static void CampGobelin(Transform camp)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                float a = k * 2.1f + .4f;
+                var t = new GameObject("Tente" + k).transform;
+                t.SetParent(camp, false);
+                t.localPosition = new Vector3(Mathf.Cos(a) * 5.5f, 0, Mathf.Sin(a) * 5.5f);
+                t.localRotation = Quaternion.Euler(0, -a * Mathf.Rad2Deg + 90f, 0);
+                Local(t, PrimitiveType.Cube, new Vector3(-.55f, .75f, 0), new Vector3(.08f, 1.7f, 2.2f), "#7a6448", true, new Vector3(0, 0, -32f));
+                Local(t, PrimitiveType.Cube, new Vector3(.55f, .75f, 0), new Vector3(.08f, 1.7f, 2.2f), "#6b563c", true, new Vector3(0, 0, 32f));
+                Local(t, PrimitiveType.Cylinder, new Vector3(0, 1.45f, 0), new Vector3(.08f, 1.2f, .08f), "#4a3524", false, new Vector3(90, 0, 0));
+            }
+            var feu = new GameObject("Feu").transform;
+            feu.SetParent(camp, false);
+            for (int k = 0; k < 6; k++)
+                Local(feu, PrimitiveType.Cube, new Vector3(Mathf.Cos(k) * .5f, .1f, Mathf.Sin(k) * .5f), new Vector3(.25f, .2f, .25f), "#6e6a66", false);
+            var braise = Local(feu, PrimitiveType.Cube, new Vector3(0, .2f, 0), new Vector3(.5f, .25f, .5f), "#ff8a3a", false);
+            braise.GetComponent<MeshRenderer>().sharedMaterial = Lumineux("#ff8a3a");
+            var l = new GameObject("Lueur").AddComponent<Light>();
+            l.transform.SetParent(feu, false);
+            l.transform.localPosition = new Vector3(0, 1f, 0);
+            l.type = LightType.Point; l.range = 9f; l.intensity = 1.8f; l.color = new Color(1f, .62f, .32f); l.shadows = LightShadows.None;
+            for (int k = 0; k < 4; k++)
+                Local(camp, PrimitiveType.Cylinder, new Vector3(2f + k * .4f, .05f, -2f + k * .3f), new Vector3(.06f, .25f, .06f), "#e8dfc8", false, new Vector3(90, k * 40f, 0));
+        }
+
+        /// <summary>L'antre du troll : de gros rochers contre la montagne, une bouche sombre, des os.</summary>
+        static void AntreDuTroll(Transform antre)
+        {
+            for (int k = 0; k < 7; k++)
+            {
+                float a = Mathf.PI * (.9f + k * .2f);
+                float r = 6.5f + (k % 3) * 1.2f;
+                Local(antre, PrimitiveType.Sphere, new Vector3(Mathf.Cos(a) * r, 1f + (k % 2) * .8f, Mathf.Sin(a) * r),
+                      new Vector3(3.2f + (k % 3), 2.6f + (k % 2) * 1.4f, 3f), k % 2 == 0 ? "#77737a" : "#6a666e", true, new Vector3(k * 23f, k * 41f, 0));
+            }
+            Local(antre, PrimitiveType.Cube, new Vector3(0, 1.8f, -6.3f), new Vector3(3.4f, 3.6f, .4f), "#14121a", false);
+            for (int k = 0; k < 6; k++)
+                Local(antre, PrimitiveType.Cylinder, new Vector3(-2f + k * .8f, .08f, 2f + (k % 3) * .6f), new Vector3(.09f, .4f, .09f), "#e8dfc8", false, new Vector3(90, k * 33f, 0));
         }
 
         static void Puits(Transform parent, Vector2 p)
