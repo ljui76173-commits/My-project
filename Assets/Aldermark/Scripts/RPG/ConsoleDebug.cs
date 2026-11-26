@@ -138,7 +138,7 @@ namespace Aldermark
                     Ecrire(Geo.Actif ? "tp hameau · tp quintaine · tp <ville> (varenne, aldenne, valdor…) · tp gelees|loups|gobelins|troll (le plus proche) · tp X Z"
                                      : "tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
                     Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
-                    Ecrire("sorts · apprendre <sort>|tout · competence <id> <niveau> · mana");
+                    Ecrire("sorts · apprendre <sort>|tout · competence <id>|tout <niveau> · mana");
                     break;
                 case "sorts":
                 case "competences":
@@ -171,6 +171,12 @@ namespace Aldermark
                 case "competence":
                     {
                         var c = Competences.Instance;
+                        if (c != null && m.Length > 2 && m[1] == "tout" && Nombre(m[2], out v))
+                        {
+                            foreach (var d in CatalogueCompetences.Ordre) if (d.EstSort && c.Connait(d.id)) c.FixerNiveau(d.id, (int)v);
+                            Ecrire($"Tous tes sorts : niveau {Mathf.Clamp((int)v, 1, CatalogueCompetences.NiveauMax)}");
+                            break;
+                        }
                         var def = m.Length > 1 ? TrouverCompetence(m[1]) : null;
                         if (c == null || def == null || m.Length < 3 || !Nombre(m[2], out v)) { Ecrire("Usage : competence flamme 10"); break; }
                         c.FixerNiveau(def.id, (int)v);

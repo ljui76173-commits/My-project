@@ -33,6 +33,8 @@ namespace Aldermark
         public bool lourd;
         /// <summary>Ce que chaque niveau apporte, en une ligne (affiché dans la fenêtre).</summary>
         public string parNiveau;
+        /// <summary>Ce qui change à l'œil aux niveaux 4, 7 et 10 (les paliers d'un sort).</summary>
+        public string[] paliers;
         public Color couleur = Color.white;
 
         public bool EstSort => type == TypeCompetence.Sort;
@@ -109,6 +111,7 @@ namespace Aldermark
                 effet = Effet.Brulure, dureeEffet = 3f,
                 description = "Une boule de feu qui file droit sur la cible et l'enflamme.",
                 parNiveau = "dégâts +12 %, coût −3 %, recharge −4 % par niveau",
+                paliers = new[] { "des braises tournent autour de la boule de feu, l'impact fait une onde de flammes", "l'impact laisse un brasier qui brûle au sol", "un cœur de flamme bleue, un halo, une explosion au sol" },
             });
             Ajouter(new DefCompetence
             {
@@ -117,6 +120,7 @@ namespace Aldermark
                 effet = Effet.Gel, dureeEffet = 3f,
                 description = "Un éclat de glace rapide. Il ralentit ; trois éclats de suite gèlent la cible sur place.",
                 parNiveau = "dégâts +12 %, coût −3 %, recharge −4 % par niveau",
+                paliers = new[] { "un éclat tourne autour du projectile, l'impact givre l'air", "l'impact fait jaillir des pics de glace", "un cristal pur, trois éclats en orbite, une couronne de pics" },
             });
             Ajouter(new DefCompetence
             {
@@ -125,6 +129,7 @@ namespace Aldermark
                 effet = Effet.Choc, dureeEffet = .8f, chanceEffet = .4f,
                 description = "La foudre frappe instantanément. Elle peut étourdir ; au niveau 5, elle rebondit sur un second ennemi.",
                 parNiveau = "dégâts +12 %, coût −3 %, recharge −4 % par niveau ; rebond au niveau 5",
+                paliers = new[] { "l'éclair se ramifie", "un double éclair, et le sol est frappé", "une foudre aveuglante aux mille branches" },
             });
             Ajouter(new DefCompetence
             {
@@ -133,6 +138,7 @@ namespace Aldermark
                 effet = Effet.Recul,
                 description = "Une rafale devant toi qui repousse tout. Projeté contre un mur, un ennemi est sonné.",
                 parNiveau = "dégâts et poussée +12 %, coût −3 %, recharge −4 % par niveau",
+                paliers = new[] { "le souffle arrache herbes et feuilles", "des tourbillons se lèvent au bout du souffle", "une onde d'air visible qui balaie tout" },
             });
             Ajouter(new DefCompetence
             {
@@ -141,6 +147,7 @@ namespace Aldermark
                 effet = Effet.Choc, dureeEffet = .9f,
                 description = "Tu frappes le sol : une onde soulève et étourdit tout ce qui t'entoure.",
                 parNiveau = "dégâts +12 %, rayon +4 %, coût −3 %, recharge −4 % par niveau",
+                paliers = new[] { "des pics de pierre jaillissent du sol", "une seconde onde suit la première", "une couronne de pics et un cratère" },
             });
             Ajouter(new DefCompetence
             {
@@ -148,6 +155,7 @@ namespace Aldermark
                 puissance = 1.5, cout = 9, recharge = 6f, incantation = .8f,
                 description = "Une lumière douce qui referme tes blessures. Longue à lancer : pas en plein milieu d'une mêlée.",
                 parNiveau = "soin +12 %, coût −3 %, recharge −4 % par niveau",
+                paliers = new[] { "un cercle de lumière s'ouvre sous tes pieds", "une colonne de lumière descend sur toi", "une pluie d'étincelles dorées" },
             });
 
             // ---------- les techniques ----------

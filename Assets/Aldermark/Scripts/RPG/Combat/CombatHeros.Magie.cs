@@ -164,16 +164,21 @@ namespace Aldermark
             if (orbe == null) return;
             if (etat != Etat.Incantation || sortEnCours == null) { DetruireOrbe(); return; }
             float u = ProgresIncantation;
+            int niveau = comp != null ? comp.Niveau(sortEnCours.id) : 1;
+            float a = Sorts.Ampleur(niveau);
+            int pal = Sorts.Palier(niveau);
             Vector3 p = VersMonde(mainG) + DirMonde(new Vector3(.04f, .05f, .09f));
-            float taille = (j.troisiemePersonne ? .26f : .1f) * (.25f + .75f * u) * (1f + .08f * Mathf.Sin(Time.time * 30f));
+            // Plus le sort est haut, plus l'énergie dans la main est grosse, vive et agitée
+            float taille = (j.troisiemePersonne ? .26f : .1f) * (.25f + .75f * u) * (1f + .08f * (niveau - 1)) * (1f + .08f * Mathf.Sin(Time.time * 30f));
             orbe.position = p;
             orbe.localScale = Vector3.one * taille;
-            lumiereOrbe.intensity = 2.5f * u;
+            lumiereOrbe.intensity = 2.5f * u * a;
+            lumiereOrbe.range = 3f * a;
             if (Time.time >= prochaineEtincelleSort)
             {
-                prochaineEtincelleSort = Time.time + .07f;
+                prochaineEtincelleSort = Time.time + .07f / pal;
                 Vector3 autour = p + Random.onUnitSphere * taille * 2.5f;
-                Effets.Eclat(autour, sortEnCours.couleur, 1, .4f, taille * .35f, 0f, .25f, p - autour);
+                Effets.Eclat(autour, sortEnCours.couleur, pal, .4f + .1f * pal, taille * .35f, 0f, .25f, p - autour);
             }
         }
 

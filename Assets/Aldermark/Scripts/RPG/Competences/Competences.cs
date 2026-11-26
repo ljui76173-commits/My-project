@@ -113,14 +113,27 @@ namespace Aldermark
         void NiveauGagne(Maitrise m)
         {
             var d = m.Def;
+            // Le niveau se voit sur le héros : une gerbe de la couleur du sort, d'autant plus grande qu'il est haut
+            float a = Sorts.Ampleur(m.niveau);
+            Vector3 p = transform.position + Vector3.up;
+            Effets.Eclat(p, d.couleur, Mathf.RoundToInt(24 * a), 3f * a, .14f, -.4f, 1.2f);
+            Sorts.Lueur(p, d.couleur, 6f * a, .5f);
+            int pal = Sorts.Palier(m.niveau);
+            bool nouveauPalier = d.EstSort && d.paliers != null && pal >= 2 && m.niveau == Sorts.DebutPalier(pal) && pal - 2 < d.paliers.Length;
             if (m.niveau >= CatalogueCompetences.NiveauMax)
             {
-                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10 : le maximum.", 4.5f);
+                string aspect = nouveauPalier ? $"\n\nSon aspect : {d.paliers[pal - 2]}." : "";
+                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10 : le maximum." + aspect, 5.5f);
                 Sons.Fanfare("niveau");
+            }
+            else if (nouveauPalier)
+            {
+                HUD.Message($"{d.nom.ToUpper()} S'INTENSIFIE", $"Niveau {m.niveau}.\n\nPlus grand, plus vif, et désormais : {d.paliers[pal - 2]}.", 5f);
+                Sons.Jouer("decouverte", .7f, 1.1f);
             }
             else
             {
-                HUD.Toast($"<color=#{ColorUtility.ToHtmlStringRGB(d.couleur)}>{d.nom}</color> passe au niveau {m.niveau}");
+                HUD.Toast($"<color=#{ColorUtility.ToHtmlStringRGB(d.couleur)}>{d.nom}</color> passe au niveau {m.niveau}" + (d.EstSort ? " : plus grand, plus vif" : ""));
                 Sons.Jouer("quete", .55f, 1.15f);
             }
         }

@@ -10,7 +10,8 @@ namespace Aldermark
     {
         static Material particules, sillon, onde;
 
-        static Material Particules()
+        /// <summary>Le matériau des particules : un point doux (pas un carré).</summary>
+        public static Material Particules()
         {
             if (particules != null) return particules;
             particules = Transparent(Color.white);
@@ -97,8 +98,8 @@ namespace Aldermark
             go.AddComponent<Fondu>().duree = 12f;
         }
 
-        /// <summary>Une onde de choc : un anneau qui s'élargit au sol, et de la poussière.</summary>
-        public static void OndeDeChoc(Vector3 p, float rayon)
+        /// <summary>Une onde de choc : un anneau qui s'élargit au sol (blanc, ou de la couleur donnée), et de la poussière.</summary>
+        public static void OndeDeChoc(Vector3 p, float rayon, Color? couleur = null)
         {
             var go = new GameObject("OndeDeChoc");
             p.y = Monde.Hauteur(p.x, p.z) + .1f;
@@ -111,11 +112,27 @@ namespace Aldermark
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             var o = go.AddComponent<Onde>();
             o.rayon = rayon;
+            if (couleur.HasValue) o.couleur = couleur.Value;
             for (int k = 0; k < 8; k++)
             {
                 float a = k * Mathf.PI / 4f;
                 Poussiere(p + new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * rayon * .5f, 6);
             }
+        }
+
+        /// <summary>Un anneau de couleur qui s'élargit dans l'espace, face à la direction donnée (onde d'impact en l'air).</summary>
+        public static void Anneau(Vector3 p, Vector3 normale, float rayon, Color couleur, float duree = .35f)
+        {
+            var go = new GameObject("Anneau");
+            go.transform.position = p;
+            go.transform.rotation = Quaternion.LookRotation(normale.sqrMagnitude > .001f ? normale : Vector3.up);
+            go.AddComponent<MeshFilter>().sharedMesh = Formes.Anneau(1f, .06f, 40, 4);
+            var r = go.AddComponent<MeshRenderer>();
+            if (onde == null) onde = Transparent(new Color(1f, .95f, .85f, .8f));
+            r.sharedMaterial = onde;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var o = go.AddComponent<Onde>();
+            o.rayon = rayon; o.duree = duree; o.couleur = couleur;
         }
     }
 
@@ -123,6 +140,7 @@ namespace Aldermark
     public class Onde : MonoBehaviour
     {
         public float rayon = 3f, duree = .4f;
+        public Color couleur = new Color(1f, .95f, .85f, .8f);
         float t;
         MeshRenderer r;
         MaterialPropertyBlock bloc;
@@ -134,7 +152,7 @@ namespace Aldermark
             t += Time.unscaledDeltaTime;
             float u = Mathf.Clamp01(t / duree);
             transform.localScale = Vector3.one * Mathf.Lerp(.3f, rayon, 1f - (1f - u) * (1f - u));
-            bloc.SetColor("_BaseColor", new Color(1f, .95f, .85f, .8f * (1f - u)));
+            bloc.SetColor("_BaseColor", new Color(couleur.r, couleur.g, couleur.b, couleur.a * (1f - u)));
             r.SetPropertyBlock(bloc);
             if (t >= duree) { Destroy(GetComponent<MeshFilter>().sharedMesh); Destroy(gameObject); }
         }
