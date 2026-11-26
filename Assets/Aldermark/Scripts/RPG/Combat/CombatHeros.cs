@@ -305,6 +305,7 @@ namespace Aldermark
             if (!MondeRPG.Actif || botte == null) return;
             PoserLame();
             PlacerOrbe();
+            MettreAJourCinema();
         }
 
         void GererTemps()
@@ -420,7 +421,7 @@ namespace Aldermark
                     break;
                 case Etat.Glissade:
                     Glisser();
-                    if (tEtat >= dureeGlissade) { etat = Etat.Libre; garde = false; }
+                    if (tEtat >= dureeGlissade) { FinGlissade(); etat = Etat.Libre; garde = false; }
                     break;
                 case Etat.Projete:
                     if (!j.AuSol) aQuitteLeSol = true;
@@ -659,23 +660,30 @@ namespace Aldermark
             if (stats.Vie <= 0 && !mort) StartCoroutine(Mourir());
         }
 
-        /// <summary>L'épée se plante dans le sol et l'on glisse en arrière : étincelles, terre, sillon.</summary>
-        void CommencerGlissade(Vector3 direction, float distance, bool enGarde)
+        /// <summary>
+        /// L'épée se plante dans le sol et l'on glisse en arrière : étincelles, terre, sillon d'autant plus large et profond
+        /// que le coup était fort. Une grosse glissade à l'épée passe en plan de cinéma. Pieds : on glisse sur les pieds (recul d'un sort).
+        /// </summary>
+        void CommencerGlissade(Vector3 direction, float distance, bool enGarde, bool pieds = false)
         {
             dirGlissade = direction.normalized;
+            glissadePieds = pieds || MainsNues;
+            intensiteGlissade = Mathf.Clamp01((distance - 1f) / 5f);
             dureeGlissade = Mathf.Clamp(.3f + distance * .12f, .35f, 1.2f);
             float v0 = 2f * distance / dureeGlissade;
             j.Elan(dirGlissade * v0, dureeGlissade, v0 / dureeGlissade);
             etat = Etat.Glissade; tEtat = 0f; courante = null;
             garde = enGarde;
             prochainSillon = 0f;
-            Sons.Jouer(MainsNues ? "frottement" : "raclement", .8f, Mathf.Lerp(1.1f, .8f, distance / 6f));
-            j.Secouer(.08f);
+            Sons.Jouer(glissadePieds ? "frottement" : "raclement", .8f + .2f * intensiteGlissade, Mathf.Lerp(1.1f, .75f, distance / 6f));
+            j.Secouer(.08f + .06f * intensiteGlissade);
+            if (!glissadePieds) PlanterLame(distance);
         }
 
         void Glisser()
         {
-            if (MainsNues)
+            float I = intensiteGlissade;
+            if (glissadePieds)
             {
                 // Sans lame à planter : les pieds labourent le sol
                 if (tEtat >= prochainSillon && tEtat < dureeGlissade * .85f)
@@ -686,23 +694,24 @@ namespace Aldermark
                         Vector3 pied = transform.position + transform.right * cote;
                         Vector3 sol = new Vector3(pied.x, Monde.Hauteur(pied.x, pied.z), pied.z);
                         Effets.Terre(sol, -dirGlissade + Vector3.up);
-                        Effets.Sillon(sol, dirGlissade);
+                        Effets.Sillon(sol, dirGlissade, .16f + .12f * I, .45f + .2f * I, 12f + 10f * I);
                     }
-                    Effets.Poussiere(transform.position - dirGlissade * .3f, 3);
-                    j.Secouer(.02f);
+                    Effets.Poussiere(transform.position - dirGlissade * .3f, 3 + Mathf.RoundToInt(5 * I));
+                    j.Secouer(.02f + .02f * I);
                 }
                 return;
             }
-            Vector3 pointe = VersMonde(MainPlantee) + DirMonde(LamePlantee).normalized * .95f;
-            pointe.y = Mathf.Max(Monde.Hauteur(pointe.x, pointe.z), pointe.y - 1f);
+            Vector3 pointe = PointeLame();
             if (tEtat >= prochainSillon && tEtat < dureeGlissade * .85f)
             {
                 prochainSillon = tEtat + .05f;
                 Vector3 sol = new Vector3(pointe.x, Monde.Hauteur(pointe.x, pointe.z), pointe.z);
                 Effets.Etincelles(sol + Vector3.up * .05f, -dirGlissade + Vector3.up * .6f);
-                Effets.Terre(sol, -dirGlissade + Vector3.up);
-                Effets.Sillon(sol, dirGlissade);
-                j.Secouer(.025f);
+                if (I > .3f) Effets.Eclat(sol, new Color(1f, .8f, .4f), Mathf.RoundToInt(8 * I), 6f, .05f, 1.4f, .35f, -dirGlissade + Vector3.up * .4f);
+                Effets.Eclat(sol, new Color(.42f, .33f, .22f), 6 + Mathf.RoundToInt(10 * I), 3f + 3f * I, .14f + .08f * I, 2.2f, .6f, -dirGlissade + Vector3.up);
+                Effets.Sillon(sol, dirGlissade, .18f + .34f * I, .45f + .3f * I, 14f + 16f * I);
+                if (I > .15f) Bourrelets(sol, I);
+                j.Secouer(.025f + .03f * I);
             }
         }
 
@@ -732,6 +741,7 @@ namespace Aldermark
         System.Collections.IEnumerator Mourir()
         {
             mort = true;
+            FinirCinema();
             Alterations.Effacer();
             AnnulerSort();
             LacherVerrou();
@@ -907,7 +917,7 @@ namespace Aldermark
                     ggCible = nues ? new Vector3(-.15f, -.55f, .7f) : reposG; vitesse = 25f;
                     break;
                 case Etat.Glissade:
-                    if (nues) { gCible = garde ? CroixD : reposD; ggCible = garde ? CroixG : reposG; }
+                    if (nues || glissadePieds) { gCible = garde ? CroixD : reposD; ggCible = garde ? CroixG : reposG; }
                     else { gCible = MainPlantee; dCible = LamePlantee; ggCible = reposG; }
                     vitesse = 40f;
                     break;
