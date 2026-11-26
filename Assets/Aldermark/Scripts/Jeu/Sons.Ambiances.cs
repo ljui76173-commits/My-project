@@ -12,7 +12,7 @@ namespace Aldermark
     /// </summary>
     public partial class Sons
     {
-        AudioSource sourceGrillons, sourceFoule, sourceEau;
+        AudioSource sourceGrillons, sourceFoule, sourceEau, sourceCloche;
         float minuterieAmbiance, minuterieEau, minuterieChouette = 20f;
         float cibleVent = .2f, cibleGrillons, cibleFoule, cibleEau, cibleRiviere;
         float foret, altitude, nuit, ville;
@@ -41,7 +41,14 @@ namespace Aldermark
             sourceEau = go.AddComponent<AudioSource>();
             sourceEau.clip = Choisir("vagues"); sourceEau.loop = true; sourceEau.spatialBlend = 1f; sourceEau.volume = 0f;
             sourceEau.minDistance = 8f; sourceEau.maxDistance = 90f; sourceEau.rolloffMode = AudioRolloffMode.Linear; sourceEau.dopplerLevel = 0f; sourceEau.Play();
-            if (sourceRiviere != null) { sourceRiviere.maxDistance = 70f; sourceRiviere.minDistance = 6f; }
+            if (sourceRiviere != null) { sourceRiviere.maxDistance = 70f; sourceRiviere.minDistance = 6f; sourceRiviere.priority = 64; }
+            sourceGrillons.priority = sourceFoule.priority = sourceEau.priority = sourceVent.priority = 64;
+            // La cloche a sa propre source, prioritaire, qui porte loin
+            var gc = new GameObject("SonCloche");
+            gc.transform.SetParent(transform, false);
+            sourceCloche = gc.AddComponent<AudioSource>();
+            sourceCloche.playOnAwake = false; sourceCloche.spatialBlend = 1f; sourceCloche.dopplerLevel = 0f; sourceCloche.priority = 16;
+            sourceCloche.rolloffMode = AudioRolloffMode.Linear; sourceCloche.minDistance = 40f; sourceCloche.maxDistance = 900f; sourceCloche.spread = 40f;
             Horloge.NouvelleHeure += SonnerLesCloches;
         }
 
@@ -100,6 +107,8 @@ namespace Aldermark
             sourceFoule.volume = Mathf.MoveTowards(sourceFoule.volume, cibleFoule * va, dt * .2f);
             sourceEau.volume = Mathf.MoveTowards(sourceEau.volume, cibleEau * va, dt * .3f);
             if (sourceRiviere != null) sourceRiviere.volume = Mathf.MoveTowards(sourceRiviere.volume, cibleRiviere * va, dt * .3f);
+            // Une boucle muette ne garde pas sa voix : elle se met en pause et reprend quand elle remonte
+            Veiller(sourceGrillons); Veiller(sourceFoule); Veiller(sourceEau); Veiller(sourceRiviere);
 
             // Les oiseaux le jour (plus en forêt), la chouette la nuit en forêt
             minuterieOiseau -= dt;
@@ -151,6 +160,13 @@ namespace Aldermark
                 }
         }
 
+        static void Veiller(AudioSource s)
+        {
+            if (s == null) return;
+            if (s.volume <= .001f) { if (s.isPlaying) s.Pause(); }
+            else if (!s.isPlaying) s.UnPause();
+        }
+
         // ---------- les cloches ----------
 
         void SonnerLesCloches(int heure)
@@ -163,15 +179,18 @@ namespace Aldermark
                 float d = (l.Position - auditeur.position).sqrMagnitude;
                 if (d < md) { md = d; proche = l; }
             }
-            if (proche != null) StartCoroutine(Coups(proche.Position + Vector3.up * 20f, heure % 12 == 0 ? 12 : heure % 12, proche.nom.StartsWith("Chapelle") ? 1.35f : 1f));
+            if (proche != null) StartCoroutine(Coups(proche.Position + Vector3.up * 20f, heure % 12 == 0 ? 12 : heure % 12, proche.nom.StartsWith("Chapelle") ? 1.4f : 1f));
         }
 
         IEnumerator Coups(Vector3 ou, int n, float hauteur)
         {
+            sourceCloche.transform.position = ou;
+            sourceCloche.pitch = hauteur;
+            var c = Choisir("cloche");
             for (int k = 0; k < n; k++)
             {
-                JouerA("cloche", ou, .8f, hauteur, 700f);
-                yield return new WaitForSeconds(1.8f);
+                sourceCloche.PlayOneShot(c, .9f * Volume(CanalSon.Ambiances));
+                yield return new WaitForSeconds(2.6f);
             }
         }
 
@@ -339,17 +358,37 @@ namespace Aldermark
             });
         }
 
-        /// <summary>Une cloche d'église : harmoniques de cloche (non entières) qui s'éteignent lentement.</summary>
+        /// <summary>
+        /// Une cloche d'église en bronze : les partiels d'une vraie cloche (bourdon, fondamentale, tierce mineure, quinte,
+        /// nominale, puis les aigus), chacun avec sa durée (le bourdon grave tient le plus longtemps), quelques-uns
+        /// doublés et à peine désaccordés (le lent battement d'une cloche), et le choc du battant au début.
+        /// </summary>
         AudioClip Cloche()
         {
-            const float f = 196f;
-            float[] p = { .5f, 1f, 1.19f, 1.5f, 2f, 2.5f, 2.98f };
-            float[] a = { .5f, 1f, .6f, .45f, .35f, .2f, .15f };
-            return Creer("Cloche", 4.5f, (i, t) =>
+            const float nominale = 330f, d = 9f;
+            //                      bourdon fond.  tierce quinte nomin. dixième onzième douzième octave
+            float[] rapport = { .5f, 1f, 1.2f, 1.5f, 2f, 2.5f, 2.67f, 3f, 4f, 5.33f };
+            float[] ampli = { .55f, .5f, .45f, .22f, .6f, .22f, .16f, .14f, .1f, .06f };
+            float[] duree = { 7.5f, 5f, 4.2f, 2.6f, 3.4f, 1.8f, 1.4f, 1.1f, .8f, .5f };
+            float[] battement = { .35f, 0f, .22f, 0f, .4f, 0f, 0f, 0f, 0f, 0f };
+            float b1 = 0f, b2 = 0f;
+            return Creer("Cloche", d, (i, t) =>
             {
                 float s = 0f;
-                for (int k = 0; k < p.Length; k++) s += Mathf.Sin(2f * Mathf.PI * f * p[k] * t) * a[k] * Mathf.Exp(-t * (.6f + k * .35f));
-                return s * .22f * Mathf.Clamp01(t / .004f);
+                for (int k = 0; k < rapport.Length; k++)
+                {
+                    float f = nominale * .5f * rapport[k];
+                    float env = Mathf.Exp(-t * 6.9f / duree[k]);
+                    float onde = battement[k] > 0f
+                        ? (Mathf.Sin(2f * Mathf.PI * (f - battement[k] * .5f) * t) + Mathf.Sin(2f * Mathf.PI * (f + battement[k] * .5f) * t)) * .5f
+                        : Mathf.Sin(2f * Mathf.PI * f * t);
+                    s += onde * ampli[k] * env;
+                }
+                // Le battant : un claquement métallique de quelques centièmes de seconde
+                b1 += (Bruit() - b1) * .55f; b2 += (b1 - b2) * .25f;
+                s += (b1 - b2) * 1.6f * Mathf.Exp(-t * 70f);
+                float attaque = Mathf.Clamp01(t / .002f), fin = Mathf.Clamp01((d - t) / .5f);
+                return s * .3f * attaque * fin;
             });
         }
 

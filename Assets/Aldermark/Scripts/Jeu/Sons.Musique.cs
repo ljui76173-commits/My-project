@@ -34,6 +34,7 @@ namespace Aldermark
             musiqueB = Source(false, false, 0f);
             couche = Source(true, false, 0f);
             fanfare = Source(false, false, 0f);
+            musiqueA.priority = musiqueB.priority = couche.priority = fanfare.priority = 0;   // la musique ne se coupe jamais
             var cat = CatalogueAudio.Instance;
             var combat = cat != null ? cat.Musiques("Combat") : new List<CatalogueAudio.Piste>();
             coucheFichier = combat.Count > 0;
@@ -90,6 +91,7 @@ namespace Aldermark
             baisseFanfare = Mathf.MoveTowards(baisseFanfare, fanfare.isPlaying ? 1f : 0f, dt * 2f);
             float fond = (1f - .65f * danger) * (1f - .8f * baisseFanfare);
             couche.volume = Mathf.MoveTowards(couche.volume, danger * vm * (coucheFichier ? 1f : .55f) * (1f - .8f * baisseFanfare), dt * .8f);
+            Veiller(couche);
             fanfare.volume = Volume(CanalSon.Musique) * .9f;
 
             // La situation, toutes les secondes
