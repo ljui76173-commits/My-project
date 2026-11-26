@@ -352,7 +352,7 @@ namespace Aldermark
             {
                 p.satellites = new GameObject("Satellites").transform;
                 p.satellites.SetParent(go.transform, false);
-                int n = pal - 1;
+                int n = Mathf.Min(pal - 1, 6);
                 Color cs = eclat ? new Color(.85f, .96f, 1f, .9f) : new Color(1f, .85f, .35f, .9f);
                 for (int k = 0; k < n; k++)
                 {
@@ -443,6 +443,7 @@ namespace Aldermark
         void Finir(ICible c, bool impact = true)
         {
             fini = true;
+            if (c != null || impact) Sorts.Deflagration(s.def.element, transform.position, vitesse.normalized, s.niveau, s.camp);
             if (c != null) Sorts.Toucher(s, c, vitesse.normalized);
             else if (impact) Sorts.Impact(s.def.element, transform.position, vitesse.normalized, s.niveau);
             else Effets.Eclat(transform.position, s.def.couleur, 6, 1f, .1f, 0f, .3f);

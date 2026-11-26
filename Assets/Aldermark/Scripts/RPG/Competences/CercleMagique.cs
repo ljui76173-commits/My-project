@@ -394,6 +394,16 @@ namespace Aldermark
                 c.Ajouter(TexturesMagiques.Exterieur, 1.6f, 6f, .32f, .3f);
                 c.Ajouter(TexturesMagiques.Etoile(e), 1.3f, 14f, .35f, .32f);
             }
+            if (palier >= 5)
+            {
+                c.Ajouter(TexturesMagiques.Halo, 2.2f, 0f, .3f, .36f);
+                c.Ajouter(TexturesMagiques.Interieur, 1.95f, -30f, .35f, .4f);
+            }
+            if (palier >= 7)
+            {
+                c.Ajouter(TexturesMagiques.Exterieur, 2.4f, -4f, .28f, .45f);
+                c.Ajouter(TexturesMagiques.Etoile(e), 2.1f, 9f, .25f, .48f);
+            }
             if (lumiere)
             {
                 var lg = new GameObject("Lumiere");
