@@ -297,7 +297,8 @@ namespace Aldermark.Editeur
                 {
                     scratch.Vider();
                     volumes.Clear();
-                    KitBatiment.Construire(scratch, k, volumes);
+                    try { KitBatiment.Construire(scratch, k, volumes); }
+                    catch (System.Exception e) { Debug.LogWarning($"Aldermark : {k.type} en {k.position} ignoré ({e.Message})."); continue; }
                     foreach (var vo in volumes)
                     {
                         var go = new GameObject("Mur");

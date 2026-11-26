@@ -94,7 +94,7 @@ namespace Aldermark
             c = s.position;
             R = s.rayon;
             t = new Tirage(graine);
-            graines = graine * 1000;
+            graines = (graine & 0xfffff) * 1000;   // reste positif (un débordement donnait des graines négatives)
         }
 
         public static PlanVille Tracer(Site s, int graine)

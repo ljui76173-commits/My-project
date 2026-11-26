@@ -480,7 +480,13 @@ namespace Aldermark.Editeur
         {
             var go = new GameObject(nom);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+            var rendu = go.AddComponent<MeshRenderer>();
+            rendu.sharedMaterials = mats;
+            // Un LODGroup : le terrain accepte l'arbre sans shader « Nature » (plus d'avertissements),
+            // et ne le dessine plus quand il ne fait que quelques pixels à l'écran
+            var lod = go.AddComponent<LODGroup>();
+            lod.SetLODs(new[] { new LOD(nom == "Rocher" || nom.StartsWith("Buisson") ? .008f : .004f, new Renderer[] { rendu }) });
+            lod.RecalculateBounds();
             if (collision)
             {
                 var c = go.AddComponent<CapsuleCollider>();
