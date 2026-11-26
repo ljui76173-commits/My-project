@@ -37,14 +37,60 @@ namespace Aldermark
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reinitialiser() { Lance = null; materiaux.Clear(); }
 
-        /// <summary>La taille et l'éclat d'un sort selon son niveau : 1 au niveau 1, 1,9 au niveau 10.</summary>
-        public static float Ampleur(int niveau) => 1f + .1f * (Mathf.Clamp(niveau, 1, 10) - 1);
+        /// <summary>
+        /// La taille et l'éclat d'un sort selon son niveau : 1 au niveau 1, 1,9 au niveau 10, puis ça continue sans plafond
+        /// (plus lentement : 2,9 au niveau 20, 3,9 au 50, 4,6 au 100), pour que l'écran reste lisible.
+        /// </summary>
+        public static float Ampleur(int niveau)
+        {
+            niveau = Mathf.Max(1, niveau);
+            if (niveau <= 10) return 1f + .1f * (niveau - 1);
+            return 1.9f + .9f * Mathf.Log(1f + (niveau - 10) / 5f);
+        }
 
-        /// <summary>1 (niveaux 1 à 3), 2 (4 à 6), 3 (7 à 9), 4 (niveau 10, maîtrisé).</summary>
-        public static int Palier(int niveau) => niveau >= 10 ? 4 : niveau >= 7 ? 3 : niveau >= 4 ? 2 : 1;
+        /// <summary>Les niveaux où un sort change d'aspect : 4, 7, 10 (maîtrisé), puis 15, 25, 40, 60, 100.</summary>
+        static readonly int[] SeuilsPaliers = { 1, 4, 7, 10, 15, 25, 40, 60, 100 };
 
-        /// <summary>Le niveau où commence un palier (2 → 4, 3 → 7, 4 → 10).</summary>
-        public static int DebutPalier(int palier) => palier >= 4 ? 10 : palier == 3 ? 7 : palier == 2 ? 4 : 1;
+        /// <summary>1 à 9 : le palier atteint (4 : maîtrisé ; 5 : transcendé ; 6 : céleste ; 7 : cataclysme ; 8 : légendaire ; 9 : divin).</summary>
+        public static int Palier(int niveau)
+        {
+            int p = 1;
+            for (int k = 1; k < SeuilsPaliers.Length; k++) if (niveau >= SeuilsPaliers[k]) p = k + 1;
+            return p;
+        }
+
+        /// <summary>Le niveau où commence un palier (0 s'il n'y en a plus).</summary>
+        public static int DebutPalier(int palier) => palier >= 1 && palier <= SeuilsPaliers.Length ? SeuilsPaliers[palier - 1] : 0;
+
+        public static string NomPalier(int palier)
+        {
+            switch (palier)
+            {
+                case 4: return "maîtrisé";
+                case 5: return "transcendé";
+                case 6: return "céleste";
+                case 7: return "cataclysme";
+                case 8: return "légendaire";
+                case 9: return "divin";
+                default: return "";
+            }
+        }
+
+        /// <summary>Ce qui change à l'œil à ce palier : propre au sort jusqu'au niveau 10, puis commun à tous les sorts.</summary>
+        public static string DescriptionPalier(DefCompetence d, int palier)
+        {
+            if (palier < 2) return "";
+            if (d.paliers != null && palier - 2 < d.paliers.Length) return d.paliers[palier - 2];
+            switch (palier)
+            {
+                case 5: return "chaque impact creuse un cratère, et une colonne d'énergie tombe du ciel";
+                case 6: return "le jour s'assombrit pendant l'incantation, et un cercle immense s'ouvre dans le ciel";
+                case 7: return "le temps s'arrête au lancer ; triple onde de choc, cratère géant";
+                case 8: return "tout est plus grand : cercles, explosions, cratères";
+                case 9: return "la puissance d'un dieu : l'écran blanchit au lancer";
+                default: return "";
+            }
+        }
 
         /// <summary>Un matériau translucide et lumineux, partagé par couleur.</summary>
         public static Material Materiau(Color c)
@@ -164,6 +210,7 @@ namespace Aldermark
             }
             Eclair(s.origine, fin, d.couleur, s.niveau);
             Sons.JouerA("sortFoudre", fin, .9f + .02f * s.niveau, Mathf.Max(.72f, UnityEngine.Random.Range(.92f, 1.08f) - .03f * (s.niveau - 1)), 90f + 6f * s.niveau);
+            Deflagration(d.element, fin, s.direction, s.niveau, s.camp);
             if (touchee == null) { Impact(d.element, fin, s.direction, s.niveau); return; }
             Toucher(s, touchee, (fin - s.origine).normalized);
             if (s.niveau < 5) return;
@@ -206,6 +253,15 @@ namespace Aldermark
                 foreach (float cote in pal >= 4 ? new[] { -1f, 0f, 1f } : new[] { -1f, 1f })
                     Tourbillon(pied + avant * d.portee * .9f + droite * cote * d.portee * .35f, 1.8f, 1.1f * a);
             }
+            if (pal >= 5)
+            {
+                // Une tempête : des tourbillons tout le long du souffle, et la caméra qui tremble
+                Vector3 droite = Vector3.Cross(Vector3.up, avant);
+                for (int k = 0; k < 4 + pal; k++)
+                    Tourbillon(pied + avant * d.portee * UnityEngine.Random.Range(.3f, 1.2f) + droite * UnityEngine.Random.Range(-1f, 1f) * d.portee * .5f, 2.5f * a, 1.3f * a);
+                var hh = CombatHeros.Instance;
+                if (hh != null) hh.Secousse(.05f * a);
+            }
             if (pal >= 4)
             {
                 Vector3 o = s.origine;
@@ -230,7 +286,8 @@ namespace Aldermark
             centre.y = Monde.Hauteur(centre.x, centre.z);
             float rayon = s.rayon > 0f ? s.rayon : s.def.rayon;
             Effets.OndeDeChoc(centre, rayon, new Color(.85f, .72f, .5f, .85f));
-            int gerbes = 10 + 2 * (s.niveau - 1);
+            Deflagration(Element.Terre, centre + Vector3.up * .4f, Vector3.up, s.niveau, s.camp);
+            int gerbes = Mathf.Min(40, 10 + 2 * (s.niveau - 1));
             for (int k = 0; k < gerbes; k++)
             {
                 float ang = k * Mathf.PI * 2f / gerbes;

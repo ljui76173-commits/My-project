@@ -15,8 +15,8 @@ namespace Aldermark
 
         Competences comp;
         DefCompetence sortEnCours;
-        CercleMagique cercleMain, cercleSol;
-        float prochaineRune;
+        CercleMagique cercleMain, cercleSol, cercleCiel;
+        float prochaineRune, prochaineConvergence;
         Transform orbe;
         Light lumiereOrbe;
         float prochainAvertissement, prochaineEtincelleSort, prochaineFlammeHeros;
@@ -90,7 +90,8 @@ namespace Aldermark
             // Les cercles éclatent au lancer
             if (cercleMain != null) cercleMain.Liberer();
             if (cercleSol != null) cercleSol.Liberer();
-            cercleMain = cercleSol = null;
+            if (cercleCiel != null) cercleCiel.Liberer();
+            cercleMain = cercleSol = cercleCiel = null;
             DetruireOrbe();
             comp.Declencher(d);
             int niveau = comp.Niveau(d.id);
@@ -104,7 +105,7 @@ namespace Aldermark
                 attaque = d.forme == FormeSort.Soin ? comp.Soin(d) : comp.AttaqueMagique(d),
                 origine = origine, direction = vise - origine, cible = cible,
                 rayon = comp.Rayon(d),
-                poussee = d.forme == FormeSort.Cone ? d.poussee * (float)Competences.Progression(niveau) : d.poussee,
+                poussee = d.forme == FormeSort.Cone ? d.poussee * (float)Competences.Progression(niveau) : d.poussee * Sorts.Ampleur(niveau),
                 touche = (c, tue) =>
                 {
                     if (comp != null) comp.Exercer(id, tue ? 3 : 1);
@@ -142,7 +143,7 @@ namespace Aldermark
             }
 
             // Le souffle sur la caméra et l'écran
-            j.CoupFov(3f + 4.5f * puissance);
+            j.CoupFov(Mathf.Min(18f, 3f + 4.5f * puissance + 1.5f * (pal - 1)));
             j.Secouer(.03f + .05f * puissance);
             HUD.EclairCombat(new Color(c.r, c.g, c.b, .05f + .07f * puissance), .22f, false);
             if (puissance >= 1.1f) Sons.Jouer("onde", Mathf.Min(.6f, .25f * puissance), .65f);
@@ -160,7 +161,14 @@ namespace Aldermark
                 if (puissance >= 1.25f && j.AuSol) CommencerGlissade(-avant, puissance * 1.3f, false, true);
                 else if (puissance >= .5f) j.Elan(-avant * puissance * 4f, .2f, puissance * 20f);
             }
-            if (pal >= 4) Ralentir(.22f);
+            if (pal >= 7)
+            {
+                // Le temps s'arrête, puis repart au ralenti
+                Figer(.14f);
+                Ralentir(.6f);
+                HUD.EclairCombat(new Color(1f, 1f, 1f, pal >= 9 ? .6f : .3f), .4f, false);
+            }
+            else if (pal >= 4) Ralentir(.22f + .05f * (pal - 4));
         }
 
         // ---------- les cercles d'incantation ----------
@@ -175,13 +183,22 @@ namespace Aldermark
             // Devant la main (face à la visée) pour ce qui part au loin
             if (devant)
                 cercleMain = CercleMagique.Creer(VersMonde(mainG), Quaternion.LookRotation(DirectionVisee()),
-                    (j.troisiemePersonne ? .42f : .16f) * a, d.couleur, d.element, pal, true);
+                    Mathf.Min(j.troisiemePersonne ? .42f * a : .16f * a, j.troisiemePersonne ? 1.6f : .3f), d.couleur, d.element, pal, true);
             // Au sol : toujours pour la terre et le soin ; à partir du niveau 4 pour les autres
             if (!devant || pal >= 2)
             {
                 float r = d.forme == FormeSort.Zone ? comp.Rayon(d) * .8f : d.forme == FormeSort.Soin ? 1.3f * a : 1.1f * a;
                 cercleSol = CercleMagique.Creer(PiedAuSol(), Quaternion.LookRotation(Vector3.down, transform.forward), r, d.couleur, d.element, pal, !devant);
             }
+            // Céleste : un cercle immense s'ouvre dans le ciel, au-dessus de ce que tu vises
+            if (pal >= 6)
+                cercleCiel = CercleMagique.Creer(PositionCiel(), Quaternion.LookRotation(Vector3.down, transform.forward), 6f * a, d.couleur, d.element, pal, true);
+        }
+
+        Vector3 PositionCiel()
+        {
+            Vector3 vers = Cibles.Existe(verrou) && verrou.Vivant ? verrou.Centre : transform.position + Vector3.ProjectOnPlane(j.cam.transform.forward, Vector3.up).normalized * 12f;
+            return new Vector3(vers.x, Monde.Hauteur(vers.x, vers.z) + 24f, vers.z);
         }
 
         Vector3 PiedAuSol()
@@ -204,7 +221,8 @@ namespace Aldermark
         {
             if (cercleMain != null) cercleMain.Annuler();
             if (cercleSol != null) cercleSol.Annuler();
-            cercleMain = cercleSol = null;
+            if (cercleCiel != null) cercleCiel.Annuler();
+            cercleMain = cercleSol = cercleCiel = null;
         }
 
         /// <summary>Ce que vise le centre de l'écran (on traverse son propre corps et les zones invisibles).</summary>
@@ -269,6 +287,25 @@ namespace Aldermark
                 Vector3 dir = DirectionVisee();
                 cercleMain.transform.SetPositionAndRotation(VersMonde(mainG) + dir * (j.troisiemePersonne ? .25f : .12f), Quaternion.LookRotation(dir));
                 cercleMain.Progres = u;
+            }
+            if (cercleCiel != null)
+            {
+                cercleCiel.transform.position = Vector3.Lerp(cercleCiel.transform.position, PositionCiel(), 1f - Mathf.Exp(-Time.deltaTime * 3f));
+                cercleCiel.Progres = u;
+            }
+            // L'énergie qui afflue vers la main, la lueur sur les bords de l'écran, le jour qui s'assombrit (céleste)
+            {
+                int palC = Sorts.Palier(niveau);
+                Color ce = sortEnCours.couleur;
+                Vector3 main = VersMonde(mainG);
+                if (Time.time >= prochaineConvergence)
+                {
+                    prochaineConvergence = Time.time + .07f / palC;
+                    Vector3 depuis = main + Random.onUnitSphere * (j.troisiemePersonne ? 1.6f : .7f) * Sorts.Ampleur(niveau);
+                    Effets.Eclat(depuis, ce, 1, Vector3.Distance(depuis, main) / .22f, (j.troisiemePersonne ? .07f : .035f), 0f, .22f, main - depuis);
+                }
+                if (palC >= 2) HUD.Voile(new Color(ce.r, ce.g, ce.b, Mathf.Min(.5f, .07f + .05f * palC) * u));
+                if (palC >= 6) HUD.Assombrir(u);
             }
             if (cercleSol != null)
             {

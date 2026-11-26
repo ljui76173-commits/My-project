@@ -58,7 +58,9 @@ namespace Aldermark
 
         // ---------- ce qu'on connaît ----------
 
-        public static double XPRequise(int niveau) => 6 * Math.Pow(1.4, niveau - 1);
+        /// <summary>L'expérience pour passer au niveau suivant : vite au début, puis de plus en plus, sans jamais bloquer.</summary>
+        public static double XPRequise(int niveau) =>
+            niveau <= 10 ? 6 * Math.Pow(1.4, niveau - 1) : 6 * Math.Pow(1.4, 9) * (1 + .3 * (niveau - 10));
 
         public Maitrise Get(string id) => id != null && parId.TryGetValue(id, out var m) ? m : null;
         public bool Connait(string id) => id != null && parId.ContainsKey(id);
@@ -99,15 +101,14 @@ namespace Aldermark
         public void Exercer(string id, double quantite)
         {
             var m = Get(id);
-            if (m == null || m.niveau >= CatalogueCompetences.NiveauMax || quantite <= 0) return;
+            if (m == null || quantite <= 0) return;
             m.xp += quantite;
             int avant = m.niveau;
-            while (m.niveau < CatalogueCompetences.NiveauMax && m.xp >= XPRequise(m.niveau))
+            while (m.niveau < CatalogueCompetences.NiveauLimite && m.xp >= XPRequise(m.niveau))
             {
                 m.xp -= XPRequise(m.niveau);
                 m.niveau++;
             }
-            if (m.niveau >= CatalogueCompetences.NiveauMax) m.xp = 0;
             if (m.niveau > avant) NiveauGagne(m);
         }
 
@@ -120,16 +121,21 @@ namespace Aldermark
             Effets.Eclat(p, d.couleur, Mathf.RoundToInt(24 * a), 3f * a, .14f, -.4f, 1.2f);
             Sorts.Lueur(p, d.couleur, 6f * a, .5f);
             int pal = Sorts.Palier(m.niveau);
-            bool nouveauPalier = d.EstSort && d.paliers != null && pal >= 2 && m.niveau == Sorts.DebutPalier(pal) && pal - 2 < d.paliers.Length;
-            if (m.niveau >= CatalogueCompetences.NiveauMax)
+            bool nouveauPalier = d.EstSort && pal >= 2 && m.niveau == Sorts.DebutPalier(pal);
+            string aspect = nouveauPalier ? Sorts.DescriptionPalier(d, pal) : "";
+            if (m.niveau == CatalogueCompetences.NiveauMaitrise)
             {
-                string aspect = nouveauPalier ? $"\n\nSon aspect : {d.paliers[pal - 2]}." : "";
-                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10 : le maximum." + aspect, 5.5f);
+                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10. Et ça continue : il n'y a pas de plafond." + (aspect != "" ? $"\n\nSon aspect : {aspect}." : ""), 5.5f);
+                Sons.Fanfare("niveau");
+            }
+            else if (nouveauPalier && pal >= 5)
+            {
+                HUD.Message($"{d.nom.ToUpper()} : {Sorts.NomPalier(pal).ToUpper()}", $"Niveau {m.niveau}.\n\nDésormais : {aspect}.", 6f);
                 Sons.Fanfare("niveau");
             }
             else if (nouveauPalier)
             {
-                HUD.Message($"{d.nom.ToUpper()} S'INTENSIFIE", $"Niveau {m.niveau}.\n\nPlus grand, plus vif, et désormais : {d.paliers[pal - 2]}.", 5f);
+                HUD.Message($"{d.nom.ToUpper()} S'INTENSIFIE", $"Niveau {m.niveau}.\n\nPlus grand, plus vif, et désormais : {aspect}.", 5f);
                 Sons.Jouer("decouverte", .7f, 1.1f);
             }
             else
@@ -144,7 +150,7 @@ namespace Aldermark
             if (!Connait(id)) Apprendre(id, false);
             var m = Get(id);
             if (m == null) return;
-            m.niveau = Mathf.Clamp(niveau, 1, CatalogueCompetences.NiveauMax);
+            m.niveau = Mathf.Clamp(niveau, 1, CatalogueCompetences.NiveauLimite);
             m.xp = 0;
         }
 
@@ -167,9 +173,13 @@ namespace Aldermark
 
         public static double Progression(int niveau) => 1 + .12 * (Mathf.Max(1, niveau) - 1);
 
-        public float Cout(DefCompetence d) => d.cout * (1f - .03f * (Mathf.Max(1, Niveau(d.id)) - 1));
-        public float Recharge(DefCompetence d) => d.recharge * (1f - .04f * (Mathf.Max(1, Niveau(d.id)) - 1));
-        public float Rayon(DefCompetence d) => d.rayon * (1f + .04f * (Mathf.Max(1, Niveau(d.id)) - 1));
+        // Le coût et la recharge baissent à chaque niveau sans jamais atteindre zéro ; le rayon suit la taille du sort
+        public float Cout(DefCompetence d) => d.cout / (1f + .035f * (Mathf.Max(1, Niveau(d.id)) - 1));
+        public float Recharge(DefCompetence d) => d.recharge / (1f + .045f * (Mathf.Max(1, Niveau(d.id)) - 1));
+        public float Rayon(DefCompetence d) => d.rayon * (1f + .4f * (Sorts.Ampleur(Niveau(d.id)) - 1f));
+
+        /// <summary>Les niveaux utiles d'un bonus qui ralentit après la maîtrise (pleine pente jusqu'au 10, un quart ensuite).</summary>
+        static float Pente(int niveau) => Mathf.Min(niveau - 1, 9) + .25f * Mathf.Max(0, niveau - 10);
 
         /// <summary>Temps restant avant de pouvoir relancer (0 : prêt).</summary>
         public float Attente(string id)
@@ -202,10 +212,10 @@ namespace Aldermark
 
         public static string IdArme(DefObjet arme) => arme == null ? "mains" : arme.forme == FormeArme.Gourdin ? "masse" : "epee";
 
-        public float FacteurParade => 1f + .06f * (Mathf.Max(1, Niveau("parade")) - 1);
-        public float FacteurCoutGarde => 1f - .04f * (Mathf.Max(1, Niveau("parade")) - 1);
-        public float FacteurEsquive => 1f + .04f * (Mathf.Max(1, Niveau("esquive")) - 1);
-        public float FacteurCoutRoulade => 1f - .04f * (Mathf.Max(1, Niveau("esquive")) - 1);
+        public float FacteurParade => 1f + .06f * Pente(Mathf.Max(1, Niveau("parade")));
+        public float FacteurCoutGarde => 1f / (1f + .045f * (Mathf.Max(1, Niveau("parade")) - 1));
+        public float FacteurEsquive => 1f + .04f * Pente(Mathf.Max(1, Niveau("esquive")));
+        public float FacteurCoutRoulade => 1f / (1f + .045f * (Mathf.Max(1, Niveau("esquive")) - 1));
 
         // ---------- sauvegarde ----------
 
@@ -233,7 +243,7 @@ namespace Aldermark
                         connues.Add(ici);
                         parId[m.id] = ici;
                     }
-                    ici.niveau = Mathf.Clamp(m.niveau, 1, CatalogueCompetences.NiveauMax);
+                    ici.niveau = Mathf.Clamp(m.niveau, 1, CatalogueCompetences.NiveauLimite);
                     ici.xp = m.xp;
                 }
             Trier();

@@ -174,7 +174,7 @@ namespace Aldermark
                         if (c != null && m.Length > 2 && m[1] == "tout" && Nombre(m[2], out v))
                         {
                             foreach (var d in CatalogueCompetences.Ordre) if (d.EstSort && c.Connait(d.id)) c.FixerNiveau(d.id, (int)v);
-                            Ecrire($"Tous tes sorts : niveau {Mathf.Clamp((int)v, 1, CatalogueCompetences.NiveauMax)}");
+                            Ecrire($"Tous tes sorts : niveau {Mathf.Clamp((int)v, 1, CatalogueCompetences.NiveauLimite)}");
                             break;
                         }
                         var def = m.Length > 1 ? TrouverCompetence(m[1]) : null;

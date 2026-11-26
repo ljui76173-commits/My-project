@@ -15,8 +15,6 @@ namespace Aldermark
         float intensiteGlissade, tCinema, attenteFinCinema, prochaineCinema;
         int compteBourrelets;
         Vector3 camCinema;
-        static readonly List<GameObject> mottes = new List<GameObject>();
-        static Material matTrou;
         static readonly Color Terre = new Color(.33f, .25f, .17f);
 
         /// <summary>La pointe de l'épée plantée, au niveau du sol.</summary>
@@ -73,35 +71,17 @@ namespace Aldermark
             j.Secouer(.04f + .06f * I);
         }
 
-        /// <summary>Une motte de terre (petite pyramide aplatie) qui reste un moment, puis s'enfonce.</summary>
-        static void Motte(Vector3 sol, float taille, float duree)
-        {
-            while (mottes.Count > 160) { if (mottes[0] != null) Destroy(mottes[0]); mottes.RemoveAt(0); }
-            var go = new GameObject("Motte");
-            go.transform.position = new Vector3(sol.x, Monde.Hauteur(sol.x, sol.z) - taille * .15f, sol.z);
-            go.transform.rotation = Quaternion.Euler(Random.Range(-15f, 15f), Random.Range(0f, 360f), Random.Range(-15f, 15f));
-            go.transform.localScale = new Vector3(taille * Random.Range(1.1f, 1.6f), taille * Random.Range(.45f, .8f), taille * Random.Range(1f, 1.4f));
-            go.AddComponent<MeshFilter>().sharedMesh = Sorts.MeshPic();
-            var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = Sorts.Pierre(Terre);
-            go.AddComponent<Enfouir>().duree = duree;
-            mottes.Add(go);
-        }
+        static void Motte(Vector3 sol, float taille, float duree) => Sorts.Motte(sol, taille, duree, Terre);
+        static void Trou(Vector3 sol, float rayon, float duree) => Sorts.Trou(sol, rayon, duree);
 
-        /// <summary>Une tache sombre aux bords irréguliers : la terre retournée au fond du sillon.</summary>
-        static void Trou(Vector3 sol, float rayon, float duree)
+        float prochainArret;
+
+        /// <summary>Un arrêt sur image bref quand un coup ou un sort puissant porte (pas plus d'un tous les tiers de seconde).</summary>
+        public void ArretSurImage(float secondes)
         {
-            if (matTrou == null) matTrou = TexturesMagiques.Sombre(TexturesMagiques.Tache, new Color(.16f, .11f, .07f, .8f));
-            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Destroy(go.GetComponent<Collider>());
-            go.name = "Trou";
-            go.transform.position = sol + Vector3.up * .035f;
-            go.transform.rotation = Quaternion.LookRotation(Vector3.down, Quaternion.Euler(0, Random.Range(0f, 360f), 0) * Vector3.forward);
-            go.transform.localScale = new Vector3(rayon * 2f, rayon * 2f, 1f);
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = matTrou;
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            go.AddComponent<Fondu>().duree = duree;
+            if (Time.unscaledTime < prochainArret || finFige > 0f) return;
+            prochainArret = Time.unscaledTime + .35f;
+            Figer(secondes);
         }
 
         // ---------- le plan de cinéma ----------

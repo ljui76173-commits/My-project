@@ -29,6 +29,15 @@ namespace Aldermark
         }
 
         bool competencesConstruites, competencesOuvertes;
+        UnityEngine.UI.Image voileBords, voileEcran;
+        Color voileVoulu, voileActuel;
+        float assombriVoulu, assombriActuel;
+
+        /// <summary>Une lueur colorée sur les bords de l'écran (l'énergie qui monte), à redemander à chaque image.</summary>
+        public static void Voile(Color c) { if (instance != null && c.a > instance.voileVoulu.a) instance.voileVoulu = c; }
+
+        /// <summary>Le jour qui s'assombrit (0 à 1), à redemander à chaque image.</summary>
+        public static void Assombrir(float force) { if (instance != null) instance.assombriVoulu = Mathf.Max(instance.assombriVoulu, force); }
         RectTransform barreRaccourcis, panneauCompetences, barreIncantation, remplIncantation, remplXPCompetence;
         UnityEngine.UI.Text texteIncantation, compTitre, compSousTitre, compNom, compType, compDescription, compChiffres, compNiveau, compParNiveau, compBas;
         readonly CaseRaccourci[] casesJeu = new CaseRaccourci[Competences.Raccourcis];
@@ -45,6 +54,15 @@ namespace Aldermark
         {
             if (competencesConstruites) return;
             competencesConstruites = true;
+
+            // Les voiles d'incantation, derrière tout le reste de l'interface
+            voileEcran = Panneau("Assombri", toile, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color(0, 0, 0, 0)).GetComponent<UnityEngine.UI.Image>();
+            voileEcran.rectTransform.offsetMin = voileEcran.rectTransform.offsetMax = Vector2.zero;
+            voileBords = Panneau("VoileSort", toile, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color(0, 0, 0, 0)).GetComponent<UnityEngine.UI.Image>();
+            voileBords.rectTransform.offsetMin = voileBords.rectTransform.offsetMax = Vector2.zero;
+            voileBords.sprite = Vignette();
+            voileBords.transform.SetAsFirstSibling();
+            voileEcran.transform.SetAsFirstSibling();
 
             // Les raccourcis, en bas au centre
             barreRaccourcis = Panneau("Raccourcis", toile, new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(.5f, 0), new Vector2(0, 60), new Vector2(4 * 58 - 6, 52), new Color(0, 0, 0, 0));
@@ -135,6 +153,15 @@ namespace Aldermark
             var comp = Competences.Instance;
             var h = CombatHeros.Instance;
 
+            // Les voiles : montent vite, retombent doucement
+            float dtv = Time.unscaledDeltaTime;
+            voileActuel = Color.Lerp(voileActuel, voileVoulu, 1f - Mathf.Exp(-dtv * (voileVoulu.a > voileActuel.a ? 10f : 3f)));
+            assombriActuel = Mathf.Lerp(assombriActuel, assombriVoulu, 1f - Mathf.Exp(-dtv * (assombriVoulu > assombriActuel ? 4f : 2.5f)));
+            voileBords.color = voileActuel;
+            voileEcran.color = new Color(.02f, .015f, .05f, assombriActuel * .55f);
+            voileVoulu = new Color(voileVoulu.r, voileVoulu.g, voileVoulu.b, 0f);
+            assombriVoulu = 0f;
+
             // La barre des raccourcis : seulement quand on connaît au moins un sort
             bool barre = comp != null && comp.ConnaitUnSort && !Dialogues.EnCours && !competencesOuvertes;
             if (barreRaccourcis.gameObject.activeSelf != barre) barreRaccourcis.gameObject.SetActive(barre);
@@ -184,8 +211,9 @@ namespace Aldermark
             c.niveau.text = large ? "" : n.ToString();
             if (large) c.abrege.text += $"  <size=13><color=#ffd27a>niv. {n}</color></size>";
             // Le cadre de la case dit le palier : blanc discret, puis la couleur du sort, puis l'or du sort maîtrisé
-            c.contour.effectColor = pal >= 4 ? new Color(1f, .82f, .45f, 1f) : pal >= 2 ? new Color(e.r, e.g, e.b, pal >= 3 ? .9f : .55f) : new Color(1f, 1f, 1f, .18f);
-            c.contour.effectDistance = pal >= 3 ? new Vector2(2, -2) : new Vector2(1, -1);
+            c.contour.effectColor = pal >= 5 ? Color.Lerp(new Color(1f, .82f, .45f, 1f), Color.white, .5f + .5f * Mathf.Sin(Time.unscaledTime * 4f))
+                : pal >= 4 ? new Color(1f, .82f, .45f, 1f) : pal >= 2 ? new Color(e.r, e.g, e.b, pal >= 3 ? .9f : .55f) : new Color(1f, 1f, 1f, .18f);
+            c.contour.effectDistance = pal >= 5 ? new Vector2(3, -3) : pal >= 3 ? new Vector2(2, -2) : new Vector2(1, -1);
             c.cout.text = Mathf.CeilToInt(cout).ToString();
             c.cout.color = mana ? CouleurManaRPG : new Color(1f, .45f, .45f);
             c.recharge.anchorMax = new Vector2(1, Mathf.Clamp01(attente / recharge));
@@ -271,8 +299,8 @@ namespace Aldermark
                 l.fond.GetComponent<UnityEngine.UI.Image>().color = choisie ? new Color(d.couleur.r, d.couleur.g, d.couleur.b, .22f) : new Color(1, 1, 1, .04f);
                 int touche = comp.Touche(l.id);
                 l.nom.text = $"<color=#{ColorUtility.ToHtmlStringRGB(Color.Lerp(d.couleur, Color.white, .5f))}>{d.nom}</color>" + (touche > 0 ? $"   <size=14><color=#a9a6c4>[{touche}]</color></size>" : "");
-                l.niveau.text = m.niveau >= CatalogueCompetences.NiveauMax ? "Niv. 10 · max" : $"Niv. {m.niveau}";
-                l.xp.anchorMax = new Vector2(m.niveau >= CatalogueCompetences.NiveauMax ? 1f : Mathf.Clamp01((float)(m.xp / Competences.XPRequise(m.niveau))), 1);
+                l.niveau.text = $"Niv. {m.niveau}";
+                l.xp.anchorMax = new Vector2(Mathf.Clamp01((float)(m.xp / Competences.XPRequise(m.niveau))), 1);
             }
 
             // Ranger un sort : 1 à 4, clic sur une case ; Suppr le retire
@@ -327,11 +355,12 @@ namespace Aldermark
                     sb.AppendLine($"Effet  {CatalogueCompetences.NomEffet(d.effet)} : {chance}{quoi}");
                 }
                 // L'aspect : ce que le niveau a déjà changé, et le prochain palier
-                if (d.paliers != null)
                 {
                     int pal = Sorts.Palier(n);
-                    if (pal >= 2) sb.AppendLine($"Aspect  <color=#a9e0ff>{d.paliers[pal - 2]}</color>");
-                    if (pal < 4) sb.AppendLine($"<color=#a9a6c4>Au niveau {Sorts.DebutPalier(pal + 1)} : {d.paliers[pal - 1]}</color>");
+                    string nomPal = Sorts.NomPalier(pal);
+                    if (pal >= 2) sb.AppendLine($"Aspect{(nomPal != "" ? $" ({nomPal})" : "")}  <color=#a9e0ff>{Sorts.DescriptionPalier(d, pal)}</color>");
+                    int prochain = Sorts.DebutPalier(pal + 1);
+                    if (prochain > 0) sb.AppendLine($"<color=#a9a6c4>Au niveau {prochain} : {Sorts.DescriptionPalier(d, pal + 1)}</color>");
                 }
                 int t = comp.Touche(d.id);
                 sb.AppendLine(t > 0 ? $"Raccourci  <b>{t}</b>" : "<color=#ffd27a>Pas encore dans un raccourci : appuie sur 1, 2, 3 ou 4</color>");
@@ -346,17 +375,17 @@ namespace Aldermark
                     case "epee": p = .06 * (n - 1); quoi = "dégâts à l'épée"; break;
                     case "masse": p = .06 * (n - 1); quoi = "dégâts à la masse"; break;
                     case "mains": p = .07 * (n - 1); quoi = "dégâts à mains nues"; break;
-                    case "parade": p = .06 * (n - 1); quoi = "fenêtre de parade parfaite"; break;
-                    case "esquive": p = .04 * (n - 1); quoi = "invulnérabilité de la roulade"; break;
+                    case "parade": p = comp.FacteurParade - 1f; quoi = "fenêtre de parade parfaite"; break;
+                    case "esquive": p = comp.FacteurEsquive - 1f; quoi = "invulnérabilité de la roulade"; break;
                 }
                 sb.AppendLine($"Bonus actuel  <b>+{p * 100:0} %</b> {quoi}");
                 if (d.id == "parade") sb.AppendLine($"Coût de la garde  <b>−{(1f - comp.FacteurCoutGarde) * 100f:0} %</b>");
                 if (d.id == "esquive") sb.AppendLine($"Coût de la roulade  <b>−{(1f - comp.FacteurCoutRoulade) * 100f:0} %</b>");
             }
             compChiffres.text = sb.ToString();
-            bool max = n >= CatalogueCompetences.NiveauMax;
-            compNiveau.text = max ? "<b>Niveau 10</b>  ·  maîtrisée" : $"<b>Niveau {n}</b> / 10   <size=16><color=#a9a6c4>{Nombres.Court(m != null ? m.xp : 0)} / {Nombres.Court(Competences.XPRequise(n))}</color></size>";
-            remplXPCompetence.anchorMax = new Vector2(max ? 1f : Mathf.Clamp01((float)((m != null ? m.xp : 0) / Competences.XPRequise(n))), 1);
+            string titre = n >= CatalogueCompetences.NiveauMaitrise ? (d.EstSort && Sorts.Palier(n) >= 5 ? $"  ·  {Sorts.NomPalier(Sorts.Palier(n))}" : "  ·  maîtrisée") : "";
+            compNiveau.text = $"<b>Niveau {n}</b>{titre}   <size=16><color=#a9a6c4>{Nombres.Court(m != null ? m.xp : 0)} / {Nombres.Court(Competences.XPRequise(n))}</color></size>";
+            remplXPCompetence.anchorMax = new Vector2(Mathf.Clamp01((float)((m != null ? m.xp : 0) / Competences.XPRequise(n))), 1);
             compParNiveau.text = "Chaque niveau : " + d.parNiveau;
         }
     }
