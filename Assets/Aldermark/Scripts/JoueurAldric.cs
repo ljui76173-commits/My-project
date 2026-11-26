@@ -325,8 +325,7 @@ namespace Aldermark
                 if (cc.isGrounded && bouge)
                 {
                     Vector3 pied = transform.position;
-                    bool terre = Monde.SurTerre(pied.x, pied.z);
-                    Sons.Jouer(terre ? "pasTerre" : "pasHerbe", course ? .2f : .13f, Random.Range(.88f, 1.1f));
+                    Sons.Pas(pied, course);
                 }
             }
             MettreAJourRonds(dt, bouge && dansLEau, p);

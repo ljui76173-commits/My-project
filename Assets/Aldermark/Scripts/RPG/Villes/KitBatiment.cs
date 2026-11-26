@@ -53,7 +53,7 @@ namespace Aldermark
     /// remparts, tours, portes, château, quais). Tout est fait de boîtes, de pans et de cônes, à la main.
     /// La façade principale (la porte) est du côté +z du repère, ou +x si la maison a pignon sur rue.
     /// </summary>
-    public static class KitBatiment
+    public static partial class KitBatiment
     {
         public static Color C(string hex)
         {
@@ -179,8 +179,10 @@ namespace Aldermark
         /// les côtés ne se voient pas ; épaisse (appui, linteau saillant) : avant, côtés et dessus.
         /// </summary>
         static void Piece(Maillage m, float u0, float v0, float u1, float v1, float ep, Color col, float z0 = 0f)
-            => m.Boite(Math.Min(u0, u1), Math.Min(v0, v1), z0, Math.Max(u0, u1), Math.Max(v0, v1), z0 + ep, col,
+        {
+            if (m.detail) m.Boite(Math.Min(u0, u1), Math.Min(v0, v1), z0, Math.Max(u0, u1), Math.Max(v0, v1), z0 + ep, col,
                        ep < .09f ? Maillage.Faces.Avant : Maillage.Faces.Avant | Maillage.Faces.Droite | Maillage.Faces.Gauche | Maillage.Faces.Dessus);
+        }
 
         static void Facade(Maillage m, Repere fr, float L, float y0, float H, OptionsMaison o, Tirage t, bool colombage, Color mur, bool porte, bool rez, bool principale)
         {
@@ -257,7 +259,7 @@ namespace Aldermark
             m.r = sauve;
         }
 
-        static void Bande(Maillage m, float u0, float v0, float u1, float v1, float largeur, float z, Color col) => m.Bande(u0, v0, u1, v1, largeur, z, col);
+        static void Bande(Maillage m, float u0, float v0, float u1, float v1, float largeur, float z, Color col) { if (m.detail) m.Bande(u0, v0, u1, v1, largeur, z, col); }
 
         static void Fenetre(Maillage m, float u, float v0, float w, float h, OptionsMaison o, Tirage t, bool soignee)
         {
@@ -282,11 +284,11 @@ namespace Aldermark
                 // Une jardinière fleurie
                 Piece(m, u - w / 2, v0 - .28f, u + w / 2, v0 - .1f, .22f, o.bois * 1.1f);
                 var fl = t.Parmi(Fleurs);
-                m.Boite(u - w / 2 + .05f, v0 - .1f, .04f, u + w / 2 - .05f, v0 + .02f, .2f, C("#4f7a34"), Maillage.Faces.Avant | Maillage.Faces.Dessus);
+                if (m.detail) m.Boite(u - w / 2 + .05f, v0 - .1f, .04f, u + w / 2 - .05f, v0 + .02f, .2f, C("#4f7a34"), Maillage.Faces.Avant | Maillage.Faces.Dessus);
                 for (int k = 0; k < 3; k++)
                 {
                     float uu = u - w / 2 + .18f + k * (w - .36f) / 2f;
-                    m.Boite(uu - .08f, v0 - .02f, .08f, uu + .08f, v0 + .1f, .2f, fl, Maillage.Faces.Avant | Maillage.Faces.Dessus);
+                    if (m.detail) m.Boite(uu - .08f, v0 - .02f, .08f, uu + .08f, v0 + .1f, .2f, fl, Maillage.Faces.Avant | Maillage.Faces.Dessus);
                 }
             }
         }
@@ -401,6 +403,7 @@ namespace Aldermark
         /// <summary>Les rangs de tuiles ou d'ardoises : de fines bandes plus sombres, parallèles au faîtage.</summary>
         static void Rangs(Maillage m, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
         {
+            if (!m.detail) return;
             var u = b - a; var w = d - a;
             var n = new Vector3(u.y * w.z - u.z * w.y, u.z * w.x - u.x * w.z, u.x * w.y - u.y * w.x);
             float l = n.magnitude;

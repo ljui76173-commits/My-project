@@ -22,8 +22,12 @@ namespace Aldermark
         [Tooltip("La matière des bâtiments (Aldermark/Bati : couleurs des sommets).")]
         public Material materiau;
         public float tailleQuartier = 64f;
+        [Tooltip("Taille à l'écran (part de la hauteur) en dessous de laquelle un quartier passe en version simplifiée.")]
+        public float seuilSimple = .22f;
+        [Tooltip("Taille à l'écran en dessous de laquelle un quartier n'est plus dessiné.")]
+        public float seuilCache = .01f;
 
-        class Quartier { public string nom; public Maillage m; }
+        class Quartier { public string nom; public Maillage m, simple; }
 
         readonly ConcurrentQueue<Quartier> prets = new ConcurrentQueue<Quartier>();
         readonly ConcurrentQueue<string> erreurs = new ConcurrentQueue<string>();
@@ -58,22 +62,28 @@ namespace Aldermark
         {
             try
             {
-                var morceaux = new Dictionary<long, Maillage>();
+                var morceaux = new Dictionary<long, (Maillage complet, Maillage simple)>();
                 var volumes = new List<Volume>();
                 foreach (var k in v.commandes)
                 {
                     int i = Mathf.FloorToInt((k.position.x - v.centre.x) / tailleQuartier), j = Mathf.FloorToInt((k.position.z - v.centre.z) / tailleQuartier);
                     long cle = ((long)i << 32) ^ (uint)j;
-                    if (!morceaux.TryGetValue(cle, out var m))
+                    if (!morceaux.TryGetValue(cle, out var paire))
                     {
-                        m = new Maillage { origine = new Vector3(v.centre.x + (i + .5f) * tailleQuartier, v.centre.y, v.centre.z + (j + .5f) * tailleQuartier) };
-                        morceaux[cle] = m;
+                        var o = new Vector3(v.centre.x + (i + .5f) * tailleQuartier, v.centre.y, v.centre.z + (j + .5f) * tailleQuartier);
+                        paire = (new Maillage { origine = o }, new Maillage { origine = o, detail = false, nuance = .03f });
+                        morceaux[cle] = paire;
                     }
-                    volumes.Clear();
-                    try { KitBatiment.Construire(m, k, volumes); }
+                    try
+                    {
+                        volumes.Clear();
+                        KitBatiment.Construire(paire.complet, k, volumes);
+                        volumes.Clear();
+                        KitBatiment.Construire(paire.simple, k, volumes);
+                    }
                     catch (Exception e) { erreurs.Enqueue($"Aldermark : {k.type} de {v.nom} ignoré : {e.Message}"); }
                 }
-                foreach (var m in morceaux.Values) prets.Enqueue(new Quartier { nom = v.nom, m = m });
+                foreach (var p in morceaux.Values) prets.Enqueue(new Quartier { nom = v.nom, m = p.complet, simple = p.simple });
             }
             catch (Exception e) { erreurs.Enqueue($"Aldermark : la ville {v.nom} n'a pas pu être bâtie : {e}"); }
             finally { Interlocked.Decrement(ref enCours); }
@@ -88,24 +98,36 @@ namespace Aldermark
 
         void Creer(Quartier q)
         {
-            var m = q.m;
-            if (m.v.Count == 0) return;
-            var mesh = new Mesh { name = "Bati " + q.nom, indexFormat = m.v.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+            if (q.m.v.Count == 0) return;
+            var go = new GameObject("Bati " + q.nom);
+            go.transform.SetParent(transform, false);
+            go.transform.position = q.m.origine;
+            // Deux niveaux de détail : complet de près, simplifié de loin (sans ombres), rien quand le quartier ne fait que quelques pixels
+            var complet = Rendu(go.transform, "Complet", q.m, ShadowCastingMode.On);
+            var simple = Rendu(go.transform, "Simple", q.simple, ShadowCastingMode.Off);
+            var lod = go.AddComponent<LODGroup>();
+            lod.SetLODs(new[] { new LOD(seuilSimple, new Renderer[] { complet }), new LOD(seuilCache, new Renderer[] { simple }) });
+            lod.RecalculateBounds();
+            quartiers++;
+            triangles += q.m.Triangles;
+            if (Termine) Debug.Log($"Aldermark : villes bâties ({quartiers} quartiers, {triangles / 1000} k triangles).");
+        }
+
+        Renderer Rendu(Transform parent, string nom, Maillage m, ShadowCastingMode ombres)
+        {
+            var mesh = new Mesh { name = nom, indexFormat = m.v.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             mesh.SetVertices(m.v);
             mesh.SetNormals(m.n);
             mesh.SetColors(m.c);
             mesh.SetTriangles(m.t, 0);
             mesh.RecalculateBounds();
-            var go = new GameObject("Bati " + q.nom);
-            go.transform.SetParent(transform, false);
-            go.transform.position = m.origine;
+            var go = new GameObject(nom);
+            go.transform.SetParent(parent, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var r = go.AddComponent<MeshRenderer>();
             r.sharedMaterial = materiau;
-            r.shadowCastingMode = ShadowCastingMode.On;
-            quartiers++;
-            triangles += m.Triangles;
-            if (Termine) Debug.Log($"Aldermark : villes bâties ({quartiers} quartiers, {triangles / 1000} k triangles).");
+            r.shadowCastingMode = ombres;
+            return r;
         }
     }
 }

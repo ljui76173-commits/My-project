@@ -3,10 +3,14 @@ using UnityEngine;
 
 namespace Aldermark
 {
+    /// <summary>Les cinq volumes réglables séparément (fenêtre Réglages, Échap).</summary>
+    public enum CanalSon { Musique, Ambiances, Effets, Voix, Interface }
+
     /// <summary>
-    /// Sons d'Aldermark, fabriqués en code (aucun fichier audio nécessaire) :
-    /// vent, rivière, oiseaux, pas, Sceau, analyse, découverte, voix des dialogues.
-    /// Joue aussi la musique déposée dans Assets/Aldermark/Audio (assignée par le menu Gameplay).
+    /// Sons d'Aldermark. Chaque son a un identifiant ; s'il existe des fichiers pour lui dans le catalogue audio
+    /// (Assets/Aldermark/Audio/Sons), l'un d'eux est tiré au sort à chaque fois, sinon le son fabriqué en code sert de secours.
+    /// Hauteur et volume varient un peu à chaque fois : un même son ne se répète jamais à l'identique.
+    /// Ambiances selon le lieu et l'heure, pas selon le sol, musique adaptative (Sons.Ambiances, Sons.Musique).
     /// </summary>
     public partial class Sons : MonoBehaviour
     {
@@ -18,6 +22,49 @@ namespace Aldermark
         static Sons instance;
         const int Freq = 44100;
         readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
+        readonly Dictionary<string, List<AudioClip>> variantes = new Dictionary<string, List<AudioClip>>();
+        readonly AudioSource[] sources3D = new AudioSource[16];
+        int prochaine3D;
+        AudioSource sourceVent, sourceRiviere;
+
+        // ---------- volumes ----------
+
+        static readonly float[] volumes = { 1f, 1f, 1f, 1f, 1f };
+        static bool volumesLus;
+
+        public static float Volume(CanalSon c)
+        {
+            if (!volumesLus)
+            {
+                volumesLus = true;
+                for (int k = 0; k < volumes.Length; k++) volumes[k] = PlayerPrefs.GetFloat("aldermark.volume." + (CanalSon)k, 1f);
+            }
+            return volumes[(int)c];
+        }
+
+        public static void FixerVolume(CanalSon c, float v)
+        {
+            Volume(c);
+            volumes[(int)c] = Mathf.Clamp01(v);
+            PlayerPrefs.SetFloat("aldermark.volume." + c, volumes[(int)c]);
+        }
+
+        static CanalSon CanalDe(string id)
+        {
+            switch (id)
+            {
+                case "clic": case "ouvrir": case "fermer": case "erreur": case "decouverte": case "quete": return CanalSon.Interface;
+                case "voix": return CanalSon.Voix;
+                case "oiseau": case "chouette": case "cloche": return CanalSon.Ambiances;
+                default: return CanalSon.Effets;
+            }
+        }
+
+        AudioClip Choisir(string id)
+        {
+            if (variantes.TryGetValue(id, out var l) && l.Count > 0) return l[alea.Next(l.Count)];
+            return clips.TryGetValue(id, out var c) ? c : null;
+        }
         AudioSource sourceUI, sourceAnalyse, sourceMusique, sourceVoix;
         readonly AudioSource[] reserve = new AudioSource[8];   // plusieurs sons à la fois, chacun à sa hauteur
         int prochaineSource;
@@ -45,6 +92,20 @@ namespace Aldermark
             clips["voix"] = Bip();
             clips["clic"] = Pas(.012f, 4000f);
             ClipsCombat();
+            ClipsAmbiances();
+            // Les fichiers déposés dans Assets/Aldermark/Audio/Sons remplacent les sons fabriqués
+            var cat = CatalogueAudio.Instance;
+            if (cat != null)
+                foreach (var v in cat.sons)
+                    if (v.clips.Count > 0) variantes[v.id] = v.clips;
+            for (int k = 0; k < sources3D.Length; k++)
+            {
+                var go = new GameObject("Son3D");
+                go.transform.SetParent(transform, false);
+                var s3 = go.AddComponent<AudioSource>();
+                s3.playOnAwake = false; s3.spatialBlend = 1f; s3.minDistance = 4f; s3.maxDistance = 60f; s3.rolloffMode = AudioRolloffMode.Linear;
+                sources3D[k] = s3;
+            }
 
             sourceUI = Source(false, false, 1f);
             for (int k = 0; k < reserve.Length; k++) reserve[k] = Source(false, false, 1f);
@@ -55,6 +116,7 @@ namespace Aldermark
 
             var vent = Source(true, false, .22f * volumeAmbiance);
             vent.clip = clips["vent"]; vent.Play();
+            sourceVent = vent;
 
             var goR = new GameObject("SonRiviere");
             goR.transform.SetParent(transform, false);
@@ -63,6 +125,9 @@ namespace Aldermark
             riv.clip = clips["riviere"]; riv.loop = true; riv.spatialBlend = 1f;
             riv.minDistance = 5f; riv.maxDistance = 55f; riv.rolloffMode = AudioRolloffMode.Linear;
             riv.volume = .32f * volumeAmbiance; riv.Play();
+            sourceRiviere = riv;
+            DemarrerAmbiances();
+            DemarrerMusique();
         }
 
         AudioSource Source(bool boucle, bool spatial, float volume)
@@ -75,6 +140,13 @@ namespace Aldermark
         void Update()
         {
             if (auditeur == null && Camera.main != null) auditeur = Camera.main.transform;
+
+            if (MondeRPG.Actif)
+            {
+                MettreAJourAmbiances(Time.unscaledDeltaTime);
+                MettreAJourMusique(Time.unscaledDeltaTime);
+                return;
+            }
 
             // Oiseaux autour d'Aldric
             minuterieOiseau -= Time.deltaTime;
@@ -90,7 +162,7 @@ namespace Aldermark
             {
                 indexMusique = (indexMusique + 1) % musiques.Length;
                 sourceMusique.clip = musiques[indexMusique];
-                sourceMusique.volume = volumeMusique;
+                sourceMusique.volume = volumeMusique * Volume(CanalSon.Musique);
                 sourceMusique.PlayDelayed(indexMusique == 0 && Time.time < 5f ? 2f : 20f);
             }
         }
@@ -101,22 +173,28 @@ namespace Aldermark
 
         public static void Jouer(string id, float volume = 1f, float hauteur = 1f)
         {
-            if (instance == null || !instance.clips.TryGetValue(id, out var c)) return;
+            if (instance == null) return;
+            var c = instance.Choisir(id);
+            if (c == null) return;
             var s = instance.reserve[instance.prochaineSource++ % instance.reserve.Length];
-            s.pitch = hauteur;
-            s.PlayOneShot(c, volume);
+            s.pitch = hauteur * instance.Rnd(.96f, 1.04f);
+            s.PlayOneShot(c, volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id)));
         }
 
-        public static void JouerA(string id, Vector3 position, float volume = 1f, float hauteur = 1f)
+        public static void JouerA(string id, Vector3 position, float volume = 1f, float hauteur = 1f) => JouerA(id, position, volume, hauteur, 60f);
+
+        /// <summary>Un son placé dans le monde ; il s'entend jusqu'à <paramref name="portee"/> mètres.</summary>
+        public static void JouerA(string id, Vector3 position, float volume, float hauteur, float portee)
         {
-            if (instance == null || !instance.clips.TryGetValue(id, out var c)) return;
-            var go = new GameObject("Son_" + id);
-            go.transform.position = position;
-            var s = go.AddComponent<AudioSource>();
-            s.clip = c; s.volume = volume; s.pitch = hauteur; s.spatialBlend = 1f;
-            s.minDistance = 4f; s.maxDistance = 60f; s.rolloffMode = AudioRolloffMode.Linear;
-            s.Play();
-            Destroy(go, c.length / Mathf.Max(.1f, hauteur) + .1f);
+            if (instance == null) return;
+            var c = instance.Choisir(id);
+            if (c == null) return;
+            var s = instance.sources3D[instance.prochaine3D++ % instance.sources3D.Length];
+            s.transform.position = position;
+            s.maxDistance = portee;
+            s.minDistance = Mathf.Min(4f, portee * .25f);
+            s.pitch = hauteur * instance.Rnd(.96f, 1.04f);
+            s.PlayOneShot(c, volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id)));
         }
 
         /// <summary>Bourdon d'analyse : progression de 0 à 1, ou négatif pour couper.</summary>
@@ -137,7 +215,7 @@ namespace Aldermark
         {
             if (instance == null) return;
             instance.sourceVoix.pitch = hauteur * (.92f + .16f * (float)instance.alea.NextDouble());
-            instance.sourceVoix.PlayOneShot(instance.clips["voix"], .55f);
+            instance.sourceVoix.PlayOneShot(instance.clips["voix"], .55f * Volume(CanalSon.Voix));
         }
 
         // ---------- synthèse ----------
