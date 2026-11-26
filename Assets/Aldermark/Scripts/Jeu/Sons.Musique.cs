@@ -16,7 +16,7 @@ namespace Aldermark
         bool aCourante;                  // vrai : musiqueA est la piste en cours
         string situation = "", regionCourante = "";
         AudioClip pisteCourante, dernierePiste;
-        float volumeCourante, minuterieSituation, silence, danger, baisseFanfare;
+        float volumeCourante, minuterieSituation, silence, danger, baisseFanfare, debutPiste;
         bool coucheFichier;
 
         static readonly string[] Regions = { "foret", "montagne", "cote", "plaine" };
@@ -33,6 +33,16 @@ namespace Aldermark
             couche.clip = coucheFichier ? combat[alea.Next(combat.Count)].clip : clips["tambours"];
             couche.Play();
             silence = 2f;
+            if (cat == null || cat.musiques.Count == 0)
+                Debug.Log("Aldermark : aucune musique trouvée. Dépose tes morceaux dans Assets/Aldermark/Audio/Musique/Exploration (et Nuit, Village, Ville, Capitale, Combat, Fanfares).");
+            else
+            {
+                var parSituation = new Dictionary<string, int>();
+                foreach (var p in cat.musiques) parSituation[p.situation] = parSituation.TryGetValue(p.situation, out var n) ? n + 1 : 1;
+                var mots = new List<string>();
+                foreach (var kv in parSituation) mots.Add($"{kv.Key} {kv.Value}");
+                Debug.Log("Aldermark : musiques trouvées : " + string.Join(", ", mots) + ".");
+            }
         }
 
         void MettreAJourMusique(float dt)
@@ -78,7 +88,8 @@ namespace Aldermark
             if (autre.volume <= 0f && autre.isPlaying) autre.Stop();
 
             // Fin du morceau : un court silence, puis le suivant de la même situation
-            if (pisteCourante != null && !cour.isPlaying)
+            // (un morceau lu depuis le disque peut mettre un instant à démarrer : on lui laisse 2 s)
+            if (pisteCourante != null && !cour.isPlaying && Time.unscaledTime - debutPiste > 2f)
             {
                 pisteCourante = null;
                 silence = Rnd(5f, 14f);
@@ -143,6 +154,7 @@ namespace Aldermark
             s.clip = choix.clip;
             s.volume = fondu > 0f ? 0f : .01f;
             s.Play();
+            debutPiste = Time.unscaledTime;
             pisteCourante = dernierePiste = choix.clip;
             volumeCourante = 1f;
         }
