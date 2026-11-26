@@ -43,6 +43,11 @@ namespace Aldermark
         float eclair, dureeEtourdi;
         protected Vector3 recul;
         protected ICible dernierAuteur;
+        float protegeJusqua;
+
+        /// <summary>Intouchable un instant (une gelée qui vient de naître ne meurt pas dans le coup qui a tué sa mère).</summary>
+        public void Proteger(float secondes) => protegeJusqua = Time.time + secondes;
+        public bool Protege => Time.time < protegeJusqua;
 
         public double Facteur => Math.Pow(StatsHeros.CroissanceMonde, niveau - 1);
         public double VieMax => vieBase * Facteur;
@@ -115,6 +120,7 @@ namespace Aldermark
         public virtual void Recevoir(Coup c)
         {
             if (!Vivant) return;
+            if (Protege) return;
             DernierCoup = Time.time;
             if (c.auteur != null) dernierAuteur = c.auteur;
             double reel = Degats.Calculer(c.degats, Defense);   // le coup arrive brut, la défense s'applique ici

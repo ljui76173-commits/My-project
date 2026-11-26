@@ -83,14 +83,19 @@ namespace Aldermark
             Effets.Eclat(Centre, new Color(.4f, .78f, .38f), 18, 3.5f, .2f, 1.6f, .6f);
             Sons.JouerA("gelee", Centre, 1f, .8f / taille);
             if (taille <= .9f) return;
-            // La grosse gelée se divise
-            Vector3 cote = transform.right;
+            // La grosse gelée éclate en deux petites, projetées de part et d'autre (perpendiculaire au coup)
+            Vector3 coup = Vector3.ProjectOnPlane(c.direction, Vector3.up);
+            Vector3 cote = coup.sqrMagnitude > .01f ? Vector3.Cross(Vector3.up, coup.normalized) : transform.right;
+            Effets.Eclat(Centre + Vector3.up * .2f, new Color(.45f, .85f, .42f), 30, 5f, .22f, 1.4f, .7f);
+            Effets.OndeDeChoc(transform.position, 1.6f);
+            HUD.ChiffreTexte(Centre + Vector3.up * .8f, "Elle se divise !", new Color(.6f, 1f, .55f));
             for (int k = -1; k <= 1; k += 2)
             {
                 Prochaine = .62f;
-                var g = Repaire.Creer(Repaire.Espece.Gelee, transform.position + cote * k * .55f + Vector3.up * .1f, Mathf.Max(1, niveau - 1));
+                var g = Repaire.Creer(Repaire.Espece.Gelee, transform.position + cote * k * .7f + Vector3.up * .15f, Mathf.Max(1, niveau - 1));
                 g.origine = origine;
-                g.Pousser(cote * k * 3.5f, 4f);
+                g.Proteger(.6f);
+                g.Pousser(cote * k * 5f + coup.normalized * 1.5f, 5.5f);
                 g.Provoquer(c.auteur);
             }
         }
