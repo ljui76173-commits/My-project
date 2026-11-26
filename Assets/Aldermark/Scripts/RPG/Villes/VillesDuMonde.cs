@@ -70,7 +70,8 @@ namespace Aldermark
                         morceaux[cle] = m;
                     }
                     volumes.Clear();
-                    KitBatiment.Construire(m, k, volumes);
+                    try { KitBatiment.Construire(m, k, volumes); }
+                    catch (Exception e) { erreurs.Enqueue($"Aldermark : {k.type} de {v.nom} ignoré : {e.Message}"); }
                 }
                 foreach (var m in morceaux.Values) prets.Enqueue(new Quartier { nom = v.nom, m = m });
             }

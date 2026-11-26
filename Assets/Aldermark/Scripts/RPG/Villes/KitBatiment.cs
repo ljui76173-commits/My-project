@@ -121,7 +121,7 @@ namespace Aldermark
                     break;
                 case Gabarit.Barque: Barque(m, b, k.graine); break;
                 case Gabarit.Tour: Tour(m, b, k.a, k.b, k.graine == 1, PierreRempart, Ardoises[0], vols); break;
-                case Gabarit.PorteDeVille: PorteDeVille(m, b, k.a, k.b, PierreRempart, Ardoises[k.graine % Ardoises.Length], vols); break;
+                case Gabarit.PorteDeVille: PorteDeVille(m, b, k.a, k.b, PierreRempart, Ardoises[(k.graine & 0x7fffffff) % Ardoises.Length], vols); break;
                 case Gabarit.Rempart: Rempart(m, k.position, k.fin, k.a, k.b, PierreRempart, vols); break;
             }
             m.sol = -10000f;
