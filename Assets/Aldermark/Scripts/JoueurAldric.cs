@@ -545,7 +545,8 @@ namespace Aldermark
             {
                 var vers = transform.position - proche.transform.position;
                 vers.y = 0;
-                if (vers.sqrMagnitude > .01f) proche.transform.rotation = Quaternion.LookRotation(vers);
+                // Seules les personnes se tournent vers toi (pas le lit, pas un objet)
+                if (vers.sqrMagnitude > .01f && proche.GetComponent<Habitant>() != null) proche.transform.rotation = Quaternion.LookRotation(vers);
                 Dialogues.Commencer(proche);
             }
         }

@@ -263,8 +263,10 @@ namespace Aldermark.Editeur
             groupe.SetParent(racine, false);
             var gelees = Repaire(groupe, "RepaireDesGelees", Monde.RepaireGelees, Aldermark.Repaire.Espece.Gelee, 4, 1, 2, 7f, 4f);
             MarquerLieu(gelees, "Mare aux gelées", TypeLieu.Gelees, false);
+            MareAuxGelees(gelees);
             var loups = Repaire(groupe, "TaniereDesLoups", Monde.RepaireLoups, Aldermark.Repaire.Espece.Loup, 4, 3, 4, 6f, 8f);
             MarquerLieu(loups, "Tanière des loups", TypeLieu.Loups, false);
+            TaniereDesLoups(loups);
             var camp = Repaire(groupe, "CampGobelin", Monde.CampGobelins, Aldermark.Repaire.Espece.Gobelin, 4, 4, 6, 3.5f, 10f);
             CampGobelin(camp);
             MarquerLieu(camp, "Camp gobelin", TypeLieu.Gobelins, false);
@@ -282,6 +284,35 @@ namespace Aldermark.Editeur
             r.espece = e; r.nombre = nombre; r.niveauMin = nivMin; r.niveauMax = nivMax; r.rayon = rayon; r.heuresRepeuplement = heures;
             go.AddComponent<Entite>().id = "repaire-" + e.ToString().ToLower();
             return go.transform;
+        }
+
+        /// <summary>La mare aux gelées : une eau verdâtre, des joncs, des pierres moussues, des flaques de gelée.</summary>
+        static void MareAuxGelees(Transform mare)
+        {
+            Local(mare, PrimitiveType.Cylinder, new Vector3(0, .04f, 0), new Vector3(7f, .04f, 5.5f), "#5c8a6a", false);
+            for (int k = 0; k < 14; k++)
+            {
+                float a = k * .45f, r = 3.4f + (k % 3) * .35f;
+                Local(mare, PrimitiveType.Cylinder, new Vector3(Mathf.Cos(a) * r, .55f, Mathf.Sin(a) * r * .8f), new Vector3(.05f, .55f + (k % 4) * .1f, .05f), "#6f8a3a", false, new Vector3((k % 5) * 4f - 8f, 0, (k % 3) * 5f - 5f));
+            }
+            for (int k = 0; k < 6; k++)
+            {
+                float a = k * 1.05f + .3f;
+                Local(mare, PrimitiveType.Sphere, new Vector3(Mathf.Cos(a) * 4.6f, .2f, Mathf.Sin(a) * 3.8f), new Vector3(1f + (k % 2) * .5f, .55f, .9f), k % 2 == 0 ? "#6f7a5e" : "#7a7f6a", true, new Vector3(0, k * 50f, 0));
+                Local(mare, PrimitiveType.Sphere, new Vector3(Mathf.Cos(a + .5f) * 2.4f, .03f, Mathf.Sin(a + .5f) * 2f), new Vector3(.9f, .05f, .7f), "#7fcf72", false);
+            }
+        }
+
+        /// <summary>La tanière des loups : un terrier sous des rochers, des os rongés, un tronc abattu.</summary>
+        static void TaniereDesLoups(Transform taniere)
+        {
+            Local(taniere, PrimitiveType.Sphere, new Vector3(0, .9f, -3.2f), new Vector3(5.5f, 3.2f, 4f), "#6e6a66", true, new Vector3(0, 20f, 0));
+            Local(taniere, PrimitiveType.Sphere, new Vector3(2.6f, .7f, -2.4f), new Vector3(2.8f, 2.2f, 2.6f), "#7a7672", true, new Vector3(0, 60f, 0));
+            Local(taniere, PrimitiveType.Sphere, new Vector3(0, .5f, -1.35f), new Vector3(1.8f, 1.3f, .8f), "#1a1614", false);   // l'entrée du terrier
+            Local(taniere, PrimitiveType.Cylinder, new Vector3(-3.2f, .35f, .8f), new Vector3(.6f, 2.4f, .6f), "#5b4030", true, new Vector3(90f, 35f, 0));
+            for (int k = 0; k < 8; k++)
+                Local(taniere, PrimitiveType.Cylinder, new Vector3(-1.5f + (k % 4) * .9f, .06f, .6f + (k / 4) * .9f), new Vector3(.07f, .3f, .07f), "#e8dfc8", false, new Vector3(90, k * 47f, 0));
+            Local(taniere, PrimitiveType.Sphere, new Vector3(1.2f, .12f, 1.4f), new Vector3(.3f, .25f, .35f), "#e8dfc8", false);   // un crâne
         }
 
         /// <summary>Un camp de gobelins : trois tentes de peaux, un feu, des os.</summary>
