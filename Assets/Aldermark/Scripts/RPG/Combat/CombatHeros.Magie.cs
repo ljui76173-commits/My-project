@@ -16,7 +16,7 @@ namespace Aldermark
         Competences comp;
         DefCompetence sortEnCours;
         CercleMagique cercleMain, cercleSol, cercleCiel;
-        float prochaineRune, prochaineConvergence;
+        float prochaineRune, prochaineConvergence, prochainArretTemps;
         Transform orbe;
         Light lumiereOrbe;
         float prochainAvertissement, prochaineEtincelleSort, prochaineFlammeHeros;
@@ -95,13 +95,14 @@ namespace Aldermark
             DetruireOrbe();
             comp.Declencher(d);
             int niveau = comp.Niveau(d.id);
+            int visuel = comp.NiveauVisuel(d.id);
             Vector3 origine = VersMonde(MainSort);
             ICible cible = Cibles.Existe(verrou) && verrou.Vivant ? verrou : null;
             Vector3 vise = cible != null ? cible.Centre : PointVise();
             string id = d.id;
             Sorts.Lancer(new Incantation
             {
-                def = d, auteur = this, camp = Camp.Heros, niveau = niveau,
+                def = d, auteur = this, camp = Camp.Heros, niveau = niveau, niveauVisuel = visuel,
                 attaque = d.forme == FormeSort.Soin ? comp.Soin(d) : comp.AttaqueMagique(d),
                 origine = origine, direction = vise - origine, cible = cible,
                 rayon = comp.Rayon(d),
@@ -114,7 +115,7 @@ namespace Aldermark
             });
             comp.Exercer(d.id, d.forme == FormeSort.Soin ? 2 : 1);
             stats.Exercer(Stat.INT, .5);
-            Decharge(d, niveau, origine, vise);
+            Decharge(d, niveau, visuel, origine, vise);
         }
 
         /// <summary>
@@ -122,11 +123,12 @@ namespace Aldermark
         /// onde au sol, et le recul : plus le sort est puissant, plus il te repousse (un pas en arrière,
         /// puis une vraie glissade, les pieds labourant le sol). Un sort maîtrisé ralentit le temps un instant.
         /// </summary>
-        void Decharge(DefCompetence d, int niveau, Vector3 origine, Vector3 vise)
+        void Decharge(DefCompetence d, int niveau, int visuel, Vector3 origine, Vector3 vise)
         {
-            float a = Sorts.Ampleur(niveau);
-            int pal = Sorts.Palier(niveau);
-            float puissance = Mathf.Clamp(d.cout / 10f * a, .3f, 2.5f);
+            // L'aspect suit le niveau visuel (sort + héros) ; le recul, lui, suit la vraie force du sort
+            float a = Sorts.Ampleur(visuel);
+            int pal = Sorts.Palier(visuel);
+            float puissance = Mathf.Clamp(d.cout / 10f * Sorts.Ampleur(niveau), .3f, 2.5f);
             Color c = d.couleur;
             Vector3 vers = (vise - origine).sqrMagnitude > .01f ? (vise - origine).normalized : transform.forward;
             Vector3 avant = Vector3.ProjectOnPlane(vers, Vector3.up);
@@ -161,14 +163,15 @@ namespace Aldermark
                 if (puissance >= 1.25f && j.AuSol) CommencerGlissade(-avant, puissance * 1.3f, false, true);
                 else if (puissance >= .5f) j.Elan(-avant * puissance * 4f, .2f, puissance * 20f);
             }
-            if (pal >= 7)
+            if (pal >= 7 && Time.unscaledTime >= prochainArretTemps && d.incantation >= .3f)
             {
-                // Le temps s'arrête, puis repart au ralenti
+                // Le temps s'arrête, puis repart au ralenti (pas à chaque sort : ce serait pénible)
+                prochainArretTemps = Time.unscaledTime + 10f;
                 Figer(.14f);
                 Ralentir(.6f);
-                HUD.EclairCombat(new Color(1f, 1f, 1f, pal >= 9 ? .6f : .3f), .4f, false);
+                HUD.EclairCombat(new Color(1f, 1f, 1f, pal >= 9 ? .45f : .28f), .4f, false);
             }
-            else if (pal >= 4) Ralentir(.22f + .05f * (pal - 4));
+            else if (pal >= 4) Ralentir(Mathf.Min(.4f, .22f + .04f * (pal - 4)));
         }
 
         // ---------- les cercles d'incantation ----------
@@ -176,7 +179,7 @@ namespace Aldermark
         void CreerCercles(DefCompetence d)
         {
             AnnulerCercles();
-            int niveau = comp != null ? comp.Niveau(d.id) : 1;
+            int niveau = comp != null ? comp.NiveauVisuel(d.id) : 1;
             float a = Sorts.Ampleur(niveau);
             int pal = Sorts.Palier(niveau);
             bool devant = d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone;
@@ -280,7 +283,7 @@ namespace Aldermark
             if (orbe == null) return;
             if (etat != Etat.Incantation || sortEnCours == null) { DetruireOrbe(); return; }
             float u = ProgresIncantation;
-            int niveau = comp != null ? comp.Niveau(sortEnCours.id) : 1;
+            int niveau = comp != null ? comp.NiveauVisuel(sortEnCours.id) : 1;
             // Les cercles suivent la main et les pieds, et s'avivent à mesure que l'énergie monte
             if (cercleMain != null)
             {

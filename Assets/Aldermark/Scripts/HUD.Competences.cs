@@ -94,9 +94,9 @@ namespace Aldermark
             compNom = Haut(Texte("Nom", panneauCompetences, "", 30, Color.white, TextAnchor.UpperLeft), 580, 118, 620, 40);
             compNom.fontStyle = FontStyle.Bold;
             compType = Haut(Texte("Type", panneauCompetences, "", 18, Pale, TextAnchor.UpperLeft), 580, 160, 620, 26);
-            compDescription = Haut(Texte("Description", panneauCompetences, "", 19, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 196, 620, 80);
+            compDescription = Haut(Texte("Description", panneauCompetences, "", 18, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 192, 620, 56);
             compDescription.horizontalOverflow = HorizontalWrapMode.Wrap;
-            compChiffres = Haut(Texte("Chiffres", panneauCompetences, "", 17, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 276, 620, 168);
+            compChiffres = Haut(Texte("Chiffres", panneauCompetences, "", 16, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 252, 620, 190);
             compChiffres.lineSpacing = 1.05f;
             compChiffres.horizontalOverflow = HorizontalWrapMode.Wrap;
             compNiveau = Haut(Texte("Niveau", panneauCompetences, "", 20, Color.white, TextAnchor.UpperLeft), 580, 446, 620, 28);
@@ -206,7 +206,7 @@ namespace Aldermark
             c.teinte.color = new Color(e.r, e.g, e.b, mana ? .32f : .1f);
             string couleurNom = ColorUtility.ToHtmlStringRGB(mana ? Color.Lerp(e, Color.white, .55f) : new Color(.55f, .55f, .6f));
             int n = Mathf.Max(1, comp.Niveau(d.id));
-            int pal = Sorts.Palier(n);
+            int pal = Sorts.Palier(comp.NiveauVisuel(d.id));
             c.abrege.text = large ? $"<color=#{couleurNom}>{d.nom}</color>" : $"<color=#{couleurNom}>{d.abrege}</color>";
             c.niveau.text = large ? "" : n.ToString();
             if (large) c.abrege.text += $"  <size=13><color=#ffd27a>niv. {n}</color></size>";
@@ -356,11 +356,14 @@ namespace Aldermark
                 }
                 // L'aspect : ce que le niveau a déjà changé, et le prochain palier
                 {
-                    int pal = Sorts.Palier(n);
+                    // L'aspect : le niveau du sort, plus 25 par niveau de héros
+                    int bonus = comp.BonusAspect;
+                    int pal = Sorts.Palier(n + bonus);
                     string nomPal = Sorts.NomPalier(pal);
                     if (pal >= 2) sb.AppendLine($"Aspect{(nomPal != "" ? $" ({nomPal})" : "")}  <color=#a9e0ff>{Sorts.DescriptionPalier(d, pal)}</color>");
                     int prochain = Sorts.DebutPalier(pal + 1);
-                    if (prochain > 0) sb.AppendLine($"<color=#a9a6c4>Au niveau {prochain} : {Sorts.DescriptionPalier(d, pal + 1)}</color>");
+                    if (prochain > 0) sb.AppendLine($"<color=#a9a6c4>Au niveau {Mathf.Max(n + 1, prochain - bonus)} : {Sorts.DescriptionPalier(d, pal + 1)}</color>");
+                    if (bonus > 0) sb.AppendLine($"<size=14><color=#a9a6c4>Ton niveau de héros ajoute {bonus} niveaux à l'aspect de tes sorts</color></size>");
                 }
                 int t = comp.Touche(d.id);
                 sb.AppendLine(t > 0 ? $"Raccourci  <b>{t}</b>" : "<color=#ffd27a>Pas encore dans un raccourci : appuie sur 1, 2, 3 ou 4</color>");
@@ -383,7 +386,8 @@ namespace Aldermark
                 if (d.id == "esquive") sb.AppendLine($"Coût de la roulade  <b>−{(1f - comp.FacteurCoutRoulade) * 100f:0} %</b>");
             }
             compChiffres.text = sb.ToString();
-            string titre = n >= CatalogueCompetences.NiveauMaitrise ? (d.EstSort && Sorts.Palier(n) >= 5 ? $"  ·  {Sorts.NomPalier(Sorts.Palier(n))}" : "  ·  maîtrisée") : "";
+            int palAspect = d.EstSort ? Sorts.Palier(comp.NiveauVisuel(d.id)) : 1;
+            string titre = palAspect >= 5 ? $"  ·  {Sorts.NomPalier(palAspect)}" : n >= CatalogueCompetences.NiveauMaitrise ? "  ·  maîtrisée" : "";
             compNiveau.text = $"<b>Niveau {n}</b>{titre}   <size=16><color=#a9a6c4>{Nombres.Court(m != null ? m.xp : 0)} / {Nombres.Court(Competences.XPRequise(n))}</color></size>";
             remplXPCompetence.anchorMax = new Vector2(Mathf.Clamp01((float)((m != null ? m.xp : 0) / Competences.XPRequise(n))), 1);
             compParNiveau.text = "Chaque niveau : " + d.parNiveau;

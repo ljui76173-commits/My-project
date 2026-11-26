@@ -13,6 +13,10 @@ namespace Aldermark
         /// <summary>Attaque magique brute (ou quantité soignée pour un soin).</summary>
         public double attaque;
         public int niveau;
+        /// <summary>Le niveau qui règle l'ASPECT du sort (taille, paliers) : celui du sort, plus ce qu'apporte le niveau du héros.
+        /// 0 : le niveau du sort (les monstres).</summary>
+        public int niveauVisuel;
+        public int Visuel => niveauVisuel > 0 ? niveauVisuel : niveau;
         public Vector3 origine, direction;
         /// <summary>La cible verrouillée, s'il y en a une : le projectile s'incurve vers elle, la foudre la frappe.</summary>
         public ICible cible;
@@ -48,10 +52,16 @@ namespace Aldermark
             return 1.9f + .9f * Mathf.Log(1f + (niveau - 10) / 5f);
         }
 
-        /// <summary>Les niveaux où un sort change d'aspect : 4, 7, 10 (maîtrisé), puis 15, 25, 40, 60, 100.</summary>
-        static readonly int[] SeuilsPaliers = { 1, 4, 7, 10, 15, 25, 40, 60, 100 };
+        /// <summary>
+        /// Une progression qui suit le niveau jusqu'à 10 puis plafonne à 9 : pour le son et les petits réglages,
+        /// qui ne doivent pas déraper quand l'aspect d'un sort monte à 100 ou 200.
+        /// </summary>
+        public static float Prog(int niveau) => Mathf.Min(9f, (Ampleur(niveau) - 1f) * 10f);
 
-        /// <summary>1 à 9 : le palier atteint (4 : maîtrisé ; 5 : transcendé ; 6 : céleste ; 7 : cataclysme ; 8 : légendaire ; 9 : divin).</summary>
+        /// <summary>Les niveaux (d'aspect) où un sort change : 4, 7, 10 (maîtrisé), puis 15, 25, 40, 60, 100, 160, 250.</summary>
+        static readonly int[] SeuilsPaliers = { 1, 4, 7, 10, 15, 25, 40, 60, 100, 160, 250 };
+
+        /// <summary>1 à 11 : le palier atteint (4 : maîtrisé ; 5 : transcendé ; 6 : céleste ; 7 : cataclysme ; 8 : légendaire ; 9 : divin ; 10 : mythique ; 11 : absolu).</summary>
         public static int Palier(int niveau)
         {
             int p = 1;
@@ -72,6 +82,8 @@ namespace Aldermark
                 case 7: return "cataclysme";
                 case 8: return "légendaire";
                 case 9: return "divin";
+                case 10: return "mythique";
+                case 11: return "absolu";
                 default: return "";
             }
         }
@@ -88,6 +100,8 @@ namespace Aldermark
                 case 7: return "le temps s'arrête au lancer ; triple onde de choc, cratère géant";
                 case 8: return "tout est plus grand : cercles, explosions, cratères";
                 case 9: return "la puissance d'un dieu : l'écran blanchit au lancer";
+                case 10: return "les cercles emplissent le ciel, les cratères deviennent des gouffres";
+                case 11: return "chaque sort fait trembler le monde";
                 default: return "";
             }
         }
@@ -135,7 +149,7 @@ namespace Aldermark
                 auteur = s.auteur, nom = d.nom, element = d.element, effet = effet ? d.effet : Effet.Aucun, dureeEffet = d.dureeEffet,
             });
             s.touche?.Invoke(c, vivant && Cibles.Existe(c) && !c.Vivant);
-            Impact(d.element, centre, direction, s.niveau);
+            Impact(d.element, centre, direction, s.Visuel);
         }
 
         /// <summary>L'éclat d'un sort qui frappe (une cible, un mur, le sol), d'autant plus grand que le sort est haut.</summary>
@@ -143,6 +157,7 @@ namespace Aldermark
         {
             float a = Ampleur(niveau);
             int pal = Palier(niveau);
+            float kn = 1f + Prog(niveau);   // 1 à 10, pour le son et les lueurs
             Color c = CatalogueCompetences.CouleurElement(e);
             Vector3 sol = new Vector3(p.x, Monde.Hauteur(p.x, p.z), p.z);
             bool presDuSol = p.y - sol.y < 3f;
@@ -152,8 +167,8 @@ namespace Aldermark
                     Effets.Eclat(p, new Color(1f, .55f, .15f), Mathf.RoundToInt(22 * a), 4.5f * Mathf.Sqrt(a), .2f * a, -.4f, .6f);
                     Effets.Eclat(p, new Color(1f, .9f, .5f), Mathf.RoundToInt(10 * a), 7f * a, .07f, .8f, .4f);
                     Effets.Eclat(p, new Color(.25f, .2f, .18f, .5f), Mathf.RoundToInt(6 * a), 1.2f, .45f * a, -.25f, 1.1f);   // fumée
-                    Sons.JouerA("sortFeu", p, .7f + .03f * niveau, .78f - .02f * niveau);
-                    Lueur(p, c, 5f * a, .25f + .02f * niveau);
+                    Sons.JouerA("sortFeu", p, .7f + .03f * kn, .78f - .02f * kn);
+                    Lueur(p, c, 5f * a, .25f + .02f * kn);
                     if (pal >= 2) Effets.Anneau(p, -direction, .9f * a, new Color(1f, .6f, .2f, .8f));
                     if (pal >= 3 && presDuSol) Brasier(sol, .9f * a, 2.6f);
                     if (pal >= 4)
@@ -164,14 +179,14 @@ namespace Aldermark
                     break;
                 case Element.Glace:
                     Effets.Eclat(p, new Color(.85f, .96f, 1f), Mathf.RoundToInt(18 * a), 5f * Mathf.Sqrt(a), .09f * a, 1.6f, .55f, -direction);
-                    Effets.Eclat(p, new Color(.6f, .85f, 1f, .6f), Mathf.RoundToInt(8 * a), 1.5f, .3f * a, -.05f, .5f + .05f * niveau);
-                    Sons.JouerA("sortGlace", p, .7f + .03f * niveau, 1.15f - .02f * niveau);
+                    Effets.Eclat(p, new Color(.6f, .85f, 1f, .6f), Mathf.RoundToInt(8 * a), 1.5f, .3f * a, -.05f, .5f + .05f * kn);
+                    Sons.JouerA("sortGlace", p, .7f + .03f * kn, 1.15f - .02f * kn);
                     if (pal >= 2) Effets.Anneau(p, -direction, .8f * a, new Color(.75f, .93f, 1f, .75f), .45f);
                     if (pal >= 3 && presDuSol) Pics(sol, pal >= 4 ? 9 : 5, .5f * a, .55f * a, new Color(.7f, .9f, 1f, .7f), true, 1.4f);
                     break;
                 case Element.Foudre:
                     Effets.Eclat(p, new Color(.9f, .92f, 1f), Mathf.RoundToInt(16 * a), 6f * a, .06f, .5f, .3f);
-                    Lueur(p, c, 8f * a, .15f + .02f * niveau);
+                    Lueur(p, c, 8f * a, .15f + .02f * kn);
                     if (pal >= 3 && presDuSol)
                     {
                         Effets.OndeDeChoc(sol, 1.2f * a, new Color(.8f, .85f, 1f, .8f));
@@ -208,10 +223,11 @@ namespace Aldermark
                 touchee = c;
                 fin = c != null ? c.Centre : point;
             }
-            Eclair(s.origine, fin, d.couleur, s.niveau);
-            Sons.JouerA("sortFoudre", fin, .9f + .02f * s.niveau, Mathf.Max(.72f, UnityEngine.Random.Range(.92f, 1.08f) - .03f * (s.niveau - 1)), 90f + 6f * s.niveau);
-            Deflagration(d.element, fin, s.direction, s.niveau, s.camp);
-            if (touchee == null) { Impact(d.element, fin, s.direction, s.niveau); return; }
+            float kt = Prog(s.Visuel);
+            Eclair(s.origine, fin, d.couleur, s.Visuel);
+            Sons.JouerA("sortFoudre", fin, .92f + .02f * kt, Mathf.Max(.72f, UnityEngine.Random.Range(.92f, 1.08f) - .03f * kt), 90f + 6f * kt);
+            Deflagration(d.element, fin, s.direction, s.Visuel, s.camp);
+            if (touchee == null) { Impact(d.element, fin, s.direction, s.Visuel); return; }
             Toucher(s, touchee, (fin - s.origine).normalized);
             if (s.niveau < 5) return;
             // Le rebond : sur l'ennemi le plus proche de la première cible
@@ -224,7 +240,7 @@ namespace Aldermark
                 if (dist < best) { best = dist; suivant = cb; }
             }
             if (suivant == null) return;
-            Eclair(fin, suivant.Centre, d.couleur, s.niveau);
+            Eclair(fin, suivant.Centre, d.couleur, s.Visuel);
             Toucher(s, suivant, (suivant.Centre - fin).normalized, .6);
         }
 
@@ -232,8 +248,8 @@ namespace Aldermark
         static void Cone(Incantation s)
         {
             var d = s.def;
-            float a = Ampleur(s.niveau);
-            int pal = Palier(s.niveau);
+            float a = Ampleur(s.Visuel);
+            int pal = Palier(s.Visuel);
             Vector3 avant = Vector3.ProjectOnPlane(s.direction, Vector3.up).normalized;
             if (avant.sqrMagnitude < .01f) avant = s.direction;
             Vector3 pied = s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
@@ -268,7 +284,7 @@ namespace Aldermark
                 Effets.Anneau(o + avant * 1.5f, avant, 3.5f, new Color(.92f, 1f, .96f, .55f), .4f);
                 Retard.Lancer(.12f, () => Effets.Anneau(o + avant * 3.5f, avant, 5f, new Color(.92f, 1f, .96f, .4f), .4f));
             }
-            Sons.JouerA("sortVent", s.origine, .9f + .03f * s.niveau, UnityEngine.Random.Range(.92f, 1.08f) - .02f * (s.niveau - 1));
+            Sons.JouerA("sortVent", s.origine, .93f + .03f * Prog(s.Visuel), UnityEngine.Random.Range(.92f, 1.08f) - .02f * Prog(s.Visuel));
             foreach (var c in Autour(s, pied, d.portee))
             {
                 Vector3 vers = Vector3.ProjectOnPlane(c.Centre - pied, Vector3.up);
@@ -280,14 +296,14 @@ namespace Aldermark
         /// <summary>La terre : une onde autour du lanceur qui frappe, soulève et étourdit.</summary>
         static void Zone(Incantation s)
         {
-            float a = Ampleur(s.niveau);
-            int pal = Palier(s.niveau);
+            float a = Ampleur(s.Visuel);
+            int pal = Palier(s.Visuel);
             Vector3 centre = s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
             centre.y = Monde.Hauteur(centre.x, centre.z);
             float rayon = s.rayon > 0f ? s.rayon : s.def.rayon;
             Effets.OndeDeChoc(centre, rayon, new Color(.85f, .72f, .5f, .85f));
-            Deflagration(Element.Terre, centre + Vector3.up * .4f, Vector3.up, s.niveau, s.camp);
-            int gerbes = Mathf.Min(40, 10 + 2 * (s.niveau - 1));
+            Deflagration(Element.Terre, centre + Vector3.up * .4f, Vector3.up, s.Visuel, s.camp);
+            int gerbes = Mathf.Min(40, 10 + Mathf.RoundToInt(2 * (a - 1f) * 10f));
             for (int k = 0; k < gerbes; k++)
             {
                 float ang = k * Mathf.PI * 2f / gerbes;
@@ -316,7 +332,7 @@ namespace Aldermark
                     var dir = new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang));
                     Effets.Sillon(centre + dir * 1.2f, dir);
                 }
-            Sons.JouerA("sortTerre", centre, .9f + .03f * s.niveau, UnityEngine.Random.Range(.9f, 1.05f) - .025f * (s.niveau - 1), 80f + 6f * s.niveau);
+            Sons.JouerA("sortTerre", centre, .93f + .03f * Prog(s.Visuel), UnityEngine.Random.Range(.9f, 1.05f) - .025f * Prog(s.Visuel), 80f + 6f * Prog(s.Visuel));
             var h = CombatHeros.Instance;
             if (h != null) h.Secousse(Mathf.Clamp01(1f - Vector3.Distance(h.transform.position, centre) / 25f) * .14f * a);
             foreach (var c in Autour(s, centre, rayon))
@@ -334,8 +350,8 @@ namespace Aldermark
         {
             var c = s.auteur;
             if (!Cibles.Existe(c) || !c.Vivant) return;
-            float a = Ampleur(s.niveau);
-            int pal = Palier(s.niveau);
+            float a = Ampleur(s.Visuel);
+            int pal = Palier(s.Visuel);
             double avant = c.VieActuelle;
             if (c is CombatHeros && StatsHeros.Instance != null) StatsHeros.Instance.Rendre(s.attaque);
             else if (c is Combattant cb) cb.Rendre(s.attaque);
@@ -354,7 +370,7 @@ namespace Aldermark
             if (pal >= 4)
                 for (int k = 0; k < 5; k++)
                     Effets.Eclat(p + Vector3.up * 3.5f + UnityEngine.Random.insideUnitSphere * .8f, new Color(1f, .9f, .5f), 8, .6f, .1f, .35f, 2f);
-            Sons.JouerA("sortSoin", c.Centre, .9f, 1f - .015f * (s.niveau - 1));
+            Sons.JouerA("sortSoin", c.Centre, .9f, 1f - .015f * Prog(s.Visuel));
             Vector3 ou = c is CombatHeros ? c.Centre + Vector3.up * .6f : c.Centre + Vector3.up * .9f;
             HUD.ChiffreTexte(ou, "+" + Nombres.Court(Math.Max(0, rendu)), new Color(.55f, 1f, .55f));
         }

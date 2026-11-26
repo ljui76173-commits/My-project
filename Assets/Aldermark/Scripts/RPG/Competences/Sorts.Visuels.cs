@@ -322,8 +322,9 @@ namespace Aldermark
         public static void Creer(Incantation s)
         {
             var d = s.def;
-            float a = Sorts.Ampleur(s.niveau);
-            int pal = Sorts.Palier(s.niveau);
+            float a = Sorts.Ampleur(s.Visuel);
+            int pal = Sorts.Palier(s.Visuel);
+            float kn = Sorts.Prog(s.Visuel);
             var go = new GameObject("Sort_" + d.id);
             go.transform.position = s.origine;
             go.transform.rotation = Quaternion.LookRotation(s.direction);
@@ -370,7 +371,7 @@ namespace Aldermark
 
             // La lumière qu'il porte
             var l = go.AddComponent<Light>();
-            l.type = LightType.Point; l.color = ext; l.range = 5f * a; l.intensity = 2.2f + .2f * (s.niveau - 1); l.shadows = LightShadows.None;
+            l.type = LightType.Point; l.color = ext; l.range = 5f * a; l.intensity = 2.2f + .2f * kn; l.shadows = LightShadows.None;
 
             // La traînée
             var tg = new GameObject("Trainee");
@@ -379,7 +380,7 @@ namespace Aldermark
             ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var m = ps.main;
             m.loop = true; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
-            float vie = 1f + .08f * (s.niveau - 1);
+            float vie = 1f + .08f * kn;
             m.startLifetime = new ParticleSystem.MinMaxCurve(.25f * vie, .45f * vie);
             m.startSpeed = new ParticleSystem.MinMaxCurve(0f, .6f);
             m.startSize = new ParticleSystem.MinMaxCurve(p.taille * 1.2f, p.taille * 2.4f);
@@ -396,7 +397,7 @@ namespace Aldermark
             tg.GetComponent<ParticleSystemRenderer>().sharedMaterial = Effets.Particules();
             ps.Play();
             p.trainee = ps;
-            Sons.JouerA(eclat ? "sortGlace" : "sortFeu", s.origine, .7f + .02f * s.niveau, (eclat ? 1.4f : 1.15f) - .02f * (s.niveau - 1));
+            Sons.JouerA(eclat ? "sortGlace" : "sortFeu", s.origine, .72f + .02f * kn, (eclat ? 1.4f : 1.15f) - .02f * kn);
         }
 
         static Transform Piece(Transform parent, PrimitiveType type, Color c)
@@ -443,9 +444,9 @@ namespace Aldermark
         void Finir(ICible c, bool impact = true)
         {
             fini = true;
-            if (c != null || impact) Sorts.Deflagration(s.def.element, transform.position, vitesse.normalized, s.niveau, s.camp);
+            if (c != null || impact) Sorts.Deflagration(s.def.element, transform.position, vitesse.normalized, s.Visuel, s.camp);
             if (c != null) Sorts.Toucher(s, c, vitesse.normalized);
-            else if (impact) Sorts.Impact(s.def.element, transform.position, vitesse.normalized, s.niveau);
+            else if (impact) Sorts.Impact(s.def.element, transform.position, vitesse.normalized, s.Visuel);
             else Effets.Eclat(transform.position, s.def.couleur, 6, 1f, .1f, 0f, .3f);
             // La traînée finit de se dissiper seule
             if (trainee != null)
