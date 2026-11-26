@@ -47,6 +47,8 @@ namespace Aldermark
                 System.Buffer.BlockCopy(o, 0, grilleEaux, 0, grilleEaux.Length * 2);
             }
             Brancher();
+            // Les arbres dessinés par lots (le terrain les dessinait un par un)
+            if (GetComponent<ForetInstanciee>() == null) gameObject.AddComponent<ForetInstanciee>();
         }
 
         void OnDestroy()

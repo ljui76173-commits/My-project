@@ -66,7 +66,7 @@ namespace Aldermark
             return clips.TryGetValue(id, out var c) ? c : null;
         }
         AudioSource sourceUI, sourceAnalyse, sourceMusique, sourceVoix;
-        readonly AudioSource[] reserve = new AudioSource[8];   // plusieurs sons à la fois, chacun à sa hauteur
+        readonly AudioSource[] reserve = new AudioSource[12];   // plusieurs sons à la fois, chacun à sa hauteur
         int prochaineSource;
         Transform auditeur;
         float minuterieOiseau = 3f;
@@ -104,6 +104,7 @@ namespace Aldermark
                 go.transform.SetParent(transform, false);
                 var s3 = go.AddComponent<AudioSource>();
                 s3.playOnAwake = false; s3.spatialBlend = 1f; s3.minDistance = 4f; s3.maxDistance = 60f; s3.rolloffMode = AudioRolloffMode.Linear;
+                s3.dopplerLevel = 0f;   // sans effet Doppler : sinon les sons se tordent quand on court
                 sources3D[k] = s3;
             }
 
@@ -124,7 +125,7 @@ namespace Aldermark
             var riv = goR.AddComponent<AudioSource>();
             riv.clip = clips["riviere"]; riv.loop = true; riv.spatialBlend = 1f;
             riv.minDistance = 5f; riv.maxDistance = 55f; riv.rolloffMode = AudioRolloffMode.Linear;
-            riv.volume = .32f * volumeAmbiance; riv.Play();
+            riv.volume = .32f * volumeAmbiance; riv.dopplerLevel = 0f; riv.Play();
             sourceRiviere = riv;
             DemarrerAmbiances();
             DemarrerMusique();
@@ -176,9 +177,22 @@ namespace Aldermark
             if (instance == null) return;
             var c = instance.Choisir(id);
             if (c == null) return;
-            var s = instance.reserve[instance.prochaineSource++ % instance.reserve.Length];
+            // Une source libre : changer la hauteur d'une source qui joue encore déformerait le son en cours
+            var s = Libre(instance.reserve, ref instance.prochaineSource);
+            s.clip = c;
             s.pitch = hauteur * instance.Rnd(.96f, 1.04f);
-            s.PlayOneShot(c, volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id)));
+            s.volume = volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id));
+            s.Play();
+        }
+
+        static AudioSource Libre(AudioSource[] l, ref int prochaine)
+        {
+            for (int k = 0; k < l.Length; k++)
+            {
+                var s = l[(prochaine + k) % l.Length];
+                if (!s.isPlaying) { prochaine = (prochaine + k + 1) % l.Length; return s; }
+            }
+            return l[prochaine++ % l.Length];   // toutes occupées : la plus ancienne
         }
 
         public static void JouerA(string id, Vector3 position, float volume = 1f, float hauteur = 1f) => JouerA(id, position, volume, hauteur, 60f);
@@ -189,12 +203,14 @@ namespace Aldermark
             if (instance == null) return;
             var c = instance.Choisir(id);
             if (c == null) return;
-            var s = instance.sources3D[instance.prochaine3D++ % instance.sources3D.Length];
+            var s = Libre(instance.sources3D, ref instance.prochaine3D);
             s.transform.position = position;
             s.maxDistance = portee;
             s.minDistance = Mathf.Min(4f, portee * .25f);
+            s.clip = c;
             s.pitch = hauteur * instance.Rnd(.96f, 1.04f);
-            s.PlayOneShot(c, volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id)));
+            s.volume = volume * instance.Rnd(.92f, 1.06f) * Volume(CanalDe(id));
+            s.Play();
         }
 
         /// <summary>Bourdon d'analyse : progression de 0 à 1, ou négatif pour couper.</summary>
