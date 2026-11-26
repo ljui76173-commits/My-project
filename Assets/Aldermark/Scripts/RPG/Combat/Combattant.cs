@@ -190,11 +190,11 @@ namespace Aldermark
                 if (Vie <= 0 && !invincible) { Mourir(new Coup { degats = brule, auteur = Alterations.Auteur, nom = "brûlure" }); return; }
             }
             if (Time.time < prochaineFlamme) return;
-            Vector3 p = Centre + Random.insideUnitSphere * .3f;
+            Vector3 p = Centre + UnityEngine.Random.insideUnitSphere * .3f;
             if (Alterations.Brulure > 0f)
             {
                 prochaineFlamme = Time.time + .12f;
-                Effets.Eclat(p, new Color(1f, Random.Range(.35f, .65f), .1f, .9f), 3, 1.2f, .16f, -.7f, .45f);
+                Effets.Eclat(p, new Color(1f, UnityEngine.Random.Range(.35f, .65f), .1f, .9f), 3, 1.2f, .16f, -.7f, .45f);
             }
             else if (Alterations.Gel > 0f && Alterations.Gele <= 0f)
             {
