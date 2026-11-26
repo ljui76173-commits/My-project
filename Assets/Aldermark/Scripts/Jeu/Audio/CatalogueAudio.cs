@@ -85,6 +85,13 @@ namespace Aldermark
             ("fermer", new[] { "close_0", "minimize_0", "bookclose" }),
             ("erreur", new[] { "error_0" }),
             ("clic", new[] { "click_0", "select_0", "tick_0", "switch_0", "toggle_0" }),
+            ("sortFeu", new[] { "sort_feu", "sortfeu", "fireball", "fire_spell" }),
+            ("sortGlace", new[] { "sort_glace", "sortglace", "ice_spell", "frost" }),
+            ("sortFoudre", new[] { "sort_foudre", "sortfoudre", "thunder", "lightning" }),
+            ("sortVent", new[] { "sort_vent", "sortvent", "wind_spell", "gust" }),
+            ("sortTerre", new[] { "sort_terre", "sortterre", "earth_spell", "rumble" }),
+            ("sortSoin", new[] { "sort_soin", "sortsoin", "heal" }),
+            ("incantation", new[] { "incantation", "spell_charge", "magic_charge" }),
         };
 
         public static string IdPour(string nomFichier)

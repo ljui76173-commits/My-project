@@ -16,11 +16,11 @@ namespace Aldermark
     /// avec un modèle riggé, la main droite suit la poignée (IK).
     /// </summary>
     [RequireComponent(typeof(JoueurAldric))]
-    public class CombatHeros : MonoBehaviour, ICible
+    public partial class CombatHeros : MonoBehaviour, ICible
     {
         public static CombatHeros Instance { get; private set; }
 
-        enum Etat { Libre, Preparation, Frappe, Recuperation, Roulade, Sonne, Glissade, Projete, Plongeon, Choc }
+        enum Etat { Libre, Preparation, Frappe, Recuperation, Roulade, Sonne, Glissade, Projete, Plongeon, Choc, Incantation }
 
         class Mouvement
         {
@@ -168,6 +168,8 @@ namespace Aldermark
             stats = GetComponent<StatsHeros>();
             inv = GetComponent<Inventaire>();
             if (inv == null && stats != null) inv = gameObject.AddComponent<Inventaire>();
+            comp = GetComponent<Competences>();
+            if (comp == null && stats != null) comp = gameObject.AddComponent<Competences>();
         }
 
         void Start()
@@ -267,10 +269,12 @@ namespace Aldermark
 
             if (roulerPresse && (etat == Etat.Libre || etat == Etat.Recuperation) && !garde) Rouler();
             if (roulerPresse && etat == Etat.Projete) demandeRelevement = Time.time;   // se relever d'une roulade à l'atterrissage
+            GererSorts(kb, pad, libreDeJouer);
 
             AvancerEtat(dt);
+            MettreAJourAlterations(dt);
             j.courseInterdite = etat != Etat.Libre || garde;
-            j.entrave = Entrave();
+            j.entrave = Entrave() * (Alterations.Gele > 0f ? 0f : Alterations.Gel > 0f ? .55f : 1f);
             j.verrou = Cibles.Existe(verrou) ? verrou.Corps : null;
             if (mort && !j.troisiemePersonne) j.decalageCamera = Vector3.Lerp(j.decalageCamera, new Vector3(0, -1.15f, 0), Mathf.Clamp01(Time.unscaledDeltaTime * 2.5f));
         }
@@ -290,6 +294,7 @@ namespace Aldermark
                 case Etat.Glissade:
                 case Etat.Projete: return 0f;
                 case Etat.Plongeon: return .4f;
+                case Etat.Incantation: return .45f;
                 case Etat.Choc: return 0f;
                 default: return 1f;
             }
@@ -299,6 +304,7 @@ namespace Aldermark
         {
             if (!MondeRPG.Actif || botte == null) return;
             PoserLame();
+            PlacerOrbe();
         }
 
         void GererTemps()
@@ -435,6 +441,10 @@ namespace Aldermark
                 case Etat.Plongeon:
                     if (j.AuSol || tEtat > 3f) Atterrir();
                     break;
+                case Etat.Incantation:
+                    if (sortEnCours == null) { etat = Etat.Libre; break; }
+                    if (tEtat >= sortEnCours.incantation) { etat = Etat.Libre; tEtat = 0f; LibererSort(); }
+                    break;
             }
         }
 
@@ -460,7 +470,7 @@ namespace Aldermark
         void Frapper(ICible cible, Mouvement a, Vector3 direction, double bonus = 1)
         {
             bool critique = a.critiqueSur || Random.value < ChanceCritique;
-            double atq = Attaque * a.mult * bonus * (critique ? 1.75 : 1);
+            double atq = Attaque * a.mult * bonus * (critique ? 1.75 : 1) * (comp != null ? comp.BonusArme(ArmeEnMain) : 1);
             float poussee = a.poussee * (ArmeEnMain != null ? ArmeEnMain.poussee : 1f);
             cible.Recevoir(new Coup { degats = atq, direction = direction, poussee = poussee, lourd = a.lourde, critique = critique, auteur = this, nom = a.nom });
             Figer(a.lourde || a.critiqueSur ? .1f : critique ? .07f : .05f);
@@ -470,6 +480,7 @@ namespace Aldermark
             Effets.Eclat(cible.Centre, bois ? new Color(.75f, .6f, .4f) : new Color(1f, .9f, .75f), critique ? 14 : 7, 3.5f, .1f, 1f, .35f, direction);
             if (a.critiqueSur) HUD.ChiffreTexte(cible.Centre + Vector3.up * .9f, a.nom + " !", new Color(1f, .85f, .4f));
             stats.Exercer(Stat.FOR, (a.lourde ? 2 : 1) * (MainsNues ? .8 : 1));
+            if (comp != null) comp.Exercer(Competences.IdArme(ArmeEnMain), critique || a.lourde ? 1.5 : 1);
             if (MainsNues) stats.Exercer(Stat.AGI, .3);
             if (critique) stats.Exercer(Stat.AGI, .5);
         }
@@ -537,7 +548,9 @@ namespace Aldermark
         {
             var kb = Keyboard.current;
             var pad = Gamepad.current;
-            if (!stats.Depenser(CoutRoulade)) { HUD.Toast("Trop essoufflé pour rouler"); return false; }
+            if (!stats.Depenser(CoutRoulade * (comp != null ? comp.FacteurCoutRoulade : 1f))) { HUD.Toast("Trop essoufflé pour rouler"); return false; }
+            if (comp != null) comp.Exercer("esquive", .2);
+            if (Alterations.Brulure > 0f) { Alterations.Eteindre(); HUD.ChiffreTexte(SurSoi(), "Éteint", new Color(.8f, .85f, .9f)); }
             Vector2 dep = Vector2.zero;
             if (kb != null)
             {
@@ -557,7 +570,7 @@ namespace Aldermark
             return true;
         }
 
-        public bool Invulnerable => (etat == Etat.Roulade && tEtat > .04f && tEtat < .38f) || (etat == Etat.Projete && tEtat < .4f);
+        public bool Invulnerable => (etat == Etat.Roulade && tEtat > .04f && tEtat < Mathf.Min(DureeRoulade, .38f * (comp != null ? comp.FacteurEsquive : 1f))) || (etat == Etat.Projete && tEtat < .4f);
 
         public void Recevoir(Coup c)
         {
@@ -571,17 +584,20 @@ namespace Aldermark
             {
                 HUD.ChiffreTexte(SurSoi(), "Esquive", new Color(.7f, .95f, 1f));
                 stats.Exercer(Stat.AGI, 1);
+                if (comp != null) comp.Exercer("esquive", 3);
                 return;
             }
+            if (etat == Etat.Incantation) AnnulerSort();
             Vector3 versAttaquant = Vector3.ProjectOnPlane(depuis - transform.position, Vector3.up);
             bool face = Vector3.Angle(transform.forward, versAttaquant) < 80f;
             // La force du coup : sa poussée, d'autant plus forte que l'attaquant dépasse notre défense
             float force = c.poussee * (float)(.5 + c.degats / (c.degats + Defense));
 
-            if (garde && face && Time.time - debutGarde < FenetreParade)
+            if (garde && face && Time.time - debutGarde < FenetreParade * (comp != null ? comp.FacteurParade : 1f))
             {
-                // Parade parfaite : aucun dégât, l'attaquant est sonné, le temps ralentit, la riposte est prête
-                if (cb != null) cb.Etourdir(1.4f);
+                // Parade parfaite : aucun dégât, l'attaquant est sonné (pas un lanceur de sort au loin), le temps ralentit, la riposte est prête
+                if (cb != null && !c.magique) cb.Etourdir(1.4f);
+                if (comp != null) comp.Exercer("parade", 3);
                 if (MainsNues)
                 {
                     Sons.Jouer("impactChair", 1f, 1.4f);
@@ -613,7 +629,8 @@ namespace Aldermark
                     Sons.Jouer("parade", .7f, .8f);
                     Effets.Etincelles(VersMonde(GardeHaute) + DirMonde(LameGarde) * .4f, versAttaquant.normalized);
                 }
-                if (!stats.Depenser(MainsNues ? CoutGarde * 1.4f : CoutGarde))
+                if (comp != null) comp.Exercer("parade", 1);
+                if (!stats.Depenser((MainsNues ? CoutGarde * 1.4f : CoutGarde) * (comp != null ? comp.FacteurCoutGarde : 1f)))
                 {
                     garde = false;
                     Sonner(.7f);
@@ -638,6 +655,7 @@ namespace Aldermark
             stats.Blesser(reel);
             j.Secouer(garde ? .03f : .07f);
             HUD.ChiffreDegats(SurSoi(), reel, c.critique, true);
+            if (c.effet != Effet.Aucun && !(garde && face) && stats.Vie > 0) SubirEffet(c);
             if (stats.Vie <= 0 && !mort) StartCoroutine(Mourir());
         }
 
@@ -714,6 +732,8 @@ namespace Aldermark
         System.Collections.IEnumerator Mourir()
         {
             mort = true;
+            Alterations.Effacer();
+            AnnulerSort();
             LacherVerrou();
             Time.timeScale = 1f; finFige = finRalenti = 0;
             if (MondeRPG.Instance != null) yield return MondeRPG.Instance.StartCoroutine(MondeRPG.Instance.Mort());
@@ -906,6 +926,11 @@ namespace Aldermark
                 case Etat.Roulade:
                     gCible = reposD + new Vector3(0, -.2f, -.15f); ggCible = reposG + new Vector3(0, -.2f, -.15f);
                     break;
+                case Etat.Incantation:
+                    // La main gauche se lève, paume en avant, pendant que l'énergie se rassemble
+                    gCible = reposD; dCible = LameRepos;
+                    ggCible = MainSort + new Vector3(0, Mathf.Sin(Time.time * 9f) * .006f, 0); vitesse = 18f;
+                    break;
                 default:
                     if (nues) { gCible = garde ? CroixD : reposD; ggCible = garde ? CroixG : reposG; }
                     else { gCible = garde ? GardeHaute : GardeRepos; dCible = garde ? LameGarde : LameRepos; ggCible = reposG; }
@@ -958,7 +983,7 @@ namespace Aldermark
             j.cibleMainDroite = VersMonde(main);
             j.poidsMainDroite = 1f;
             j.cibleMainGauche = VersMonde(mainG);
-            j.poidsMainGauche = MainsNues ? 1f : 0f;
+            j.poidsMainGauche = MainsNues || etat == Etat.Incantation ? 1f : 0f;
             PoserBras(j.BrasDroit, main, new Vector3(.5f, -.75f, .15f));
             PoserBras(j.BrasGauche, mainG, new Vector3(-.5f, -.75f, .15f));
 

@@ -17,6 +17,7 @@ namespace Aldermark
         {
             nom = "Loup gris";
             vieBase = 30; attaqueBase = 7; defenseBase = 2; xpBase = 16;
+            FixerAffinite(Element.Feu, 1.5f); FixerAffinite(Element.Glace, .75f);   // le feu leur fait peur, la fourrure tient chaud
             resistanceRecul = .8f;
             vitesseMarche = 2.2f; vitesseCourse = 7.5f; perception = 20f; laisse = 45f; rayonRepos = 9f;
             rayonCorps = .38f; hauteurCorps = .95f; hauteurCentre = .62f; hauteurTete = 1f;

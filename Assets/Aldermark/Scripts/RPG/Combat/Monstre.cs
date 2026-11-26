@@ -393,7 +393,7 @@ namespace Aldermark
         void Bouger(float dt)
         {
             if (!cc.enabled) return;
-            Vector3 v = vitesseVoulue + elan;
+            Vector3 v = vitesseVoulue * Alterations.Lenteur + elan;
             elan = Vector3.MoveTowards(elan, Vector3.zero, 14f * dt);
             foreach (var m in Actifs)   // ne pas s'empiler
             {

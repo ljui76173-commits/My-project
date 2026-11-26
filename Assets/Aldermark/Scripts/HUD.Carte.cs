@@ -232,7 +232,7 @@ namespace Aldermark
 
             // Touches : M (selon la disposition du clavier) et N
             if (toucheM == null) toucheM = kb.FindKeyOnCurrentKeyboardLayout("m") ?? kb.mKey;
-            bool autreMenu = statutOuvert || inventaireOuvert || Coffre.Ouvert != null || ConsoleDebug.Ouverte || Dialogues.EnCours;
+            bool autreMenu = statutOuvert || inventaireOuvert || competencesOuvertes || Coffre.Ouvert != null || ConsoleDebug.Ouverte || Dialogues.EnCours;
             if (!autreMenu && toucheM.wasPressedThisFrame) OuvrirCarte(!carteOuverte);
             if (carteOuverte && kb.escapeKey.wasPressedThisFrame) OuvrirCarte(false);
             if (!autreMenu && kb.nKey.wasPressedThisFrame)

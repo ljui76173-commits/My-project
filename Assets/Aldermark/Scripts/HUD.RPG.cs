@@ -6,12 +6,12 @@ namespace Aldermark
 {
     /// <summary>
     /// Interface du mode RPG : barres de vie, mana et endurance, niveau et XP, horloge du monde,
-    /// petites notifications, fenêtre de Statut (C) et console de debug (²).
+    /// petites notifications, fenêtre de Statut (C) et console de debug (F1 ou ²).
     /// </summary>
     public partial class HUD
     {
         /// <summary>Un menu plein écran est ouvert (Statut, console) : le héros et le temps s'arrêtent.</summary>
-        public static bool MenuOuvert => instance != null && (instance.statutOuvert || ConsoleDebug.Ouverte || instance.inventaireOuvert || Coffre.Ouvert != null || instance.carteOuverte);
+        public static bool MenuOuvert => instance != null && (instance.statutOuvert || ConsoleDebug.Ouverte || instance.inventaireOuvert || Coffre.Ouvert != null || instance.carteOuverte || instance.competencesOuvertes);
 
         bool rpgConstruit, statutOuvert;
         RectTransform remplVie, remplMana, remplEndurance, remplXP, panneauStatut, remplXPStatut, panneauConsole;
@@ -60,8 +60,8 @@ namespace Aldermark
             if (aide != null)
             {
                 aide.GetComponent<UnityEngine.UI.Text>().text =
-                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · M carte · C Statut · V vue · Échap réglages · ² console";
-                ((RectTransform)aide.parent).sizeDelta = new Vector2(1560, 38);
+                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · 1-4 sorts · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · K compétences · M carte · C Statut · V vue · Échap réglages · F1 console";
+                ((RectTransform)aide.parent).sizeDelta = new Vector2(1780, 38);
             }
 
             // Barres en bas à gauche
@@ -86,6 +86,7 @@ namespace Aldermark
             Etirer((RectTransform)texteToasts.transform, Vector2.zero, Vector2.zero);
 
             ConstruireStatut();
+            ConstruireCompetences();
 
             // Console de debug
             panneauConsole = Panneau("Console", toile, new Vector2(.5f, 1), new Vector2(.5f, 1), new Vector2(.5f, 1), new Vector2(0, -70), new Vector2(1280, 400), new Color(.03f, .03f, .06f, .92f));
@@ -172,7 +173,7 @@ namespace Aldermark
             ConstruireRPG();
             var s = StatsHeros.Instance;
             var kb = Keyboard.current;
-            bool rienOuvert = !statutOuvert && !inventaireOuvert && !carteOuverte && Coffre.Ouvert == null && !ConsoleDebug.Ouverte && !Dialogues.EnCours;
+            bool rienOuvert = !statutOuvert && !inventaireOuvert && !carteOuverte && !competencesOuvertes && Coffre.Ouvert == null && !ConsoleDebug.Ouverte && !Dialogues.EnCours;
 
             if (s != null && joueur != null)
             {
@@ -196,7 +197,7 @@ namespace Aldermark
             texteToasts.text = sb.ToString();
 
             // Statut : C pour ouvrir ou fermer, Échap pour fermer
-            if (kb != null && !reglagesOuverts && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && !carteOuverte && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
+            if (kb != null && !reglagesOuverts && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && !carteOuverte && !competencesOuvertes && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
             if (statutOuvert && kb != null && kb.escapeKey.wasPressedThisFrame) OuvrirStatut(false);
             if (statutOuvert && s != null) MettreAJourStatut(s, kb);
 
@@ -204,6 +205,7 @@ namespace Aldermark
             {
                 MettreAJourInventaire();
                 MettreAJourCarte();
+                MettreAJourCompetences(kb, statutOuvert || inventaireOuvert || carteOuverte || Coffre.Ouvert != null || ConsoleDebug.Ouverte || Dialogues.EnCours);
             }
             MettreAJourCombat();
             MettreAJourReglages(kb, rienOuvert);
