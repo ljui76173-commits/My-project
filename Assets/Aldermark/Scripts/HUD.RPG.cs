@@ -60,7 +60,7 @@ namespace Aldermark
             if (aide != null)
             {
                 aide.GetComponent<UnityEngine.UI.Text>().text =
-                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · M carte · C Statut · V vue · ² console";
+                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · M carte · C Statut · V vue · Échap réglages · ² console";
                 ((RectTransform)aide.parent).sizeDelta = new Vector2(1560, 38);
             }
 
@@ -172,6 +172,7 @@ namespace Aldermark
             ConstruireRPG();
             var s = StatsHeros.Instance;
             var kb = Keyboard.current;
+            bool rienOuvert = !statutOuvert && !inventaireOuvert && !carteOuverte && Coffre.Ouvert == null && !ConsoleDebug.Ouverte && !Dialogues.EnCours;
 
             if (s != null && joueur != null)
             {
@@ -195,13 +196,17 @@ namespace Aldermark
             texteToasts.text = sb.ToString();
 
             // Statut : C pour ouvrir ou fermer, Échap pour fermer
-            if (kb != null && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && !carteOuverte && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
+            if (kb != null && !reglagesOuverts && !ConsoleDebug.Ouverte && !Dialogues.EnCours && !inventaireOuvert && Coffre.Ouvert == null && !carteOuverte && kb.cKey.wasPressedThisFrame) OuvrirStatut(!statutOuvert);
             if (statutOuvert && kb != null && kb.escapeKey.wasPressedThisFrame) OuvrirStatut(false);
             if (statutOuvert && s != null) MettreAJourStatut(s, kb);
 
-            MettreAJourInventaire();
-            MettreAJourCarte();
+            if (!reglagesOuverts)
+            {
+                MettreAJourInventaire();
+                MettreAJourCarte();
+            }
             MettreAJourCombat();
+            MettreAJourReglages(kb, rienOuvert);
         }
 
         static void Remplir(RectTransform r, UnityEngine.UI.Text t, double v, double max, string nom)

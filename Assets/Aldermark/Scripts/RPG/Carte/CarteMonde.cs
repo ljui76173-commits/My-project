@@ -127,7 +127,7 @@ namespace Aldermark
                 if (l.connu || decouverts.Contains(l.Id) || !Explore(l.Position)) continue;
                 decouverts.Add(l.Id);
                 HUD.Toast($"Lieu découvert : {l.nom}");
-                Sons.Jouer("decouverte", .45f, 1.15f);
+                Sons.Fanfare("decouverte");
                 if (StatsHeros.Instance != null) StatsHeros.Instance.GagnerXP(8);
                 Version++;
             }

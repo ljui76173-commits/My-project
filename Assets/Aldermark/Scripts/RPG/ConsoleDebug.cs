@@ -12,6 +12,8 @@ namespace Aldermark
     public class ConsoleDebug : MonoBehaviour
     {
         public static bool Ouverte { get; private set; }
+        /// <summary>L'image où la console a été fermée par Échap (pour ne pas ouvrir les Réglages dans la foulée).</summary>
+        public static int ImageFermeture { get; private set; } = -1;
         static ConsoleDebug instance;
 
         string saisie = "";
@@ -41,7 +43,7 @@ namespace Aldermark
                 Cursor.visible = Ouverte;
             }
             if (!Ouverte) { HUD.Console(null, null); return; }
-            if (kb.escapeKey.wasPressedThisFrame) { Ouverte = false; HUD.Console(null, null); return; }
+            if (kb.escapeKey.wasPressedThisFrame) { Ouverte = false; ImageFermeture = Time.frameCount; HUD.Console(null, null); return; }
             if (kb.backspaceKey.wasPressedThisFrame && saisie.Length > 0) saisie = saisie.Substring(0, saisie.Length - 1);
             if (kb.upArrowKey.wasPressedThisFrame && commandesPassees.Count > 0)
             {

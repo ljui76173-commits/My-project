@@ -27,6 +27,7 @@ namespace Aldermark.Editeur
 
             var racine = new GameObject("Gameplay").transform;
             racine.gameObject.AddComponent<Dialogues>();
+            CatalogueAudioEditeur.Rafraichir();
             var sons = racine.gameObject.AddComponent<Sons>();
             sons.positionRiviere = new Vector3(Monde.PontX, 0, 0);
             if (Geo.Actif)
@@ -40,7 +41,7 @@ namespace Aldermark.Editeur
             }
             if (AssetDatabase.IsValidFolder("Assets/Aldermark/Audio"))
                 sons.musiques = AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Aldermark/Audio" })
-                    .Select(AssetDatabase.GUIDToAssetPath).OrderBy(c => c)
+                    .Select(AssetDatabase.GUIDToAssetPath).Where(c => !c.Contains("/Sons/")).OrderBy(c => c)
                     .Select(AssetDatabase.LoadAssetAtPath<AudioClip>).Where(c => c != null).ToArray();
             var monde = racine.gameObject.AddComponent<MondeRPG>();
             racine.gameObject.AddComponent<ConsoleDebug>();
