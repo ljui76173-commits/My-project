@@ -116,7 +116,9 @@ namespace Aldermark
         float[] ageRonds;
         Vector3[] centreRonds;
         int prochainRond;
-        float minuterieRonds;
+        float minuterieRonds, surfaceEau = -.1f;
+        /// <summary>Vrai quand Aldric nage (eau trop profonde pour avoir pied).</summary>
+        public bool Nage { get; private set; }
         ParticleSystem poussiere;
         float minuteriePoussiere;
         PointInteret cibleAnalyse;
@@ -269,8 +271,22 @@ namespace Aldermark
             }
             Vector3 p = transform.position;
             // Dans l'eau seulement si les pieds sont sous la surface (pas sur un pont ou une pierre)
-            bool dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
-            if (dansLEau) vitesse *= .5f;
+            bool dansLEau, nage = false;
+            if (Geo.Actif)
+            {
+                // Le grand monde : mer, lacs et rivières à leur propre niveau ; trop profond, on nage
+                surfaceEau = Geo.NiveauEau(p.x, p.z);
+                dansLEau = surfaceEau > -9000f && p.y < surfaceEau - .05f;
+                nage = dansLEau && p.y < surfaceEau - 1.25f;
+            }
+            else
+            {
+                surfaceEau = -.1f;
+                dansLEau = Monde.Hauteur(p.x, p.z) < -.15f && p.y < .05f;
+            }
+            Nage = nage;
+            if (nage) vitesse *= .42f;
+            else if (dansLEau) vitesse *= .5f;
             vitesse *= entrave;
             Vector3 mouvement = (transform.forward * dep.y + transform.right * dep.x) * vitesse;
             if (elanTemps > 0f)
@@ -282,6 +298,7 @@ namespace Aldermark
             }
             bool saute = !fige && ((kb != null && kb.spaceKey.wasPressedThisFrame) || (pad != null && pad.buttonSouth.wasPressedThisFrame));
             if (impulsionVerticale > 0f) { vitesseVerticale = impulsionVerticale; impulsionVerticale = 0f; }
+            else if (nage) vitesseVerticale = Mathf.Clamp((surfaceEau - 1.32f - p.y) * 4f, -3f, 2.5f);   // la tête hors de l'eau
             else if (cc.isGrounded)
             {
                 if (vitesseVerticale < -6f) Sons.Jouer("pasTerre", .3f, .8f);   // réception
@@ -308,7 +325,7 @@ namespace Aldermark
                 if (cc.isGrounded && bouge)
                 {
                     Vector3 pied = transform.position;
-                    bool terre = Monde.DistanceRoute(pied.x, pied.z) < 2.5f || Vector2.Distance(new Vector2(pied.x, pied.z), Monde.Village) < 12f;
+                    bool terre = Monde.SurTerre(pied.x, pied.z);
                     Sons.Jouer(terre ? "pasTerre" : "pasHerbe", course ? .2f : .13f, Random.Range(.88f, 1.1f));
                 }
             }
@@ -609,7 +626,7 @@ namespace Aldermark
         void MettreAJourPoussiere(float dt, bool marche, bool course, Vector3 pied)
         {
             if (!marche) return;
-            bool surTerre = Monde.DistanceRoute(pied.x, pied.z) < 2.5f || Vector2.Distance(new Vector2(pied.x, pied.z), Monde.Village) < 12f;
+            bool surTerre = Monde.SurTerre(pied.x, pied.z);
             minuteriePoussiere -= dt;
             if (minuteriePoussiere > 0f) return;
             minuteriePoussiere = course ? .12f : .25f;
@@ -666,7 +683,7 @@ namespace Aldermark
                     minuterieRonds = .3f;
                     int i = prochainRond++ % ronds.Length;
                     ageRonds[i] = 0f;
-                    centreRonds[i] = new Vector3(p.x, -.06f, p.z);
+                    centreRonds[i] = new Vector3(p.x, Geo.Actif ? surfaceEau + .04f : -.06f, p.z);
                 }
             }
             for (int i = 0; i < ronds.Length; i++)

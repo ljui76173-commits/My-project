@@ -15,7 +15,7 @@ namespace Aldermark.Editeur
     /// Aldric, lumières, ciel) et l'enregistre dans Assets/Scenes/Varenne.unity.
     /// Le terrain reste modifiable ensuite avec les outils Terrain d'Unity.
     /// </summary>
-    public static class GenerateurVallee
+    public static partial class GenerateurVallee
     {
         const string Dossier = "Assets/Aldermark/Genere";
         const float YMin = -5f, HauteurMax = 115f;
@@ -285,6 +285,13 @@ namespace Aldermark.Editeur
                     if (type == 'h' && h > .86f) c = Color.Lerp(c, h > .95f ? clair : sombre * .9f, .8f);
                     if (type == 't' && h > .94f) c = h > .975f ? clair * 1.08f : sombre * .85f;
                     if (type == 'r' && h > .9f) c = sombre * .85f;
+                    if (type == 'c')
+                    {
+                        // Pavés : des rangées décalées, joints sombres, chaque pierre un peu différente
+                        int rang = y / 16, cx = (x + (rang % 2) * 8) % 16, cy = y % 16;
+                        float pierreTeinte = Hash((x + (rang % 2) * 8) / 16 + rang * 13.1f, rang * 3.7f);
+                        c = cx < 2 || cy < 2 ? sombre * .72f : Color.Lerp(b, pierreTeinte > .5f ? clair : sombre, Mathf.Abs(pierreTeinte - .5f) * 1.2f);
+                    }
                     c.a = 0;
                     px[y * S + x] = c;
                 }
@@ -486,7 +493,9 @@ namespace Aldermark.Editeur
             return pf;
         }
 
-        static void Arbres()
+        /// <summary>Les modèles d'arbres, de buissons et de rochers (prefabs), dans cet ordre :
+        /// SapinSombre, SapinClair, ArbreJaune, ArbreOrange, ArbreRoux, BuissonVert, BuissonOlive, Haie, Rocher.</summary>
+        static GameObject[] ProtosArbres()
         {
             var sapin = Sauver(Formes.Sapin(), "Arbres/Sapin.asset");
             var dore = Sauver(Formes.ArbreDore(), "Arbres/ArbreDore.asset");
@@ -504,6 +513,12 @@ namespace Aldermark.Editeur
                 PrefabArbre("Haie", buisson, new[] { Lit("#4f6e34") }, false),
                 PrefabArbre("Rocher", buisson, new[] { Lit("#8a8794") }, false),
             };
+            return protos;
+        }
+
+        static void Arbres()
+        {
+            var protos = ProtosArbres();
             var foret = Racine("Foret");
             void Poser(int proto, float x, float z, float rot, Vector3 echelle, float enfonce = .3f)
             {

@@ -27,7 +27,9 @@ namespace Aldermark
         }
 
         static readonly OngletCarte[] Onglets = { OngletCarte.Tout, OngletCarte.Lieux, OngletCarte.Commerces, OngletCarte.Services, OngletCarte.Dangers, OngletCarte.Reperes };
-        const float PorteeMiniCarte = 150f, TailleMiniCarte = 230f;
+        const float TailleMiniCarte = 230f;
+        static float PorteeMiniCarte => Geo.Actif ? 320f : 150f;
+        static float ZoomMax => Geo.Actif ? 40f : 8f;
 
         bool carteConstruite, carteOuverte, miniCarteVisible = true, clicCarte, glisseCarte;
         RectTransform panneauCarte, vueCarte, imageCarte, legendeCarte, infobulleCarte, panneauMini, pivotMini, imageMini, nordMini;
@@ -200,7 +202,7 @@ namespace Aldermark
             Cursor.lockState = ouvrir ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = ouvrir;
             Sons.Jouer("clic", .5f, ouvrir ? 1.2f : .9f);
-            if (ouvrir) { zoomCarte = 2.2f; CentrerSurJoueur(); }
+            if (ouvrir) { zoomCarte = Geo.Actif ? 7f : 2.2f; CentrerSurJoueur(); }
         }
 
         void CentrerSurJoueur()
@@ -360,7 +362,7 @@ namespace Aldermark
             if (dansVue && molette != 0f)
             {
                 float avant = zoomCarte;
-                zoomCarte = Mathf.Clamp(zoomCarte * (molette > 0 ? 1.2f : 1f / 1.2f), 1f, 8f);
+                zoomCarte = Mathf.Clamp(zoomCarte * (molette > 0 ? 1.2f : 1f / 1.2f), 1f, ZoomMax);
                 panCarte = local - (local - panCarte) * (zoomCarte / avant);
             }
             if (kb.spaceKey.wasPressedThisFrame) CentrerSurJoueur();
@@ -486,7 +488,7 @@ namespace Aldermark
                 rect.GetComponent<UnityEngine.UI.Image>().color = sur ? new Color(1, 1, 1, .1f) : new Color(1, 1, 1, 0);
                 if (sur && clic)
                 {
-                    zoomCarte = Mathf.Max(zoomCarte, 3f);
+                    zoomCarte = Mathf.Max(zoomCarte, Geo.Actif ? 12f : 3f);
                     panCarte = -(CarteMonde.UV(e.xz) - new Vector2(.5f, .5f)) * TailleCarte();
                     Sons.Jouer("clic", .4f, 1.2f);
                 }

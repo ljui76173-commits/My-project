@@ -16,7 +16,8 @@ namespace Aldermark
         public static float PontX => Riviere(0f);
         public static Vector2 Corvin => new Vector2(PontX + 22f, 27f);
         /// <summary>Le hameau de départ du mode RPG : quelques maisons à l'écart, au sud de la route de l'ouest.</summary>
-        public static readonly Vector2 Hameau = new Vector2(-80f, -96f);
+        public static Vector2 Hameau => Geo.Actif && Geo.Sites.Count > 0 ? Geo.Depart : HameauVallee;
+        public static readonly Vector2 HameauVallee = new Vector2(-80f, -96f);
         public const float RayonHameau = 26f;
         /// <summary>La maison du héros dans le hameau (pas d'herbe sous son plancher).</summary>
         public static Vector2 MaisonHeros => Hameau + new Vector2(-10f, -6f);
@@ -70,6 +71,7 @@ namespace Aldermark
         /// <summary>Hauteur du sol en (x, z).</summary>
         public static float Hauteur(float x, float z)
         {
+            if (Geo.Actif) return Geo.Hauteur(x, z);
             float d = Mathf.Abs(x - Riviere(z));
             float y = -3.6f + Lisse(0, Berge, d) * 4.8f;
             if (d > Berge) y = 1.2f + (d - Berge) * .11f + Mathf.Pow(Mathf.Max(0, d - 70) / 40f, 2) * 7f;
@@ -81,7 +83,7 @@ namespace Aldermark
             float k = Lisse(46, 24, Vector2.Distance(new Vector2(x, z), Village));
             y = y + (3.3f + (Fbm(x * .05f, z * .05f) - .5f) * .8f - y) * k;
             // Le hameau de départ est posé sur un replat
-            float kh = Lisse(RayonHameau + 12f, RayonHameau - 6f, Vector2.Distance(new Vector2(x, z), Hameau));
+            float kh = Lisse(RayonHameau + 12f, RayonHameau - 6f, Vector2.Distance(new Vector2(x, z), HameauVallee));
             y = y + (5.6f + (Fbm(x * .05f, z * .05f) - .5f) * .6f - y) * kh;
             return y;
         }
@@ -95,6 +97,7 @@ namespace Aldermark
 
         public static float DistanceRoute(float x, float z)
         {
+            if (Geo.Actif) return Geo.DistanceRoute(x, z) + 1.5f;
             var p = new Vector2(x, z);
             float m = float.MaxValue;
             foreach (var r in Routes)
@@ -102,11 +105,19 @@ namespace Aldermark
             return m;
         }
 
-        public static bool DansChamp(float x, float z) =>
+        public static bool DansChamp(float x, float z) => Geo.Actif ? Geo.EstChamp(Geo.Sol(x, z)) :
             x > 74 && x < 138 && z > -24 && z < 62 && Vector2.Distance(new Vector2(x, z), Village) > 30;
 
         /// <summary>Bande du champ (0 blé, 1 vert, 2 labour).</summary>
-        public static int BandeChamp(float x, float z) => (int)(((Mathf.Floor((x * .85f + z * .3f) / 7f) % 3) + 3) % 3);
+        public static int BandeChamp(float x, float z) => Geo.Actif ? Mathf.Clamp((int)Geo.Sol(x, z) - (int)TypeSol.Champ0, 0, 2) : (int)(((Mathf.Floor((x * .85f + z * .3f) / 7f) % 3) + 3) % 3);
+
+        /// <summary>Un sol de terre (chemin, pavés, sable, roche, labour) : bruit de pas et poussière.</summary>
+        public static bool SurTerre(float x, float z)
+        {
+            if (!Geo.Actif) return DistanceRoute(x, z) < 2.5f || Vector2.Distance(new Vector2(x, z), Village) < 12f;
+            var s = Geo.Sol(x, z);
+            return Geo.DistanceRoute(x, z) < 1f || s == TypeSol.Chemin || s == TypeSol.Pave || s == TypeSol.Sable || s == TypeSol.LitRiviere || s == TypeSol.Roche || s == TypeSol.Champ2;
+        }
 
         // ---- Nuages : même bruit que le shader du ciel (hash sans sinus, stable entre CPU et GPU)
         static float Fr(float v) => v - Mathf.Floor(v);

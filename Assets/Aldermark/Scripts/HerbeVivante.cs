@@ -61,12 +61,14 @@ namespace Aldermark
                     matrices[i] = Placer(i, x, z);
                 }
             }
+            rp.worldBounds = new Bounds(p, new Vector3(taille + 20f, 400f, taille + 20f));   // suit le joueur (le grand monde fait 8 km)
             for (int debut = 0; debut < nombre; debut += Lot)
                 Graphics.RenderMeshInstanced(rp, touffe, 0, matrices, Mathf.Min(Lot, nombre - debut), debut);
         }
 
         static Matrix4x4 Placer(int i, float x, float z)
         {
+            if (Geo.Actif) return PlacerGrandMonde(i, x, z);
             float y = Monde.Hauteur(x, z);
             if (y < .9f || y > 48f || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f || Vector2.Distance(new Vector2(x, z), Monde.MaisonHeros) < 5.5f) return Vide;
             if (Mathf.Abs(Monde.Hauteur(x + .8f, z) - Monde.Hauteur(x - .8f, z)) > 1.2f) return Vide;
@@ -76,6 +78,26 @@ namespace Aldermark
                 int bande = Monde.BandeChamp(x, z);
                 if (bande == 0) sy = 1.35f + Monde.HashPublic(i, 4.3f) * .3f;
                 else if (bande == 1) sy = .45f;
+                else if (Monde.HashPublic(i, 4.4f) < .5f) return Vide; else sy = .25f;
+            }
+            var rot = Quaternion.Euler(0, Monde.HashPublic(i, 4.7f) * 360f, 0);
+            return Matrix4x4.TRS(new Vector3(x, y - .04f, z), rot, new Vector3(sxz, sy, sxz));
+        }
+
+        /// <summary>Le grand monde : l'herbe suit le type de sol (prés, sous-bois clairsemé, blé, labours), jamais dans l'eau ni sur les routes.</summary>
+        static Matrix4x4 PlacerGrandMonde(int i, float x, float z)
+        {
+            float y = Geo.Hauteur(x, z);
+            var sol = Geo.Sol(x, z);
+            if (!Geo.EstHerbe(sol) || Geo.NiveauEau(x, z) > y - .15f || Geo.DistanceRoute(x, z) < .3f || Vector2.Distance(new Vector2(x, z), Monde.MaisonHeros) < 5.5f) return Vide;
+            if (Mathf.Abs(Geo.Hauteur(x + .8f, z) - Geo.Hauteur(x - .8f, z)) > 1.2f) return Vide;
+            float sy = .35f + Monde.HashPublic(i, 4.1f) * .3f, sxz = .8f + Monde.HashPublic(i, 4.2f) * .5f;
+            if (sol == TypeSol.HerbeSombre && Monde.HashPublic(i, 4.5f) < .35f) return Vide;
+            if (sol == TypeSol.HerbeDoree) sy *= .8f;
+            if (Geo.EstChamp(sol))
+            {
+                if (sol == TypeSol.Champ0) sy = 1.35f + Monde.HashPublic(i, 4.3f) * .3f;
+                else if (sol == TypeSol.Champ1) sy = .45f;
                 else if (Monde.HashPublic(i, 4.4f) < .5f) return Vide; else sy = .25f;
             }
             var rot = Quaternion.Euler(0, Monde.HashPublic(i, 4.7f) * 360f, 0);
