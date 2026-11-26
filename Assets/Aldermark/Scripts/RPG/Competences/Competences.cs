@@ -47,6 +47,7 @@ namespace Aldermark
             stats = GetComponent<StatsHeros>();
             Registre.InscrireSauvegarde(this);
             foreach (var id in DeDepart) Apprendre(id, false);
+            TexturesMagiques.Prechauffer();   // les cercles d'incantation, tracés au chargement plutôt qu'au premier sort
         }
 
         void OnDestroy()

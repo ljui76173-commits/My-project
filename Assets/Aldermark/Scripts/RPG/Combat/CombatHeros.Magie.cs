@@ -15,6 +15,8 @@ namespace Aldermark
 
         Competences comp;
         DefCompetence sortEnCours;
+        CercleMagique cercleMain, cercleSol;
+        float prochaineRune;
         Transform orbe;
         Light lumiereOrbe;
         float prochainAvertissement, prochaineEtincelleSort, prochaineFlammeHeros;
@@ -54,6 +56,7 @@ namespace Aldermark
             courante = null; appui = -1f; comboDemande = false;
             Sons.Jouer("incantation", .5f, HauteurElement(d.element) / Mathf.Max(.35f, d.incantation / .45f));
             CreerOrbe(d);
+            CreerCercles(d);
         }
 
         static float HauteurElement(Element e)
@@ -82,9 +85,13 @@ namespace Aldermark
         {
             var d = sortEnCours;
             sortEnCours = null;
+            if (d == null || comp == null) { DetruireOrbe(); return; }
+            if (!j.Depenser(comp.Cout(d))) { DetruireOrbe(); Avertir("Pas assez de mana"); return; }   // dépenser du mana entraîne l'Esprit
+            // Les cercles éclatent au lancer
+            if (cercleMain != null) cercleMain.Liberer();
+            if (cercleSol != null) cercleSol.Liberer();
+            cercleMain = cercleSol = null;
             DetruireOrbe();
-            if (d == null || comp == null) return;
-            if (!j.Depenser(comp.Cout(d))) { Avertir("Pas assez de mana"); return; }   // dépenser du mana entraîne l'Esprit
             comp.Declencher(d);
             int niveau = comp.Niveau(d.id);
             Vector3 origine = VersMonde(MainSort);
@@ -106,7 +113,98 @@ namespace Aldermark
             });
             comp.Exercer(d.id, d.forme == FormeSort.Soin ? 2 : 1);
             stats.Exercer(Stat.INT, .5);
-            j.Secouer(d.forme == FormeSort.Zone ? .1f : .03f);
+            Decharge(d, niveau, origine, vise);
+        }
+
+        /// <summary>
+        /// Le moment où le sort part : éclair dans la main, souffle sur la caméra (le champ de vision s'ouvre d'un coup),
+        /// onde au sol, et le recul : plus le sort est puissant, plus il te repousse (un pas en arrière,
+        /// puis une vraie glissade, les pieds labourant le sol). Un sort maîtrisé ralentit le temps un instant.
+        /// </summary>
+        void Decharge(DefCompetence d, int niveau, Vector3 origine, Vector3 vise)
+        {
+            float a = Sorts.Ampleur(niveau);
+            int pal = Sorts.Palier(niveau);
+            float puissance = Mathf.Clamp(d.cout / 10f * a, .3f, 2.5f);
+            Color c = d.couleur;
+            Vector3 vers = (vise - origine).sqrMagnitude > .01f ? (vise - origine).normalized : transform.forward;
+            Vector3 avant = Vector3.ProjectOnPlane(vers, Vector3.up);
+            avant = avant.sqrMagnitude > .01f ? avant.normalized : transform.forward;
+
+            // La décharge dans la main
+            Effets.Eclat(origine, c, Mathf.RoundToInt(14 * a), 4f * a, .1f, 0f, .35f, vers);
+            Effets.Eclat(origine, Color.white, Mathf.RoundToInt(6 * a), 6f * a, .05f, 0f, .2f, vers);
+            Sorts.Lueur(origine, c, 5f * a, .22f);
+            if (d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone)
+            {
+                Effets.Anneau(origine + vers * .3f, vers, .45f * a, new Color(c.r, c.g, c.b, .85f), .3f);
+                if (pal >= 3) Effets.Anneau(origine + vers * .9f, vers, .8f * a, new Color(c.r, c.g, c.b, .5f), .35f);
+            }
+
+            // Le souffle sur la caméra et l'écran
+            j.CoupFov(3f + 4.5f * puissance);
+            j.Secouer(.03f + .05f * puissance);
+            HUD.EclairCombat(new Color(c.r, c.g, c.b, .05f + .07f * puissance), .22f, false);
+            if (puissance >= 1.1f) Sons.Jouer("onde", Mathf.Min(.6f, .25f * puissance), .65f);
+
+            // Au sol, sous les pieds
+            if (puissance >= .9f && j.AuSol)
+            {
+                Effets.OndeDeChoc(transform.position, 1f + .7f * puissance, new Color(c.r, c.g, c.b, .7f));
+                Effets.Poussiere(transform.position, Mathf.RoundToInt(10 * puissance));
+            }
+
+            // Le recul
+            if (d.forme != FormeSort.Soin && d.forme != FormeSort.Zone)
+            {
+                if (puissance >= 1.25f && j.AuSol) CommencerGlissade(-avant, puissance * 1.3f, false, true);
+                else if (puissance >= .5f) j.Elan(-avant * puissance * 4f, .2f, puissance * 20f);
+            }
+            if (pal >= 4) Ralentir(.22f);
+        }
+
+        // ---------- les cercles d'incantation ----------
+
+        void CreerCercles(DefCompetence d)
+        {
+            AnnulerCercles();
+            int niveau = comp != null ? comp.Niveau(d.id) : 1;
+            float a = Sorts.Ampleur(niveau);
+            int pal = Sorts.Palier(niveau);
+            bool devant = d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone;
+            // Devant la main (face à la visée) pour ce qui part au loin
+            if (devant)
+                cercleMain = CercleMagique.Creer(VersMonde(mainG), Quaternion.LookRotation(DirectionVisee()),
+                    (j.troisiemePersonne ? .42f : .16f) * a, d.couleur, d.element, pal, true);
+            // Au sol : toujours pour la terre et le soin ; à partir du niveau 4 pour les autres
+            if (!devant || pal >= 2)
+            {
+                float r = d.forme == FormeSort.Zone ? comp.Rayon(d) * .8f : d.forme == FormeSort.Soin ? 1.3f * a : 1.1f * a;
+                cercleSol = CercleMagique.Creer(PiedAuSol(), Quaternion.LookRotation(Vector3.down, transform.forward), r, d.couleur, d.element, pal, !devant);
+            }
+        }
+
+        Vector3 PiedAuSol()
+        {
+            Vector3 p = transform.position;
+            return new Vector3(p.x, Mathf.Max(p.y, Monde.Hauteur(p.x, p.z)) + .05f, p.z);
+        }
+
+        Vector3 DirectionVisee()
+        {
+            if (Cibles.Existe(verrou) && verrou.Vivant)
+            {
+                Vector3 v = verrou.Centre - VersMonde(mainG);
+                if (v.sqrMagnitude > .01f) return v.normalized;
+            }
+            return j.cam.transform.forward;
+        }
+
+        void AnnulerCercles()
+        {
+            if (cercleMain != null) cercleMain.Annuler();
+            if (cercleSol != null) cercleSol.Annuler();
+            cercleMain = cercleSol = null;
         }
 
         /// <summary>Ce que vise le centre de l'écran (on traverse son propre corps et les zones invisibles).</summary>
@@ -165,6 +263,26 @@ namespace Aldermark
             if (etat != Etat.Incantation || sortEnCours == null) { DetruireOrbe(); return; }
             float u = ProgresIncantation;
             int niveau = comp != null ? comp.Niveau(sortEnCours.id) : 1;
+            // Les cercles suivent la main et les pieds, et s'avivent à mesure que l'énergie monte
+            if (cercleMain != null)
+            {
+                Vector3 dir = DirectionVisee();
+                cercleMain.transform.SetPositionAndRotation(VersMonde(mainG) + dir * (j.troisiemePersonne ? .25f : .12f), Quaternion.LookRotation(dir));
+                cercleMain.Progres = u;
+            }
+            if (cercleSol != null)
+            {
+                cercleSol.transform.SetPositionAndRotation(PiedAuSol(), Quaternion.LookRotation(Vector3.down, transform.forward));
+                cercleSol.Progres = u;
+                // Des runes de lumière montent du bord du cercle
+                if (Time.time >= prochaineRune)
+                {
+                    prochaineRune = Time.time + .09f / Sorts.Palier(niveau);
+                    float ang = Random.value * Mathf.PI * 2f;
+                    Vector3 bord = cercleSol.transform.position + new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang)) * cercleSol.Rayon * Random.Range(.6f, 1f);
+                    Effets.Eclat(bord, sortEnCours.couleur, 2, .3f, .07f, -.9f, .9f);
+                }
+            }
             float a = Sorts.Ampleur(niveau);
             int pal = Sorts.Palier(niveau);
             Vector3 p = VersMonde(mainG) + DirMonde(new Vector3(.04f, .05f, .09f));
@@ -184,6 +302,7 @@ namespace Aldermark
 
         void DetruireOrbe()
         {
+            AnnulerCercles();
             if (orbe != null) Destroy(orbe.gameObject);
             orbe = null;
             lumiereOrbe = null;

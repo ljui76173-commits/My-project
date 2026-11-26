@@ -80,8 +80,8 @@ namespace Aldermark
         public static void Poussiere(Vector3 p, int nombre = 18) =>
             Eclat(p, new Color(.78f, .72f, .6f, .7f), nombre, 2.2f, .5f, -.05f, .9f);
 
-        /// <summary>Un sillon sombre dans le sol, qui s'efface lentement.</summary>
-        public static void Sillon(Vector3 p, Vector3 direction)
+        /// <summary>Un sillon sombre dans le sol (largeur et longueur en mètres), qui s'efface lentement.</summary>
+        public static void Sillon(Vector3 p, Vector3 direction, float largeur = .18f, float longueur = .45f, float duree = 12f)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
             Object.Destroy(go.GetComponent<Collider>());
@@ -90,12 +90,12 @@ namespace Aldermark
             go.transform.position = p;
             var plat = Vector3.ProjectOnPlane(direction, Vector3.up);
             go.transform.rotation = Quaternion.LookRotation(Vector3.down, plat.sqrMagnitude > .001f ? plat : Vector3.forward);
-            go.transform.localScale = new Vector3(.18f, .45f, 1f);
+            go.transform.localScale = new Vector3(largeur, longueur, 1f);
             var r = go.GetComponent<MeshRenderer>();
             if (sillon == null) sillon = Transparent(new Color(.25f, .18f, .1f, .75f));
             r.sharedMaterial = sillon;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            go.AddComponent<Fondu>().duree = 12f;
+            go.AddComponent<Fondu>().duree = duree;
         }
 
         /// <summary>Une onde de choc : un anneau qui s'élargit au sol (blanc, ou de la couleur donnée), et de la poussière.</summary>

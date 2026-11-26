@@ -10,7 +10,7 @@ namespace Aldermark
     public static partial class Sorts
     {
         static Mesh meshPic;
-        static Material pierre;
+        static readonly System.Collections.Generic.Dictionary<Color, Material> pierres = new System.Collections.Generic.Dictionary<Color, Material>();
 
         /// <summary>Un éclair : une ligne brisée qui scintille, ramifiée et doublée aux paliers hauts, et un flash de lumière.</summary>
         public static void Eclair(Vector3 a, Vector3 b, Color couleur, int niveau = 1)
@@ -137,7 +137,7 @@ namespace Aldermark
         }
 
         /// <summary>Une pyramide à quatre faces (pointe en haut, base au sol), facettée.</summary>
-        static Mesh MeshPic()
+        public static Mesh MeshPic()
         {
             if (meshPic != null) return meshPic;
             var c = new[] { new Vector3(-.5f, 0, -.5f), new Vector3(.5f, 0, -.5f), new Vector3(.5f, 0, .5f), new Vector3(-.5f, 0, .5f) };
@@ -156,16 +156,17 @@ namespace Aldermark
             return meshPic;
         }
 
-        /// <summary>Un matériau de pierre opaque (éclairé, avec ombres).</summary>
-        static Material Pierre(Color c)
+        /// <summary>Un matériau opaque mat (pierre, terre), éclairé, avec ombres ; un par couleur.</summary>
+        public static Material Pierre(Color c)
         {
-            if (pierre != null) return pierre;
+            if (pierres.TryGetValue(c, out var m) && m != null) return m;
             var sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) return Materiau(c);
-            pierre = new Material(sh) { name = "PierreSort" };
-            pierre.SetColor("_BaseColor", c);
-            pierre.SetFloat("_Smoothness", .1f);
-            return pierre;
+            m = new Material(sh) { name = "PierreSort" };
+            m.SetColor("_BaseColor", c);
+            m.SetFloat("_Smoothness", .08f);
+            pierres[c] = m;
+            return m;
         }
     }
 

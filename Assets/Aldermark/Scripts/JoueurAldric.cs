@@ -106,6 +106,34 @@ namespace Aldermark
         /// <summary>Fait trembler la caméra (force ≈ amplitude en mètres).</summary>
         public void Secouer(float force) => secousse = Mathf.Min(.3f, Mathf.Max(secousse, force));
 
+        // ---------- plans de cinéma ----------
+        // Un plan de caméra placé dans le monde (une glissade, un sort) prend la main sur la caméra normale.
+        // On passe en troisième personne le temps du plan, puis on revient à la vue d'avant.
+
+        /// <summary>Où se tient la caméra de cinéma, où elle regarde, son champ (degrés).</summary>
+        [System.NonSerialized] public Vector3 cinemaPosition;
+        [System.NonSerialized] public Quaternion cinemaRotation = Quaternion.identity;
+        [System.NonSerialized] public float cinemaFov = 55f;
+        float poidsCinema, cibleCinema, fovImpulsion, fovLisse = -1f;
+        bool enCinema, vueAvantCinema, vueARendre;
+
+        public bool EnCinema => enCinema || poidsCinema > 0f;
+
+        /// <summary>Coupe sur un plan de cinéma (cinemaPosition/Rotation doivent être remplis avant).</summary>
+        public void DebutCinema()
+        {
+            if (!enCinema && !vueARendre) vueAvantCinema = troisiemePersonne;
+            enCinema = true; vueARendre = true;
+            cibleCinema = 1f; poidsCinema = 1f;
+            if (!troisiemePersonne) { troisiemePersonne = true; AppliquerVue(); }
+        }
+
+        /// <summary>Le plan se termine : la caméra revient en douceur, puis la vue d'avant reprend.</summary>
+        public void FinCinema() { enCinema = false; cibleCinema = 0f; }
+
+        /// <summary>Un coup de champ de vision (degrés, positif : la vue s'ouvre comme sous un souffle), qui retombe seul.</summary>
+        public void CoupFov(float degres) => fovImpulsion = Mathf.Clamp(fovImpulsion + degres, -20f, 20f);
+
         CharacterController cc;
         StatsHeros stats;
         float tangage, vitesseVerticale, balancement, tempsDepuisDebut;
@@ -343,8 +371,11 @@ namespace Aldermark
                     tangage = Mathf.Lerp(tangage, vise, Mathf.Clamp01(dt * 4f));
                 }
             }
-            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fige ? fovBase - 16f : fovBase, Mathf.Clamp01(dt * 3f));
-            if (!HUD.MenuOuvert && ((kb != null && kb.vKey.wasPressedThisFrame) || (pad != null && pad.dpad.up.wasPressedThisFrame)))
+            if (fovLisse < 0f) fovLisse = cam.fieldOfView;
+            fovLisse = Mathf.Lerp(fovLisse, fige ? fovBase - 16f : fovBase, Mathf.Clamp01(dt * 3f));
+            fovImpulsion *= Mathf.Exp(-Time.unscaledDeltaTime * 7f);
+            cam.fieldOfView = Mathf.Lerp(fovLisse, cinemaFov, Lisse(poidsCinema)) + fovImpulsion;
+            if (!HUD.MenuOuvert && !EnCinema && ((kb != null && kb.vKey.wasPressedThisFrame) || (pad != null && pad.dpad.up.wasPressedThisFrame)))
             {
                 troisiemePersonne = !troisiemePersonne;
                 AppliquerVue();
@@ -442,9 +473,25 @@ namespace Aldermark
             PoserCamera(pivot + rot * new Vector3(.55f * distanceCamera / 3.6f, 0f, -distanceCamera), rot);
         }
 
+        static float Lisse(float u) => u * u * (3f - 2f * u);
+
         /// <summary>Place la caméra, avec le tremblement des chocs et le décalage (roulade, chute).</summary>
         void PoserCamera(Vector3 position, Quaternion rotation)
         {
+            // Le plan de cinéma, mêlé à la caméra normale
+            poidsCinema = Mathf.MoveTowards(poidsCinema, cibleCinema, Time.unscaledDeltaTime / .45f);
+            if (poidsCinema > 0f)
+            {
+                float w = Lisse(poidsCinema);
+                var parent = cam.transform.parent != null ? cam.transform.parent : transform;
+                position = Vector3.Lerp(position, parent.InverseTransformPoint(cinemaPosition), w);
+                rotation = Quaternion.Slerp(rotation, Quaternion.Inverse(parent.rotation) * cinemaRotation, w);
+            }
+            else if (!enCinema && vueARendre)
+            {
+                vueARendre = false;
+                if (troisiemePersonne != vueAvantCinema) { troisiemePersonne = vueAvantCinema; AppliquerVue(); }
+            }
             if (secousse > 0f)
             {
                 float t = Time.unscaledTime * 38f;
