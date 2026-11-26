@@ -55,6 +55,11 @@ namespace Aldermark
         public Vector3 origine;
         /// <summary>La hauteur du sol (monde) : les murs s'assombrissent en approchant du sol.</summary>
         public float sol = -10000f;
+        /// <summary>
+        /// Faux : version de loin (niveau de détail simplifié) : les petites pièces (colombages, encadrements, volets,
+        /// rangs de tuiles) ne sont pas posées. Les tirages au sort restent les mêmes : la maison ne change pas de forme.
+        /// </summary>
+        public bool detail = true;
         /// <summary>Écart de teinte d'une face à l'autre (0 : aucune).</summary>
         public float nuance = .05f;
         int compteur;
