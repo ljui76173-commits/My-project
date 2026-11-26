@@ -23,9 +23,11 @@ namespace Aldermark
 
     /// <summary>
     /// Ce que font les sorts, pour tout le monde (le héros comme les monstres) :
-    /// projectiles, traits de foudre, cônes, zones, soins, et leurs effets visuels.
+    /// projectiles, traits de foudre, cônes, zones, soins.
+    /// Le niveau du sort se voit : chaque niveau grandit et éclaire le sort (Ampleur),
+    /// et aux niveaux 4, 7 et 10 (les paliers) il gagne une nouvelle forme visible.
     /// </summary>
-    public static class Sorts
+    public static partial class Sorts
     {
         /// <summary>Quelqu'un vient de lancer un sort (pour apprendre en regardant).</summary>
         public static event Action<Incantation> Lance;
@@ -34,6 +36,15 @@ namespace Aldermark
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reinitialiser() { Lance = null; materiaux.Clear(); }
+
+        /// <summary>La taille et l'éclat d'un sort selon son niveau : 1 au niveau 1, 1,9 au niveau 10.</summary>
+        public static float Ampleur(int niveau) => 1f + .1f * (Mathf.Clamp(niveau, 1, 10) - 1);
+
+        /// <summary>1 (niveaux 1 à 3), 2 (4 à 6), 3 (7 à 9), 4 (niveau 10, maîtrisé).</summary>
+        public static int Palier(int niveau) => niveau >= 10 ? 4 : niveau >= 7 ? 3 : niveau >= 4 ? 2 : 1;
+
+        /// <summary>Le niveau où commence un palier (2 → 4, 3 → 7, 4 → 10).</summary>
+        public static int DebutPalier(int palier) => palier >= 4 ? 10 : palier == 3 ? 7 : palier == 2 ? 4 : 1;
 
         /// <summary>Un matériau translucide et lumineux, partagé par couleur.</summary>
         public static Material Materiau(Color c)
@@ -52,6 +63,7 @@ namespace Aldermark
             if (s.def == null) return;
             if (s.direction.sqrMagnitude < .001f) s.direction = Vector3.forward;
             s.direction.Normalize();
+            if (s.niveau < 1) s.niveau = 1;
             Lance?.Invoke(s);
             switch (s.def.forme)
             {
@@ -70,44 +82,64 @@ namespace Aldermark
             var d = s.def;
             bool effet = d.effet != Effet.Aucun && UnityEngine.Random.value < d.chanceEffet;
             bool vivant = c.Vivant;
+            Vector3 centre = c.Centre;
             c.Recevoir(new Coup
             {
                 degats = s.attaque * mult, direction = direction, poussee = s.poussee, lourd = d.lourd, magique = true,
                 auteur = s.auteur, nom = d.nom, element = d.element, effet = effet ? d.effet : Effet.Aucun, dureeEffet = d.dureeEffet,
             });
             s.touche?.Invoke(c, vivant && Cibles.Existe(c) && !c.Vivant);
-            Impact(d.element, c.Centre, direction);
+            Impact(d.element, centre, direction, s.niveau);
         }
 
-        /// <summary>L'éclat d'un sort qui frappe (une cible, un mur, le sol).</summary>
-        public static void Impact(Element e, Vector3 p, Vector3 direction)
+        /// <summary>L'éclat d'un sort qui frappe (une cible, un mur, le sol), d'autant plus grand que le sort est haut.</summary>
+        public static void Impact(Element e, Vector3 p, Vector3 direction, int niveau = 1)
         {
+            float a = Ampleur(niveau);
+            int pal = Palier(niveau);
             Color c = CatalogueCompetences.CouleurElement(e);
+            Vector3 sol = new Vector3(p.x, Monde.Hauteur(p.x, p.z), p.z);
+            bool presDuSol = p.y - sol.y < 3f;
             switch (e)
             {
                 case Element.Feu:
-                    Effets.Eclat(p, new Color(1f, .55f, .15f), 22, 4.5f, .2f, -.4f, .6f);
-                    Effets.Eclat(p, new Color(1f, .9f, .5f), 10, 7f, .07f, .8f, .4f);
-                    Sons.JouerA("sortFeu", p, .7f, .75f);
-                    Lueur(p, c, 5f, .25f);
+                    Effets.Eclat(p, new Color(1f, .55f, .15f), Mathf.RoundToInt(22 * a), 4.5f * Mathf.Sqrt(a), .2f * a, -.4f, .6f);
+                    Effets.Eclat(p, new Color(1f, .9f, .5f), Mathf.RoundToInt(10 * a), 7f * a, .07f, .8f, .4f);
+                    Effets.Eclat(p, new Color(.25f, .2f, .18f, .5f), Mathf.RoundToInt(6 * a), 1.2f, .45f * a, -.25f, 1.1f);   // fumée
+                    Sons.JouerA("sortFeu", p, .7f + .03f * niveau, .78f - .02f * niveau);
+                    Lueur(p, c, 5f * a, .25f + .02f * niveau);
+                    if (pal >= 2) Effets.Anneau(p, -direction, .9f * a, new Color(1f, .6f, .2f, .8f));
+                    if (pal >= 3 && presDuSol) Brasier(sol, .9f * a, 2.6f);
+                    if (pal >= 4)
+                    {
+                        Effets.Eclat(p, new Color(.65f, .82f, 1f), 24, 6f, .16f, -.5f, .5f);
+                        if (presDuSol) Effets.OndeDeChoc(sol, 2.6f, new Color(1f, .55f, .2f, .85f));
+                    }
                     break;
                 case Element.Glace:
-                    Effets.Eclat(p, new Color(.85f, .96f, 1f), 18, 5f, .09f, 1.6f, .55f, -direction);
-                    Effets.Eclat(p, new Color(.6f, .85f, 1f, .6f), 8, 1.5f, .3f, -.05f, .5f);
-                    Sons.JouerA("sortGlace", p, .7f, 1.15f);
+                    Effets.Eclat(p, new Color(.85f, .96f, 1f), Mathf.RoundToInt(18 * a), 5f * Mathf.Sqrt(a), .09f * a, 1.6f, .55f, -direction);
+                    Effets.Eclat(p, new Color(.6f, .85f, 1f, .6f), Mathf.RoundToInt(8 * a), 1.5f, .3f * a, -.05f, .5f + .05f * niveau);
+                    Sons.JouerA("sortGlace", p, .7f + .03f * niveau, 1.15f - .02f * niveau);
+                    if (pal >= 2) Effets.Anneau(p, -direction, .8f * a, new Color(.75f, .93f, 1f, .75f), .45f);
+                    if (pal >= 3 && presDuSol) Pics(sol, pal >= 4 ? 9 : 5, .5f * a, .55f * a, new Color(.7f, .9f, 1f, .7f), true, 1.4f);
                     break;
                 case Element.Foudre:
-                    Effets.Eclat(p, new Color(.9f, .92f, 1f), 16, 6f, .06f, .5f, .3f);
-                    Lueur(p, c, 8f, .15f);
+                    Effets.Eclat(p, new Color(.9f, .92f, 1f), Mathf.RoundToInt(16 * a), 6f * a, .06f, .5f, .3f);
+                    Lueur(p, c, 8f * a, .15f + .02f * niveau);
+                    if (pal >= 3 && presDuSol)
+                    {
+                        Effets.OndeDeChoc(sol, 1.2f * a, new Color(.8f, .85f, 1f, .8f));
+                        Effets.Sillon(sol, direction);
+                    }
                     break;
                 case Element.Terre:
-                    Effets.Terre(p, Vector3.up);
+                    for (int k = 0; k < Mathf.CeilToInt(a); k++) Effets.Terre(p, Vector3.up);
                     break;
                 case Element.Lumiere:
-                    Effets.Eclat(p, c, 12, 1.5f, .12f, -.4f, .8f);
+                    Effets.Eclat(p, c, Mathf.RoundToInt(12 * a), 1.5f, .12f, -.4f, .8f);
                     break;
                 default:
-                    Effets.Eclat(p, c, 10, 3f, .12f, .4f, .4f);
+                    Effets.Eclat(p, c, Mathf.RoundToInt(10 * a), 3f, .12f, .4f, .4f);
                     break;
             }
         }
@@ -130,9 +162,9 @@ namespace Aldermark
                 touchee = c;
                 fin = c != null ? c.Centre : point;
             }
-            Eclair(s.origine, fin, d.couleur);
-            Sons.JouerA("sortFoudre", fin, 1f, UnityEngine.Random.Range(.92f, 1.08f), 90f);
-            if (touchee == null) { Impact(d.element, fin, s.direction); return; }
+            Eclair(s.origine, fin, d.couleur, s.niveau);
+            Sons.JouerA("sortFoudre", fin, .9f + .02f * s.niveau, Mathf.Max(.72f, UnityEngine.Random.Range(.92f, 1.08f) - .03f * (s.niveau - 1)), 90f + 6f * s.niveau);
+            if (touchee == null) { Impact(d.element, fin, s.direction, s.niveau); return; }
             Toucher(s, touchee, (fin - s.origine).normalized);
             if (s.niveau < 5) return;
             // Le rebond : sur l'ennemi le plus proche de la première cible
@@ -145,7 +177,7 @@ namespace Aldermark
                 if (dist < best) { best = dist; suivant = cb; }
             }
             if (suivant == null) return;
-            Eclair(fin, suivant.Centre, d.couleur);
+            Eclair(fin, suivant.Centre, d.couleur, s.niveau);
             Toucher(s, suivant, (suivant.Centre - fin).normalized, .6);
         }
 
@@ -153,13 +185,34 @@ namespace Aldermark
         static void Cone(Incantation s)
         {
             var d = s.def;
+            float a = Ampleur(s.niveau);
+            int pal = Palier(s.niveau);
             Vector3 avant = Vector3.ProjectOnPlane(s.direction, Vector3.up).normalized;
             if (avant.sqrMagnitude < .01f) avant = s.direction;
             Vector3 pied = s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
-            Effets.Eclat(s.origine, new Color(.9f, .97f, .93f, .55f), 46, 15f, .3f, 0f, .45f, s.direction);
-            Effets.Eclat(s.origine, new Color(1f, 1f, 1f, .8f), 20, 22f, .06f, 0f, .3f, s.direction);
-            for (int k = 1; k <= 3; k++) Effets.Poussiere(pied + avant * k * 1.8f, 5);
-            Sons.JouerA("sortVent", s.origine, 1f, UnityEngine.Random.Range(.92f, 1.08f));
+            Effets.Eclat(s.origine, new Color(.9f, .97f, .93f, .55f), Mathf.RoundToInt(46 * a), 15f * Mathf.Sqrt(a), .3f * a, 0f, .45f, s.direction);
+            Effets.Eclat(s.origine, new Color(1f, 1f, 1f, .8f), Mathf.RoundToInt(20 * a), 22f * Mathf.Sqrt(a), .06f, 0f, .3f, s.direction);
+            int lignes = 3 + pal;
+            for (int k = 1; k <= lignes; k++)
+            {
+                Vector3 p = pied + avant * k * d.portee / lignes;
+                Effets.Poussiere(p, Mathf.RoundToInt(5 * a));
+                if (pal >= 2) Effets.Eclat(p + Vector3.up * .2f, new Color(.45f, .6f, .25f), 4, 5f, .09f, .4f, .8f, avant + Vector3.up * .5f);   // herbes et feuilles
+            }
+            if (pal >= 3)
+            {
+                // Des tourbillons au bout du souffle
+                Vector3 droite = Vector3.Cross(Vector3.up, avant);
+                foreach (float cote in pal >= 4 ? new[] { -1f, 0f, 1f } : new[] { -1f, 1f })
+                    Tourbillon(pied + avant * d.portee * .9f + droite * cote * d.portee * .35f, 1.8f, 1.1f * a);
+            }
+            if (pal >= 4)
+            {
+                Vector3 o = s.origine;
+                Effets.Anneau(o + avant * 1.5f, avant, 3.5f, new Color(.92f, 1f, .96f, .55f), .4f);
+                Retard.Lancer(.12f, () => Effets.Anneau(o + avant * 3.5f, avant, 5f, new Color(.92f, 1f, .96f, .4f), .4f));
+            }
+            Sons.JouerA("sortVent", s.origine, .9f + .03f * s.niveau, UnityEngine.Random.Range(.92f, 1.08f) - .02f * (s.niveau - 1));
             foreach (var c in Autour(s, pied, d.portee))
             {
                 Vector3 vers = Vector3.ProjectOnPlane(c.Centre - pied, Vector3.up);
@@ -171,21 +224,44 @@ namespace Aldermark
         /// <summary>La terre : une onde autour du lanceur qui frappe, soulève et étourdit.</summary>
         static void Zone(Incantation s)
         {
+            float a = Ampleur(s.niveau);
+            int pal = Palier(s.niveau);
             Vector3 centre = s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
             centre.y = Monde.Hauteur(centre.x, centre.z);
             float rayon = s.rayon > 0f ? s.rayon : s.def.rayon;
-            Effets.OndeDeChoc(centre, rayon);
-            for (int k = 0; k < 10; k++)
+            Effets.OndeDeChoc(centre, rayon, new Color(.85f, .72f, .5f, .85f));
+            int gerbes = 10 + 2 * (s.niveau - 1);
+            for (int k = 0; k < gerbes; k++)
             {
-                float a = k * Mathf.PI * .2f;
-                Vector3 p = centre + new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * rayon * UnityEngine.Random.Range(.45f, .9f);
+                float ang = k * Mathf.PI * 2f / gerbes;
+                Vector3 p = centre + new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang)) * rayon * UnityEngine.Random.Range(.45f, .9f);
                 p.y = Monde.Hauteur(p.x, p.z);
-                Effets.Terre(p, Vector3.up * 2f + (p - centre).normalized);
+                Effets.Terre(p, Vector3.up * 2f * a + (p - centre).normalized);
                 Effets.Sillon(p, p - centre);
             }
-            Sons.JouerA("sortTerre", centre, 1f, UnityEngine.Random.Range(.9f, 1.05f), 80f);
+            if (pal >= 2) Pics(centre, pal >= 4 ? 16 : pal >= 3 ? 11 : 7, rayon * .75f, 1.1f * a, new Color(.48f, .4f, .32f), false, 1.1f);
+            if (pal >= 3)
+                Retard.Lancer(.3f, () =>
+                {
+                    Effets.OndeDeChoc(centre, rayon * 1.35f, new Color(.85f, .72f, .5f, .6f));
+                    for (int k = 0; k < 8; k++)
+                    {
+                        float ang = k * Mathf.PI * .25f + .4f;
+                        Vector3 p = centre + new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang)) * rayon * 1.2f;
+                        p.y = Monde.Hauteur(p.x, p.z);
+                        Effets.Terre(p, Vector3.up * 2.5f);
+                    }
+                });
+            if (pal >= 4)
+                for (int k = 0; k < 12; k++)
+                {
+                    float ang = k * Mathf.PI / 6f;
+                    var dir = new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang));
+                    Effets.Sillon(centre + dir * 1.2f, dir);
+                }
+            Sons.JouerA("sortTerre", centre, .9f + .03f * s.niveau, UnityEngine.Random.Range(.9f, 1.05f) - .025f * (s.niveau - 1), 80f + 6f * s.niveau);
             var h = CombatHeros.Instance;
-            if (h != null) h.Secousse(Mathf.Clamp01(1f - Vector3.Distance(h.transform.position, centre) / 25f) * .14f);
+            if (h != null) h.Secousse(Mathf.Clamp01(1f - Vector3.Distance(h.transform.position, centre) / 25f) * .14f * a);
             foreach (var c in Autour(s, centre, rayon))
             {
                 Vector3 vers = Vector3.ProjectOnPlane(c.Centre - centre, Vector3.up);
@@ -201,19 +277,27 @@ namespace Aldermark
         {
             var c = s.auteur;
             if (!Cibles.Existe(c) || !c.Vivant) return;
+            float a = Ampleur(s.niveau);
+            int pal = Palier(s.niveau);
             double avant = c.VieActuelle;
             if (c is CombatHeros && StatsHeros.Instance != null) StatsHeros.Instance.Rendre(s.attaque);
             else if (c is Combattant cb) cb.Rendre(s.attaque);
             double rendu = c.VieActuelle - avant;
             Vector3 p = c.Corps.position;
-            for (int k = 0; k < 6; k++)
+            int n = 6 + 2 * (pal - 1);
+            for (int k = 0; k < n; k++)
             {
-                float a = k * Mathf.PI / 3f;
-                Effets.Eclat(p + new Vector3(Mathf.Cos(a) * .6f, .2f, Mathf.Sin(a) * .6f), s.def.couleur, 6, .8f, .14f, -.9f, 1.1f);
+                float ang = k * Mathf.PI * 2f / n;
+                Effets.Eclat(p + new Vector3(Mathf.Cos(ang) * .6f * a, .2f, Mathf.Sin(ang) * .6f * a), s.def.couleur, Mathf.RoundToInt(6 * a), .8f, .14f, -.9f, 1.1f);
             }
-            Effets.Eclat(c.Centre, new Color(1f, 1f, .85f), 14, 1.2f, .1f, -.6f, 1f);
-            Lueur(c.Centre, s.def.couleur, 6f, .6f);
-            Sons.JouerA("sortSoin", c.Centre, .9f, 1f);
+            Effets.Eclat(c.Centre, new Color(1f, 1f, .85f), Mathf.RoundToInt(14 * a), 1.2f, .1f, -.6f, 1f);
+            Lueur(c.Centre, s.def.couleur, 6f * a, .6f);
+            if (pal >= 2) Effets.OndeDeChoc(p, 1.6f * a, new Color(.6f, 1f, .55f, .8f));
+            if (pal >= 3) Colonne(p, .55f * a, 5f, new Color(.75f, 1f, .7f, .35f));
+            if (pal >= 4)
+                for (int k = 0; k < 5; k++)
+                    Effets.Eclat(p + Vector3.up * 3.5f + UnityEngine.Random.insideUnitSphere * .8f, new Color(1f, .9f, .5f), 8, .6f, .1f, .35f, 2f);
+            Sons.JouerA("sortSoin", c.Centre, .9f, 1f - .015f * (s.niveau - 1));
             Vector3 ou = c is CombatHeros ? c.Centre + Vector3.up * .6f : c.Centre + Vector3.up * .9f;
             HUD.ChiffreTexte(ou, "+" + Nombres.Court(Math.Max(0, rendu)), new Color(.55f, 1f, .55f));
         }
@@ -243,7 +327,7 @@ namespace Aldermark
             c = null;
             point = depuis + dir * distance;
             var hits = Physics.SphereCastAll(depuis, rayon, dir, distance, ~0, QueryTriggerInteraction.Collide);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            Array.Sort(hits, (x, y) => x.distance.CompareTo(y.distance));
             foreach (var hit in hits)
             {
                 var cible = hit.collider.GetComponentInParent<ICible>();
@@ -270,198 +354,6 @@ namespace Aldermark
                 }
             }
             return false;
-        }
-
-        /// <summary>Un éclair : une ligne brisée qui scintille un instant, et un flash de lumière.</summary>
-        public static void Eclair(Vector3 a, Vector3 b, Color couleur)
-        {
-            var go = new GameObject("Eclair");
-            var lr = go.AddComponent<LineRenderer>();
-            int n = Mathf.Clamp(Mathf.CeilToInt(Vector3.Distance(a, b) / .8f), 4, 30);
-            lr.positionCount = n + 1;
-            lr.useWorldSpace = true;
-            lr.widthMultiplier = .09f;
-            lr.numCapVertices = 2;
-            lr.sharedMaterial = Materiau(new Color(.92f, .95f, 1f, 1f));
-            lr.startColor = lr.endColor = Color.white;
-            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            var e = go.AddComponent<EclairVisuel>();
-            e.a = a; e.b = b; e.ligne = lr; e.n = n;
-            Lueur(b, couleur, 9f, .18f);
-            Lueur(a, couleur, 4f, .12f);
-        }
-
-        /// <summary>Une lumière brève (une explosion, un éclair).</summary>
-        public static void Lueur(Vector3 p, Color c, float portee, float duree)
-        {
-            var go = new GameObject("Lueur");
-            go.transform.position = p;
-            var l = go.AddComponent<Light>();
-            l.type = LightType.Point; l.color = c; l.range = portee; l.intensity = 3f; l.shadows = LightShadows.None;
-            go.AddComponent<LueurBreve>().duree = duree;
-        }
-    }
-
-    /// <summary>Une lumière qui s'éteint en quelques dixièmes de seconde.</summary>
-    public class LueurBreve : MonoBehaviour
-    {
-        public float duree = .2f;
-        float t, i0;
-        Light l;
-        void Start() { l = GetComponent<Light>(); i0 = l.intensity; }
-        void Update()
-        {
-            t += Time.deltaTime;
-            l.intensity = i0 * Mathf.Clamp01(1f - t / duree);
-            if (t >= duree) Destroy(gameObject);
-        }
-    }
-
-    /// <summary>L'éclair qui se redessine plusieurs fois avant de s'effacer.</summary>
-    public class EclairVisuel : MonoBehaviour
-    {
-        public Vector3 a, b;
-        public LineRenderer ligne;
-        public int n;
-        float t, prochain;
-        const float Duree = .22f;
-
-        void Update()
-        {
-            t += Time.deltaTime;
-            if (t >= prochain)
-            {
-                prochain = t + .045f;
-                Vector3 d = b - a;
-                Vector3 c1 = Vector3.Cross(d, Vector3.up);
-                if (c1.sqrMagnitude < .001f) c1 = Vector3.right;
-                c1.Normalize();
-                Vector3 c2 = Vector3.Cross(d.normalized, c1);
-                float amp = Mathf.Min(.6f, d.magnitude * .06f);
-                for (int k = 0; k <= n; k++)
-                {
-                    float u = k / (float)n;
-                    float bord = Mathf.Sin(u * Mathf.PI);   // les deux bouts restent en place
-                    ligne.SetPosition(k, a + d * u + (c1 * UnityEngine.Random.Range(-1f, 1f) + c2 * UnityEngine.Random.Range(-1f, 1f)) * amp * bord);
-                }
-            }
-            float alpha = Mathf.Clamp01(1f - t / Duree);
-            ligne.widthMultiplier = .09f * (.4f + alpha);
-            ligne.startColor = ligne.endColor = new Color(1f, 1f, 1f, alpha);
-            if (t >= Duree) Destroy(gameObject);
-        }
-    }
-
-    /// <summary>Un projectile de sort : il vole, s'incurve vers la cible verrouillée, et frappe la première chose hostile ou solide.</summary>
-    public class ProjectileSort : MonoBehaviour
-    {
-        Incantation s;
-        Vector3 vitesse;
-        float parcouru;
-        Transform visuel;
-        ParticleSystem trainee;
-        bool fini;
-
-        public static void Creer(Incantation s)
-        {
-            var d = s.def;
-            var go = new GameObject("Sort_" + d.id);
-            go.transform.position = s.origine;
-            go.transform.rotation = Quaternion.LookRotation(s.direction);
-            var p = go.AddComponent<ProjectileSort>();
-            p.s = s;
-            p.vitesse = s.direction * d.vitesse;
-
-            // Le cœur : une sphère lumineuse (allongée en éclat pour la glace) et un noyau clair
-            bool eclat = d.element == Element.Glace;
-            var coeur = GameObject.CreatePrimitive(eclat ? PrimitiveType.Cube : PrimitiveType.Sphere);
-            Destroy(coeur.GetComponent<Collider>());
-            coeur.transform.SetParent(go.transform, false);
-            coeur.transform.localScale = eclat ? new Vector3(d.taille * .7f, d.taille * .7f, d.taille * 3.2f) : Vector3.one * d.taille * 2f;
-            if (eclat) coeur.transform.localRotation = Quaternion.Euler(0, 0, 45f);
-            var mr = coeur.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = Sorts.Materiau(new Color(d.couleur.r, d.couleur.g, d.couleur.b, .8f));
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            var noyau = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            Destroy(noyau.GetComponent<Collider>());
-            noyau.transform.SetParent(go.transform, false);
-            noyau.transform.localScale = Vector3.one * d.taille * (eclat ? .6f : 1.1f);
-            var mn = noyau.GetComponent<MeshRenderer>();
-            mn.sharedMaterial = Sorts.Materiau(new Color(1f, .97f, .9f, .95f));
-            mn.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            p.visuel = coeur.transform;
-
-            // La lumière qu'il porte
-            var l = go.AddComponent<Light>();
-            l.type = LightType.Point; l.color = d.couleur; l.range = 5f; l.intensity = 2.2f; l.shadows = LightShadows.None;
-
-            // La traînée
-            var tg = new GameObject("Trainee");
-            tg.transform.SetParent(go.transform, false);
-            var ps = tg.AddComponent<ParticleSystem>();
-            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            var m = ps.main;
-            m.loop = true; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
-            m.startLifetime = new ParticleSystem.MinMaxCurve(.25f, .45f);
-            m.startSpeed = new ParticleSystem.MinMaxCurve(0f, .6f);
-            m.startSize = new ParticleSystem.MinMaxCurve(d.taille * .8f, d.taille * 1.6f);
-            m.startColor = new ParticleSystem.MinMaxGradient(new Color(d.couleur.r, d.couleur.g, d.couleur.b, .7f), new Color(1f, .95f, .8f, .5f));
-            m.gravityModifier = d.element == Element.Feu ? -.3f : 0f;
-            var em = ps.emission; em.rateOverTime = 0f; em.rateOverDistance = 14f;
-            var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Sphere; sh.radius = d.taille * .5f;
-            var tl = ps.sizeOverLifetime; tl.enabled = true; tl.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0f));
-            var col = ps.colorOverLifetime; col.enabled = true;
-            var g = new Gradient();
-            g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                      new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
-            col.color = g;
-            tg.GetComponent<ParticleSystemRenderer>().sharedMaterial = Sorts.Materiau(Color.white);
-            ps.Play();
-            p.trainee = ps;
-            Sons.JouerA(eclat ? "sortGlace" : "sortFeu", s.origine, .7f, eclat ? 1.4f : 1.15f);
-        }
-
-        void Update()
-        {
-            if (fini) return;
-            float dt = Time.deltaTime;
-            if (dt <= 0f) return;
-            var d = s.def;
-            // S'incurve vers la cible verrouillée
-            if (Sorts.Valide(s, s.cible))
-            {
-                Vector3 voulu = (s.cible.Centre - transform.position).normalized * d.vitesse;
-                vitesse = Vector3.RotateTowards(vitesse, voulu, 2.2f * dt, 0f);
-            }
-            Vector3 pas = vitesse * dt;
-            float l = pas.magnitude;
-            if (Sorts.Premier(s, transform.position, pas / l, l, d.taille * .7f, out var c, out var point))
-            {
-                transform.position = point;
-                Finir(c);
-                return;
-            }
-            transform.position += pas;
-            transform.rotation = Quaternion.LookRotation(vitesse);
-            if (visuel != null && d.element == Element.Glace) visuel.Rotate(0, 0, 720f * dt, Space.Self);
-            parcouru += l;
-            if (parcouru >= d.portee) Finir(null, false);
-        }
-
-        void Finir(ICible c, bool impact = true)
-        {
-            fini = true;
-            if (c != null) Sorts.Toucher(s, c, vitesse.normalized);
-            else if (impact) Sorts.Impact(s.def.element, transform.position, vitesse.normalized);
-            else Effets.Eclat(transform.position, s.def.couleur, 6, 1f, .1f, 0f, .3f);
-            // La traînée finit de se dissiper seule
-            if (trainee != null)
-            {
-                trainee.transform.SetParent(null, true);
-                trainee.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-                Destroy(trainee.gameObject, .6f);
-            }
-            Destroy(gameObject);
         }
     }
 }

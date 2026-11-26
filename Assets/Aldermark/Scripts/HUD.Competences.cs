@@ -17,7 +17,8 @@ namespace Aldermark
         {
             public RectTransform fond, recharge;
             public UnityEngine.UI.Image teinte;
-            public UnityEngine.UI.Text abrege, touche, cout, attente;
+            public UnityEngine.UI.Text abrege, touche, cout, attente, niveau;
+            public UnityEngine.UI.Outline contour;
         }
 
         class LigneCompetence
@@ -77,8 +78,9 @@ namespace Aldermark
             compType = Haut(Texte("Type", panneauCompetences, "", 18, Pale, TextAnchor.UpperLeft), 580, 160, 620, 26);
             compDescription = Haut(Texte("Description", panneauCompetences, "", 19, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 196, 620, 80);
             compDescription.horizontalOverflow = HorizontalWrapMode.Wrap;
-            compChiffres = Haut(Texte("Chiffres", panneauCompetences, "", 18, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 284, 620, 170);
-            compChiffres.lineSpacing = 1.12f;
+            compChiffres = Haut(Texte("Chiffres", panneauCompetences, "", 17, new Color(.92f, .9f, 1f), TextAnchor.UpperLeft), 580, 276, 620, 168);
+            compChiffres.lineSpacing = 1.05f;
+            compChiffres.horizontalOverflow = HorizontalWrapMode.Wrap;
             compNiveau = Haut(Texte("Niveau", panneauCompetences, "", 20, Color.white, TextAnchor.UpperLeft), 580, 446, 620, 28);
             var fondXP = Panneau("BarreXP", panneauCompetences, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(580, -478), new Vector2(620, 8), new Color(1, 1, 1, .12f));
             remplXPCompetence = Panneau("Remplissage", fondXP, Vector2.zero, new Vector2(0, 1), new Vector2(0, .5f), Vector2.zero, Vector2.zero, CouleurOr);
@@ -105,6 +107,7 @@ namespace Aldermark
                 large ? new Vector2(580 + k * 156, -558) : pos, taille, new Color(.086f, .07f, .15f, .78f));
             var o = c.fond.gameObject.AddComponent<UnityEngine.UI.Outline>();
             o.effectColor = new Color(1f, 1f, 1f, .18f); o.effectDistance = new Vector2(1, -1);
+            c.contour = o;
             var t = Panneau("Teinte", c.fond, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color(0, 0, 0, 0));
             t.offsetMin = new Vector2(3, 3); t.offsetMax = new Vector2(-3, -3);
             c.teinte = t.GetComponent<UnityEngine.UI.Image>();
@@ -119,6 +122,8 @@ namespace Aldermark
             Etirer((RectTransform)c.cout.transform, new Vector2(2, 2), new Vector2(-4, -1));
             c.attente = Texte("Attente", c.fond, "", 16, Color.white, TextAnchor.MiddleCenter);
             Etirer((RectTransform)c.attente.transform, Vector2.zero, Vector2.zero);
+            c.niveau = Texte("Niveau", c.fond, "", 12, CouleurOr, TextAnchor.LowerLeft);
+            Etirer((RectTransform)c.niveau.transform, new Vector2(5, 1), new Vector2(-2, -1));
             return c;
         }
 
@@ -162,7 +167,8 @@ namespace Aldermark
             {
                 c.teinte.color = new Color(0, 0, 0, 0);
                 c.abrege.text = large ? "<color=#8a87a6>vide</color>" : "";
-                c.cout.text = ""; c.attente.text = "";
+                c.cout.text = ""; c.attente.text = ""; c.niveau.text = "";
+                c.contour.effectColor = new Color(1f, 1f, 1f, .18f); c.contour.effectDistance = new Vector2(1, -1);
                 c.recharge.anchorMax = new Vector2(1, 0);
                 return;
             }
@@ -172,7 +178,14 @@ namespace Aldermark
             Color e = d.couleur;
             c.teinte.color = new Color(e.r, e.g, e.b, mana ? .32f : .1f);
             string couleurNom = ColorUtility.ToHtmlStringRGB(mana ? Color.Lerp(e, Color.white, .55f) : new Color(.55f, .55f, .6f));
+            int n = Mathf.Max(1, comp.Niveau(d.id));
+            int pal = Sorts.Palier(n);
             c.abrege.text = large ? $"<color=#{couleurNom}>{d.nom}</color>" : $"<color=#{couleurNom}>{d.abrege}</color>";
+            c.niveau.text = large ? "" : n.ToString();
+            if (large) c.abrege.text += $"  <size=13><color=#ffd27a>niv. {n}</color></size>";
+            // Le cadre de la case dit le palier : blanc discret, puis la couleur du sort, puis l'or du sort maîtrisé
+            c.contour.effectColor = pal >= 4 ? new Color(1f, .82f, .45f, 1f) : pal >= 2 ? new Color(e.r, e.g, e.b, pal >= 3 ? .9f : .55f) : new Color(1f, 1f, 1f, .18f);
+            c.contour.effectDistance = pal >= 3 ? new Vector2(2, -2) : new Vector2(1, -1);
             c.cout.text = Mathf.CeilToInt(cout).ToString();
             c.cout.color = mana ? CouleurManaRPG : new Color(1f, .45f, .45f);
             c.recharge.anchorMax = new Vector2(1, Mathf.Clamp01(attente / recharge));
@@ -313,8 +326,15 @@ namespace Aldermark
                                   d.effet == Effet.Choc ? $"étourdit {d.dureeEffet:0.#} s" : "repousse fort";
                     sb.AppendLine($"Effet  {CatalogueCompetences.NomEffet(d.effet)} : {chance}{quoi}");
                 }
+                // L'aspect : ce que le niveau a déjà changé, et le prochain palier
+                if (d.paliers != null)
+                {
+                    int pal = Sorts.Palier(n);
+                    if (pal >= 2) sb.AppendLine($"Aspect  <color=#a9e0ff>{d.paliers[pal - 2]}</color>");
+                    if (pal < 4) sb.AppendLine($"<color=#a9a6c4>Au niveau {Sorts.DebutPalier(pal + 1)} : {d.paliers[pal - 1]}</color>");
+                }
                 int t = comp.Touche(d.id);
-                sb.AppendLine(t > 0 ? $"\nRaccourci  <b>{t}</b>" : "\n<color=#ffd27a>Pas encore dans un raccourci : appuie sur 1, 2, 3 ou 4</color>");
+                sb.AppendLine(t > 0 ? $"Raccourci  <b>{t}</b>" : "<color=#ffd27a>Pas encore dans un raccourci : appuie sur 1, 2, 3 ou 4</color>");
             }
             else
             {
