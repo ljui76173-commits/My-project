@@ -27,7 +27,10 @@ namespace Aldermark.Editeur
         static readonly Dictionary<string, Material> materiaux = new Dictionary<string, Material>();
 
         [MenuItem("Aldermark/Générer la vallée de Varenne")]
-        public static void Generer()
+        public static void Generer() => Generer(false);
+
+        /// <summary>Construit la vallée ; rpg = vrai : le monde ouvert (hameau de départ, stats, sauvegarde) au lieu du scénario du pont.</summary>
+        public static void Generer(bool rpg)
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             coucheSceau = LayerMask.NameToLayer("Sceau");
@@ -61,12 +64,13 @@ namespace Aldermark.Editeur
                 Habitants();
                 ReglagesURP();
 
-                const string chemin = "Assets/Scenes/Varenne.unity";
+                string chemin = rpg ? "Assets/Scenes/Aldermark.unity" : "Assets/Scenes/Varenne.unity";
                 EditorSceneManager.SaveScene(scene, chemin);
                 EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(chemin, true) };
                 AssetDatabase.SaveAssets();
-                GameplayPont.Ajouter();
-                Debug.Log("Aldermark : vallée de Varenne générée dans " + chemin + ". Appuie sur Play.");
+                if (rpg) GameplayPont.AjouterRPG();
+                else GameplayPont.Ajouter();
+                Debug.Log("Aldermark : monde généré dans " + chemin + ". Appuie sur Play.");
             }
             finally { EditorUtility.ClearProgressBar(); }
         }
@@ -445,7 +449,7 @@ namespace Aldermark.Editeur
                 {
                     float x = -demi + (ix + .5f) / r * T, z = -demi + (iz + .5f) / r * T;
                     float y = Monde.Hauteur(x, z);
-                    if (y < .9f || y > 44 || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f) continue;
+                    if (y < .9f || y > 44 || Monde.DistanceRoute(x, z) < 1.7f || Vector2.Distance(new Vector2(x, z), Monde.Village) < 11.5f || Vector2.Distance(new Vector2(x, z), Monde.MaisonHeros) < 5.5f) continue;
                     if (Monde.DansChamp(x, z))
                     {
                         int b = Monde.BandeChamp(x, z);
@@ -514,7 +518,8 @@ namespace Aldermark.Editeur
                 float x = (Hash(i, 1.3f) - .5f) * 560, z = (Hash(i, 7.9f) - .5f) * 560, y = Monde.Hauteur(x, z), d = Mathf.Abs(x - Monde.Riviere(z));
                 float rd = Monde.DistanceRoute(x, z), r = Hash(i, 3.1f), dv = Vector2.Distance(new Vector2(x, z), Monde.Village);
                 float s = .8f + Hash(i, 5.5f) * .7f;
-                if (nb < 700 && r > .72f && r < .86f && d > Monde.Berge + 1 && y < 34 && rd > 3 && !Monde.DansChamp(x, z) && dv > 14)
+                float dh = Vector2.Distance(new Vector2(x, z), Monde.Hameau);
+                if (nb < 700 && r > .72f && r < .86f && d > Monde.Berge + 1 && y < 34 && rd > 3 && !Monde.DansChamp(x, z) && dv > 14 && dh > Monde.RayonHameau - 4f)
                 {
                     float sb = .6f + Hash(i, 5.5f) * .8f;
                     Poser(5 + nb % 2, x, z, r * 360f, Vector3.one * sb, .2f);
@@ -522,7 +527,7 @@ namespace Aldermark.Editeur
                     continue;
                 }
                 var pos = new Vector2(x, z);
-                if (d < Monde.Berge + 4 || y > 62 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 ||
+                if (d < Monde.Berge + 4 || y > 62 || rd < 5 || Monde.DansChamp(x, z) || dv < 36 || dh < Monde.RayonHameau + 4f ||
                     Vector2.Distance(pos, Monde.Depart) < 9 || DistSegment(pos, Monde.Depart, new Vector2(Monde.PontX, 0)) < 26) continue;
                 float f = Monde.Fbm(x * .013f + 5, z * .013f);
                 var e = new Vector3(s, s * (.9f + r * .4f), s);
@@ -552,7 +557,7 @@ namespace Aldermark.Editeur
             {
                 float x = (Hash(i, 61.3f) - .5f) * 520, z = (Hash(i, 67.9f) - .5f) * 520, y = Monde.Hauteur(x, z);
                 if (Mathf.Abs(x - Monde.Riviere(z)) < Monde.Berge + 2 || Monde.DistanceRoute(x, z) < 3 || Monde.DansChamp(x, z) ||
-                    Vector2.Distance(new Vector2(x, z), Monde.Village) < 30 || y > 70) continue;
+                    Vector2.Distance(new Vector2(x, z), Monde.Village) < 30 || Vector2.Distance(new Vector2(x, z), Monde.Hameau) < Monde.RayonHameau + 2f || y > 70) continue;
                 float s = .4f + Hash(i, 63) * 1.4f;
                 Poser(8, x, z, Hash(i, 64) * 360f, new Vector3(s * 1.2f, s * .7f, s), s * .25f);
             }

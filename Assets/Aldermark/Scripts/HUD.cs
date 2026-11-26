@@ -194,7 +194,19 @@ namespace Aldermark
             MettreAJourNoms(taille);
             MettreAJourChantier(taille);
 
-            // Quête, Éveil, confiance, journal
+            // Mode RPG : barres, horloge, Statut ; sinon quête, Éveil, confiance, journal du scénario
+            if (MondeRPG.Actif) MettreAJourRPG(dt);
+            else MettreAJourScenario(dt);
+
+            // Fenêtre Système
+            if (minuteurFenetre > 0) minuteurFenetre -= dt;
+            groupeFenetre.alpha = Mathf.MoveTowards(groupeFenetre.alpha, minuteurFenetre > 0 ? 1 : 0, dt * 3f);
+
+            MettreAJourEtiquettes(taille);
+        }
+
+        void MettreAJourScenario(float dt)
+        {
             if (Progression.Quete != queteAffichee)
             {
                 if (queteAffichee != null) Sons.Jouer("quete", .6f);
@@ -216,11 +228,10 @@ namespace Aldermark
                 foreach (var i in Progression.Indices) j.AppendLine("·  " + i);
                 texteJournal.text = j.ToString();
             }
+        }
 
-            // Fenêtre Système
-            if (minuteurFenetre > 0) minuteurFenetre -= dt;
-            groupeFenetre.alpha = Mathf.MoveTowards(groupeFenetre.alpha, minuteurFenetre > 0 ? 1 : 0, dt * 3f);
-
+        void MettreAJourEtiquettes(Vector2 taille)
+        {
             // Étiquettes du Sceau (la plus proche d'abord, sans chevauchement)
             bool visibles = joueur != null && joueur.SceauNiveau > .5f && cam != null;
             var places = new List<Rect>();

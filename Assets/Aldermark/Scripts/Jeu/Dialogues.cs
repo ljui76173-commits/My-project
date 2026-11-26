@@ -54,6 +54,8 @@ namespace Aldermark
                 "odon" => Odon(),
                 "bram" => Bram(),
                 "lit" => Lit(),
+                "lit_rpg" => LitRPG(),
+                "villageois" => Villageois(qui),
                 "ysolde" => Ysolde(),
                 "ilse" => Ilse(),
                 "vesk" => Vesk(),
@@ -325,6 +327,34 @@ namespace Aldermark
                         HUD.Message("INFORMATION CLÉ",
                             "La Tour veut le porteur vivant. Vesk le veut mort, et il arrive bientôt.\nVesk puise dans le nœud de mana sous l'ancien pont.\nLe Sceau peut voir les lignes de mana. Peut-être aussi… les assécher.", 9f);
                     });
+
+        // ---------- mode RPG (monde ouvert) ----------
+
+        static Noeud LitRPG()
+        {
+            float h = Horloge.Heure;
+            bool soir = h >= 19f || h < 5f;
+            var n = new Noeud("Ton lit", $"Un lit de bois et une couverture de laine qui sent le foin. Il est {Horloge.TexteHeure}."
+                + (soir ? "" : "\nTu n'as pas sommeil, mais tu peux te reposer."));
+            if (soir) n.Choix("Dormir jusqu'au matin (6 h)", () => null, () => MondeRPG.Dormir(6f));
+            n.Choix("Se reposer une heure", () => null, () => MondeRPG.Reposer(1f));
+            if (!soir) n.Choix("Se reposer jusqu'au soir (19 h)", () => null, () => MondeRPG.Dormir(19f));
+            n.Choix("Sauvegarder la partie", () => null, () => MondeRPG.Sauver(false));
+            n.Choix("Rien");
+            return n;
+        }
+
+        static readonly string[] RepliquesMatin = { "Bien le bonjour ! Tôt levé, à ce que je vois.", "La rosée est encore sur les choux. Belle journée qui s'annonce.", "Déjà debout ? Les poules ne t'ont pas attendu, elles non plus." };
+        static readonly string[] RepliquesJour = { "On ne voit pas souvent d'étrangers par ici. La route de l'ouest mène à Varenne, de l'autre côté de la rivière.", "Fais attention dans les bois : les loups descendent quand les nuits fraîchissent.", "Si tu cherches du travail, on dit qu'à Varenne ils ont toujours besoin de bras." };
+        static readonly string[] RepliquesSoir = { "Il se fait tard. Rentre avant la nuit, on entend des choses dans le bois.", "Ma soupe m'attend. Bonne soirée, voisin.", "Les étoiles sont claires ce soir. Demain sera beau." };
+
+        static Noeud Villageois(Interlocuteur qui)
+        {
+            float h = Horloge.Heure;
+            var liste = h < 10f ? RepliquesMatin : h < 18f ? RepliquesJour : RepliquesSoir;
+            int k = Mathf.Abs((qui.nom + Horloge.Jour + (int)h).GetHashCode()) % liste.Length;
+            return new Noeud(qui.nom, liste[k]);
+        }
 
         // ---------- la veillée d'armes et la bataille du Gué ----------
 

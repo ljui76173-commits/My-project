@@ -15,6 +15,16 @@ namespace Aldermark
         public static readonly Vector2 Depart = new Vector2(118f, -80f);
         public static float PontX => Riviere(0f);
         public static Vector2 Corvin => new Vector2(PontX + 22f, 27f);
+        /// <summary>Le hameau de départ du mode RPG : quelques maisons à l'écart, au sud de la route de l'ouest.</summary>
+        public static readonly Vector2 Hameau = new Vector2(-80f, -96f);
+        public const float RayonHameau = 26f;
+        /// <summary>La maison du héros dans le hameau (pas d'herbe sous son plancher).</summary>
+        public static Vector2 MaisonHeros => Hameau + new Vector2(-10f, -6f);
+        /// <summary>La quintaine d'entraînement, dans la cour à l'ouest du hameau.</summary>
+        public static Vector2 Quintaine => Hameau + new Vector2(-13f, 2f);
+        /// <summary>Les repaires autour du hameau, de plus en plus dangereux en s'éloignant.</summary>
+        public static readonly Vector2 RepaireGelees = new Vector2(-63f, -49f), RepaireLoups = new Vector2(-65f, -12f),
+            CampGobelins = new Vector2(-29f, 45f), AntreTroll = new Vector2(-62f, -164f);
 
         // Routes (x, z)
         public static readonly Vector2[][] Routes = new[]
@@ -23,6 +33,7 @@ namespace Aldermark
             new[] { new Vector2(PontX-18,0), new Vector2(-34,-8), new Vector2(-84,-38), new Vector2(-150,-58), new Vector2(-230,-70) },
             new[] { Village, new Vector2(64,62), new Vector2(84,140), new Vector2(96,230) },
             new[] { new Vector2(84,-22), Four },
+            new[] { new Vector2(-84,-38), new Vector2(-83,-62), new Vector2(-80,-84) },
         };
 
         public static float Riviere(float z) => 14f * Mathf.Sin(z / 55f) + 6f * Mathf.Sin(z / 23f + 1f);
@@ -69,6 +80,9 @@ namespace Aldermark
             y += 15f * Mathf.Exp(-((x - Depart.x) * (x - Depart.x) + (z - Depart.y) * (z - Depart.y)) / (2 * 34 * 34));
             float k = Lisse(46, 24, Vector2.Distance(new Vector2(x, z), Village));
             y = y + (3.3f + (Fbm(x * .05f, z * .05f) - .5f) * .8f - y) * k;
+            // Le hameau de départ est posé sur un replat
+            float kh = Lisse(RayonHameau + 12f, RayonHameau - 6f, Vector2.Distance(new Vector2(x, z), Hameau));
+            y = y + (5.6f + (Fbm(x * .05f, z * .05f) - .5f) * .6f - y) * kh;
             return y;
         }
 
