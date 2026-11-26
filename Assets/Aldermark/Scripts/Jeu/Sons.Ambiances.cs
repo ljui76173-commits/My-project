@@ -40,7 +40,7 @@ namespace Aldermark
             go.transform.SetParent(transform, false);
             sourceEau = go.AddComponent<AudioSource>();
             sourceEau.clip = Choisir("vagues"); sourceEau.loop = true; sourceEau.spatialBlend = 1f; sourceEau.volume = 0f;
-            sourceEau.minDistance = 8f; sourceEau.maxDistance = 90f; sourceEau.rolloffMode = AudioRolloffMode.Linear; sourceEau.Play();
+            sourceEau.minDistance = 8f; sourceEau.maxDistance = 90f; sourceEau.rolloffMode = AudioRolloffMode.Linear; sourceEau.dopplerLevel = 0f; sourceEau.Play();
             if (sourceRiviere != null) { sourceRiviere.maxDistance = 70f; sourceRiviere.minDistance = 6f; }
             Horloge.NouvelleHeure += SonnerLesCloches;
         }
