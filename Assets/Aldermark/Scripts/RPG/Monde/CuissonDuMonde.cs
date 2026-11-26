@@ -123,8 +123,11 @@ namespace Aldermark
             public float x, z, largeur, hauteur, rotation;
         }
 
-        /// <summary>Un arbre, un buisson ou un rocher au plus tous les 7 m, selon la forêt, le sol, l'altitude.</summary>
-        public List<Plante> Plantes(Action<float> progres = null)
+        /// <summary>
+        /// Un arbre, un buisson ou un rocher au plus tous les 7 m, selon la forêt, le sol, l'altitude.
+        /// <paramref name="libre"/> dit si un point est libre de tout bâtiment (fermes, faubourgs).
+        /// </summary>
+        public List<Plante> Plantes(Func<float, float, bool> libre = null, Action<float> progres = null)
         {
             var liste = new List<Plante>(260000);
             const float pas = 7f;
@@ -144,7 +147,7 @@ namespace Aldermark
                     bool enVille = false;
                     foreach (var site in Geo.Sites)
                         if ((site.position - new Vector2(x, z)).sqrMagnitude < (site.rayon + 18f) * (site.rayon + 18f)) { enVille = true; break; }
-                    if (enVille || Geo.DistanceRoute(x, z) < 3.5f) continue;
+                    if (enVille || Geo.DistanceRoute(x, z) < 3.5f || (libre != null && !libre(x, z))) continue;
 
                     float f = foret[k] / 255f;
                     float r = Geo.Hasard(ci, cj, 103), r2 = Geo.Hasard(ci, cj, 104), rot = Geo.Hasard(ci, cj, 105) * Mathf.PI * 2f;
