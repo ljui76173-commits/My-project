@@ -76,6 +76,15 @@ namespace Aldermark
         void Awake()
         {
             instance = this;
+            // Plus de voix réelles (32 par défaut) : au-delà, Unity coupe et relance les sons les plus faibles,
+            // et un son lointain (une cloche) se met à hacher. À faire avant que le moindre son ne joue.
+            var cfg = AudioSettings.GetConfiguration();
+            if (cfg.numRealVoices < 64)
+            {
+                cfg.numRealVoices = 64;
+                cfg.numVirtualVoices = Mathf.Max(cfg.numVirtualVoices, 512);
+                AudioSettings.Reset(cfg);
+            }
             clips["vent"] = Vent();
             clips["riviere"] = Riviere();
             clips["oiseau"] = Oiseau();
