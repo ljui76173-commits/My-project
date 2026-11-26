@@ -22,6 +22,7 @@ namespace Aldermark
             bool grosse = taille > .9f;
             nom = grosse ? "Grosse gelée" : "Gelée";
             vieBase = grosse ? 22 : 11; attaqueBase = 5; defenseBase = 1; xpBase = 10;
+            FixerAffinite(Element.Feu, 2f); FixerAffinite(Element.Foudre, 1.25f); FixerAffinite(Element.Glace, .5f);   // le feu la fait fondre, le froid la fige à peine
             resistanceRecul = .7f;
             vitesseMarche = 1.3f; vitesseCourse = 3.4f; perception = 12f; laisse = 30f; rayonRepos = 6f;
             rayonCorps = .42f * taille; hauteurCorps = .8f * taille; hauteurCentre = .4f * taille; hauteurTete = .85f * taille;

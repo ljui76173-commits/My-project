@@ -34,7 +34,7 @@ namespace Aldermark
             "frapper, porter lourd (bientôt)",
             "courir, sauter",
             "marcher, courir longtemps",
-            "lancer des sorts (bientôt)",
+            "lancer des sorts, toucher avec",
             "dépenser du mana",
             "explorer de nouveaux lieux",
         };

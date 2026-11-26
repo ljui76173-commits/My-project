@@ -28,6 +28,10 @@ namespace Aldermark
         public bool lourd, critique, magique;
         public ICible auteur;
         public string nom;
+        /// <summary>L'élément du coup (aucun pour une arme) : la cible peut y être faible ou résistante.</summary>
+        public Element element;
+        public Effet effet;
+        public float dureeEffet;
     }
 
     public static class Degats

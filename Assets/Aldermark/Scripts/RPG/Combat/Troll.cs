@@ -15,6 +15,7 @@ namespace Aldermark
         {
             nom = "Troll des cavernes";
             vieBase = 230; attaqueBase = 20; defenseBase = 8; xpBase = 70;
+            FixerAffinite(Element.Feu, 1.75f); FixerAffinite(Element.Terre, .5f); FixerAffinite(Element.Glace, .75f);   // les trolls craignent le feu ; la roche, c'est chez eux
             resistanceRecul = 6f; stature = 1f;
             vitesseMarche = 1.4f; vitesseCourse = 3.6f; perception = 14f; laisse = 28f; rayonRepos = 6f;
             rayonCorps = .85f; hauteurCorps = 2.8f; hauteurCentre = 1.6f; hauteurTete = 3.2f;

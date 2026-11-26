@@ -28,6 +28,12 @@ namespace Aldermark
         public bool increvable;
         public double xpBase = 20;
 
+        /// <summary>Brûlure, gel : ce qui ronge ou ralentit ce combattant.</summary>
+        public Alterations Alterations { get; } = new Alterations();
+        readonly Dictionary<Element, float> affinites = new Dictionary<Element, float>();
+        float prochaineFlamme;
+        GameObject gangue;
+
         public double Vie { get; private set; }
         public double DegatsCumules { get; private set; }
         public float Etourdi { get; private set; }
@@ -75,6 +81,7 @@ namespace Aldermark
         {
             float dt = Time.deltaTime;
             if (Etourdi > 0) Etourdi -= dt;
+            if (Alterations.Actif && Vivant) MettreAJourAlterations(dt);
             if (eclair > 0)
             {
                 eclair -= Time.unscaledDeltaTime;
@@ -117,13 +124,19 @@ namespace Aldermark
             if (Vie <= 0) Mourir(new Coup { degats = degats, auteur = auteur, nom = "choc" });
         }
 
+        /// <summary>×2 : faible à cet élément ; ×0,5 : résistant ; 0 : immunisé.</summary>
+        public float Affinite(Element e) => e != Element.Aucun && affinites.TryGetValue(e, out var a) ? a : 1f;
+        protected void FixerAffinite(Element e, float multiplicateur) => affinites[e] = multiplicateur;
+
         public virtual void Recevoir(Coup c)
         {
             if (!Vivant) return;
             if (Protege) return;
             DernierCoup = Time.time;
             if (c.auteur != null) dernierAuteur = c.auteur;
-            double reel = Degats.Calculer(c.degats, Defense);   // le coup arrive brut, la défense s'applique ici
+            // Le coup arrive brut, la défense s'applique ici (à moitié contre la magie), puis la faiblesse ou la résistance à l'élément
+            float aff = Affinite(c.element);
+            double reel = Degats.Calculer(c.degats, c.magique ? Defense * .5 : Defense) * aff;
             c.degats = reel;
             DegatsCumules += reel;
             if (!invincible) Vie = Math.Max(increvable ? 1 : 0, Vie - reel);
@@ -132,10 +145,87 @@ namespace Aldermark
             if (c.poussee > 0) recul += new Vector3(c.direction.x, 0, c.direction.z).normalized * c.poussee / Mathf.Max(.1f, resistanceRecul);
             if (c.lourd && stature < 1f) Etourdir(.5f * (1f - stature));
             HUD.ChiffreDegats(Centre + Vector3.up * .4f, c.degats, c.critique, false);
+            if (c.element != Element.Aucun)
+            {
+                if (aff >= 1.4f) HUD.ChiffreTexte(Centre + Vector3.up * 1.05f, "Faible !", new Color(1f, .62f, .3f));
+                else if (aff <= 0f) HUD.ChiffreTexte(Centre + Vector3.up * 1.05f, "Immunisé", new Color(.7f, .7f, .75f));
+                else if (aff <= .6f) HUD.ChiffreTexte(Centre + Vector3.up * 1.05f, "Résiste", new Color(.7f, .7f, .75f));
+            }
             if (c.auteur is CombatHeros) CibleCombat.Signaler(this);
             Touche?.Invoke(c);
-            if (!invincible && Vie <= 0) Mourir(c);
+            if (!invincible && Vie <= 0) { Mourir(c); return; }
+            if (c.effet != Effet.Aucun && aff > .5f) SubirEffet(c, aff);
         }
+
+        void SubirEffet(Coup c, float aff)
+        {
+            switch (c.effet)
+            {
+                case Effet.Choc:
+                    if (stature >= 1f && c.dureeEffet < 1f) break;   // un troll ne vacille pas pour une étincelle
+                    Etourdir(c.dureeEffet * (1f - stature * .5f));
+                    HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Étourdi", new Color(1f, .95f, .5f));
+                    break;
+                case Effet.Brulure:
+                case Effet.Gel:
+                    if (invincible) break;
+                    if (Alterations.Appliquer(c.effet, c.degats, c.dureeEffet, c.auteur))
+                    {
+                        Etourdir(Alterations.Gele);
+                        HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Gelé !", new Color(.65f, .9f, 1f));
+                        Gangue(Alterations.Gele);
+                    }
+                    break;
+            }
+        }
+
+        void MettreAJourAlterations(float dt)
+        {
+            double brule = Alterations.Avancer(dt);
+            if (brule > 0)
+            {
+                DegatsCumules += brule;
+                if (!invincible) Vie = Math.Max(increvable ? 1 : 0, Vie - brule);
+                HUD.ChiffreTexte(Centre + Vector3.up * .5f, Nombres.Court(brule), new Color(1f, .6f, .25f));
+                if (Vie <= 0 && !invincible) { Mourir(new Coup { degats = brule, auteur = Alterations.Auteur, nom = "brûlure" }); return; }
+            }
+            if (Time.time < prochaineFlamme) return;
+            Vector3 p = Centre + Random.insideUnitSphere * .3f;
+            if (Alterations.Brulure > 0f)
+            {
+                prochaineFlamme = Time.time + .12f;
+                Effets.Eclat(p, new Color(1f, Random.Range(.35f, .65f), .1f, .9f), 3, 1.2f, .16f, -.7f, .45f);
+            }
+            else if (Alterations.Gel > 0f && Alterations.Gele <= 0f)
+            {
+                prochaineFlamme = Time.time + .3f;
+                Effets.Eclat(p, new Color(.75f, .92f, 1f, .9f), 2, .6f, .08f, .25f, .7f);
+            }
+        }
+
+        /// <summary>Une gangue de glace autour du corps, le temps du gel.</summary>
+        void Gangue(float duree)
+        {
+            if (gangue != null) Destroy(gangue);
+            if (rendus == null || rendus.Length == 0) return;
+            var b = new Bounds(Centre, Vector3.zero);
+            foreach (var r in rendus) if (r != null && r.enabled) b.Encapsulate(r.bounds);
+            gangue = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Destroy(gangue.GetComponent<Collider>());
+            gangue.name = "Gangue";
+            gangue.transform.SetParent(transform, true);
+            gangue.transform.position = b.center;
+            gangue.transform.localScale = Vector3.Scale(b.size * 1.15f, new Vector3(1f / transform.lossyScale.x, 1f / transform.lossyScale.y, 1f / transform.lossyScale.z));
+            var mr = gangue.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = Sorts.Materiau(new Color(.7f, .9f, 1f, .42f));
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            Effets.Eclat(b.center, new Color(.8f, .95f, 1f), 18, 2.5f, .12f, 1f, .6f);
+            Sons.JouerA("sortGlace", b.center, .8f, .7f);
+            Destroy(gangue, duree);
+        }
+
+        /// <summary>Rend de la vie (un soin, une créature qui se régénère).</summary>
+        public void Rendre(double q) { if (Vivant) Soigner(q); }
 
         protected virtual void Mourir(Coup c)
         {

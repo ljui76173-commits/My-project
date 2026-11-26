@@ -102,6 +102,7 @@ namespace Aldermark
             clips["clic"] = Pas(.012f, 4000f);
             ClipsCombat();
             ClipsAmbiances();
+            ClipsMagie();
             // Les fichiers déposés dans Assets/Aldermark/Audio/Sons remplacent les sons fabriqués
             var cat = CatalogueAudio.Instance;
             if (cat != null)

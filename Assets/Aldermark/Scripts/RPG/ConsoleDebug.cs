@@ -111,6 +111,17 @@ namespace Aldermark
             return sb.ToString();
         }
 
+        /// <summary>Une compétence par son identifiant ou son nom (sans accents ni espaces : « eclatdeglace », « glace »).</summary>
+        static DefCompetence TrouverCompetence(string texte)
+        {
+            string t = Simplifier(texte);
+            foreach (var d in CatalogueCompetences.Ordre)
+                if (Simplifier(d.id) == t || Simplifier(d.nom) == t) return d;
+            foreach (var d in CatalogueCompetences.Ordre)
+                if (Simplifier(d.nom).Contains(t)) return d;
+            return null;
+        }
+
         static bool Nombre(string s, out double v) => double.TryParse(s.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out v);
 
         void Executer(string ligne)
@@ -127,6 +138,47 @@ namespace Aldermark
                     Ecrire(Geo.Actif ? "tp hameau · tp quintaine · tp <ville> (varenne, aldenne, valdor…) · tp gelees|loups|gobelins|troll (le plus proche) · tp X Z"
                                      : "tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
                     Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
+                    Ecrire("sorts · apprendre <sort>|tout · competence <id> <niveau> · mana");
+                    break;
+                case "sorts":
+                case "competences":
+                    {
+                        var c = Competences.Instance;
+                        var l = new System.Text.StringBuilder();
+                        foreach (var d in CatalogueCompetences.Ordre)
+                            l.Append(d.id).Append(c != null && c.Connait(d.id) ? $" (niv. {c.Niveau(d.id)})" : "").Append(" · ");
+                        Ecrire(l.ToString().TrimEnd(' ', '·'));
+                    }
+                    break;
+                case "apprendre":
+                    {
+                        var c = Competences.Instance;
+                        if (c == null) { Ecrire("Pas de héros RPG."); break; }
+                        if (m.Length < 2) { Ecrire("Usage : apprendre flamme (ou : apprendre tout) · « sorts » pour la liste"); break; }
+                        if (m[1] == "tout")
+                        {
+                            int n = 0;
+                            foreach (var d in CatalogueCompetences.Ordre) if (c.Apprendre(d.id, false)) n++;
+                            Ecrire($"{n} compétence(s) apprise(s).");
+                            break;
+                        }
+                        var def = TrouverCompetence(m[1]);
+                        if (def == null) Ecrire("Inconnue. Tape « sorts » pour la liste.");
+                        else if (!c.Apprendre(def.id, true)) Ecrire($"{def.nom} : déjà connue.");
+                        else Ecrire($"{def.nom} apprise.");
+                    }
+                    break;
+                case "competence":
+                    {
+                        var c = Competences.Instance;
+                        var def = m.Length > 1 ? TrouverCompetence(m[1]) : null;
+                        if (c == null || def == null || m.Length < 3 || !Nombre(m[2], out v)) { Ecrire("Usage : competence flamme 10"); break; }
+                        c.FixerNiveau(def.id, (int)v);
+                        Ecrire($"{def.nom} : niveau {c.Niveau(def.id)}");
+                    }
+                    break;
+                case "mana":
+                    if (j != null) { j.FixerMana(j.manaMax); Ecrire("Mana au maximum."); }
                     break;
                 case "xp":
                     if (s != null && m.Length > 1 && Nombre(m[1], out v)) { s.GagnerXP(v, "console"); Ecrire($"+{Nombres.Court(v)} XP"); }

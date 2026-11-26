@@ -13,6 +13,7 @@ namespace Aldermark
         {
             nom = "Gobelin";
             vieBase = 40; attaqueBase = 8; defenseBase = 3; xpBase = 20;
+            FixerAffinite(Element.Foudre, 1.25f);
             resistanceRecul = 1f;
             vitesseMarche = 1.9f; vitesseCourse = 5.2f; perception = 16f; laisse = 34f; rayonRepos = 8f;
             rayonCorps = .32f; hauteurCorps = 1.3f; hauteurCentre = .75f; hauteurTete = 1.45f;
