@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Aldermark
 {
-    public enum TypeLieu { Maison, Hameau, Village, Auberge, Forge, Marche, Moulin, Chapelle, Lavoir, Puits, Quintaine, Gelees, Loups, Gobelins, Troll }
+    public enum TypeLieu { Maison, Hameau, Village, Auberge, Forge, Marche, Moulin, Chapelle, Lavoir, Puits, Quintaine, Gelees, Loups, Gobelins, Troll, Capitale, Ville, Port }
     public enum OngletCarte { Tout, Lieux, Commerces, Services, Dangers, Reperes }
 
     /// <summary>
@@ -67,6 +67,9 @@ namespace Aldermark
                 case TypeLieu.Gelees: return "Gelées";
                 case TypeLieu.Loups: return "Loups";
                 case TypeLieu.Gobelins: return "Gobelins";
+                case TypeLieu.Capitale: return "Capitale";
+                case TypeLieu.Ville: return "Ville";
+                case TypeLieu.Port: return "Port";
                 default: return "Troll";
             }
         }

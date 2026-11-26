@@ -14,7 +14,10 @@ namespace Aldermark.Editeur
     public static partial class GameplayPont
     {
         [MenuItem("Aldermark/Nouveau monde (RPG)", priority = 0)]
-        public static void MenuNouveauMonde() => GenerateurVallee.Generer(true);
+        public static void MenuNouveauMonde() => GenerateurVallee.GenererGrandMonde();
+
+        [MenuItem("Aldermark/Ancienne vallée (RPG, 620 m)", priority = 20)]
+        public static void MenuAncienneVallee() => GenerateurVallee.Generer(true);
 
         public static void AjouterRPG()
         {
@@ -26,6 +29,15 @@ namespace Aldermark.Editeur
             racine.gameObject.AddComponent<Dialogues>();
             var sons = racine.gameObject.AddComponent<Sons>();
             sons.positionRiviere = new Vector3(Monde.PontX, 0, 0);
+            if (Geo.Actif)
+            {
+                // Le murmure de l'eau : la rivière la plus proche du hameau
+                Vector2 h = Monde.Hameau, meilleur = h + new Vector2(0, 500f);
+                foreach (var r in Geo.Rivieres)
+                    foreach (var p in r.points)
+                        if ((p - h).sqrMagnitude < (meilleur - h).sqrMagnitude) meilleur = p;
+                sons.positionRiviere = new Vector3(meilleur.x, Sol(meilleur.x, meilleur.y), meilleur.y);
+            }
             if (AssetDatabase.IsValidFolder("Assets/Aldermark/Audio"))
                 sons.musiques = AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Aldermark/Audio" })
                     .Select(AssetDatabase.GUIDToAssetPath).OrderBy(c => c)
@@ -41,10 +53,11 @@ namespace Aldermark.Editeur
             monde.joueur = aldric.GetComponent<JoueurAldric>();
 
             var reveil = ConstruireHameau(racine);
-            ConstruireBourg(racine);
+            if (Geo.Actif) ConstruireSites(racine);
+            else ConstruireBourg(racine);
             monde.reveil = reveil;
             aldric.transform.SetPositionAndRotation(reveil.position + Vector3.up * .1f, reveil.rotation);
-            NommerHabitantsDeVarenne();
+            if (!Geo.Actif) NommerHabitantsDeVarenne();
             ModelesPersonnages.BrancherAldric();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -63,7 +76,8 @@ namespace Aldermark.Editeur
             hameau.gameObject.AddComponent<Entite>().id = "lieu-hameau";
 
             var reveil = MaisonDuHeros(hameau, Monde.MaisonHeros, H);
-            MarquerLieu(hameau, "Ton hameau", TypeLieu.Hameau, true);
+            var siteDepart = Geo.Actif ? Geo.SitePlusProche(H, s => s.type == TypeSite.Depart) : null;
+            MarquerLieu(hameau, siteDepart != null ? siteDepart.nom + " (ton hameau)" : "Ton hameau", TypeLieu.Hameau, true);
             MarquerLieu(reveil.parent, "Ta maison", TypeLieu.Maison, true);
 
             // Quatre maisons de voisins, portes vers le puits
@@ -246,6 +260,42 @@ namespace Aldermark.Editeur
             MarquerLieu(bourg.transform, "Varenne", TypeLieu.Village, true);
         }
 
+        // ---------- les villes du grand monde ----------
+
+        /// <summary>
+        /// Chaque ville, port, village et hameau du grand monde figure sur la carte (le bourg voisin et ta capitale sont connus d'emblée).
+        /// Leurs bâtiments arrivent avec le kit de construction (étape suivante).
+        /// </summary>
+        static void ConstruireSites(Transform racine)
+        {
+            var groupe = new GameObject("Villes").transform;
+            groupe.SetParent(racine, false);
+            var voisin = Geo.SitePlusProche(Monde.Hameau, s => s.type == TypeSite.Village);
+            foreach (var s in Geo.Sites)
+            {
+                if (s.type == TypeSite.Depart) continue;
+                var go = new GameObject(s.nom);
+                go.transform.SetParent(groupe, false);
+                go.transform.position = new Vector3(s.position.x, Sol(s.position.x, s.position.y), s.position.y);
+                go.AddComponent<Entite>().id = "ville-" + Identifiant(s.nom);
+                TypeLieu t = s.type == TypeSite.Capitale ? TypeLieu.Capitale : s.type == TypeSite.Ville ? TypeLieu.Ville :
+                             s.type == TypeSite.Port ? TypeLieu.Port : s.type == TypeSite.Village ? TypeLieu.Village : TypeLieu.Hameau;
+                bool connu = s == voisin || (s.type == TypeSite.Capitale && s.royaume == 0);
+                MarquerLieu(go.transform, s.nom, t, connu);
+            }
+        }
+
+        static string Identifiant(string nom)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in nom.Normalize(System.Text.NormalizationForm.FormD))
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                sb.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-');
+            }
+            return sb.ToString();
+        }
+
         static void MarquerLieu(Transform t, string nom, TypeLieu type, bool connu)
         {
             if (t == null) { Debug.LogWarning($"Aldermark : lieu introuvable pour la carte : {nom}"); return; }
@@ -261,6 +311,42 @@ namespace Aldermark.Editeur
         {
             var groupe = new GameObject("Repaires").transform;
             groupe.SetParent(racine, false);
+            if (Geo.Actif && GenerateurVallee.Plan != null)
+            {
+                // Le grand monde : 33 repaires, de plus en plus dangereux en s'éloignant du hameau
+                var compte = new int[4];
+                foreach (var (p, e, niv) in GenerateurVallee.Plan.repaires)
+                {
+                    var espece = (Aldermark.Repaire.Espece)e;
+                    int num = ++compte[e];
+                    Transform t;
+                    switch (espece)
+                    {
+                        case Aldermark.Repaire.Espece.Gelee:
+                            t = Repaire(groupe, "RepaireDesGelees" + num, p, espece, 4, niv, niv + 1, 7f, 4f);
+                            MareAuxGelees(t);
+                            MarquerLieu(t, "Mare aux gelées", TypeLieu.Gelees, false);
+                            break;
+                        case Aldermark.Repaire.Espece.Loup:
+                            t = Repaire(groupe, "TaniereDesLoups" + num, p, espece, 4, niv, niv + 1, 6f, 8f);
+                            TaniereDesLoups(t);
+                            MarquerLieu(t, "Tanière des loups", TypeLieu.Loups, false);
+                            break;
+                        case Aldermark.Repaire.Espece.Gobelin:
+                            t = Repaire(groupe, "CampGobelin" + num, p, espece, 4, niv, niv + 2, 3.5f, 10f);
+                            CampGobelin(t);
+                            MarquerLieu(t, "Camp gobelin", TypeLieu.Gobelins, false);
+                            break;
+                        default:
+                            t = Repaire(groupe, "AntreDuTroll" + num, p, espece, 1, niv, niv, 2f, 24f);
+                            AntreDuTroll(t);
+                            MarquerLieu(t, "Antre du troll", TypeLieu.Troll, false);
+                            break;
+                    }
+                    t.GetComponent<Entite>().id = $"repaire-{espece.ToString().ToLower()}-{num}";
+                }
+                return;
+            }
             var gelees = Repaire(groupe, "RepaireDesGelees", Monde.RepaireGelees, Aldermark.Repaire.Espece.Gelee, 4, 1, 2, 7f, 4f);
             MarquerLieu(gelees, "Mare aux gelées", TypeLieu.Gelees, false);
             MareAuxGelees(gelees);

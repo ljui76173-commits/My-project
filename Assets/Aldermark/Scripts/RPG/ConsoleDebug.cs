@@ -72,6 +72,43 @@ namespace Aldermark
             while (historique.Count > 14) historique.RemoveAt(0);
         }
 
+        /// <summary>Le grand monde : le repaire le plus proche d'une espèce, une ville par son nom, ou un lieu de la carte.</summary>
+        static bool CibleGrandMonde(string nom, Vector3 depuis, out Vector2 cible)
+        {
+            cible = Vector2.zero;
+            string n = Simplifier(nom);
+            int espece = n.StartsWith("gelee") ? 0 : n.StartsWith("loup") ? 1 : n.StartsWith("gobelin") ? 2 : n.StartsWith("troll") ? 3 : -1;
+            if (espece >= 0)
+            {
+                Repaire meilleur = null; float md = float.MaxValue;
+                foreach (var r in FindObjectsByType<Repaire>(FindObjectsSortMode.None))
+                {
+                    if ((int)r.espece != espece) continue;
+                    float d = (r.transform.position - depuis).sqrMagnitude;
+                    if (d < md) { md = d; meilleur = r; }
+                }
+                if (meilleur == null) return false;
+                cible = new Vector2(meilleur.transform.position.x, meilleur.transform.position.z - 18f);
+                return true;
+            }
+            foreach (var s in Geo.Sites)
+                if (Simplifier(s.nom).StartsWith(n)) { cible = s.position + new Vector2(0f, -8f); return true; }
+            foreach (var l in Lieu.Tous)
+                if (Simplifier(l.nom).Contains(n)) { cible = new Vector2(l.Position.x, l.Position.z - 6f); return true; }
+            return false;
+        }
+
+        static string Simplifier(string s)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in s.Normalize(System.Text.NormalizationForm.FormD))
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+            }
+            return sb.ToString();
+        }
+
         static bool Nombre(string s, out double v) => double.TryParse(s.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out v);
 
         void Executer(string ligne)
@@ -85,7 +122,8 @@ namespace Aldermark
                 case "aide":
                 case "help":
                     Ecrire("xp N · niveau N · points N · stat FOR N · soigner · heure H · vitesse X");
-                    Ecrire("tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
+                    Ecrire(Geo.Actif ? "tp hameau · tp quintaine · tp <ville> (varenne, aldenne, valdor…) · tp gelees|loups|gobelins|troll (le plus proche) · tp X Z"
+                                     : "tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
                     Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
                     break;
                 case "xp":
@@ -123,6 +161,15 @@ namespace Aldermark
                     Vector2 cible;
                     if (m.Length > 1 && m[1] == "hameau") cible = Monde.Hameau + new Vector2(0, 12);
                     else if (m.Length > 1 && m[1] == "quintaine") cible = Monde.Quintaine + new Vector2(2.2f, 0);
+                    else if (Geo.Actif && m.Length > 2 && Nombre(m[1], out var gx) && Nombre(m[2], out var gz)) cible = new Vector2((float)gx, (float)gz);
+                    else if (Geo.Actif && m.Length > 1)
+                    {
+                        if (!CibleGrandMonde(string.Join(" ", m, 1, m.Length - 1), j.transform.position, out cible))
+                        {
+                            Ecrire("Lieu inconnu. Essaie : tp hameau · tp varenne · tp aldenne · tp gelees · tp loups · tp gobelins · tp troll · tp 100 -250");
+                            break;
+                        }
+                    }
                     else if (m.Length > 1 && m[1] == "gelees") cible = Monde.RepaireGelees + new Vector2(0, -16);
                     else if (m.Length > 1 && m[1] == "loups") cible = Monde.RepaireLoups + new Vector2(0, -22);
                     else if (m.Length > 1 && m[1] == "gobelins") cible = Monde.CampGobelins + new Vector2(0, -22);

@@ -14,9 +14,11 @@ namespace Aldermark
     {
         public static CarteMonde Instance { get; private set; }
 
-        public const int Resolution = 512, Grille = 64;
-        public const float Taille = Monde.Taille;
-        const float RayonVue = 42f;
+        public const int Resolution = 512;
+        /// <summary>Le brouillard d'exploration : 64 × 64 cases dans la vallée, 256 × 256 (32 m) dans le grand monde.</summary>
+        public static int Grille => Geo.Actif ? 256 : 64;
+        public static float Taille => Geo.Actif ? Geo.Taille : Monde.Taille;
+        static float RayonVue => Geo.Actif ? 170f : 42f;
 
         public Texture2D Peinture { get; private set; }
         public Texture2D Brouillard { get; private set; }
@@ -29,7 +31,7 @@ namespace Aldermark
         public readonly List<Vector2> route = new List<Vector2>();
         public Vector2? Destination { get; private set; }
 
-        readonly bool[] explore = new bool[Grille * Grille];
+        bool[] explore;
         readonly HashSet<string> decouverts = new HashSet<string>();
         bool brouillardSale;
         float minuteur, minuteurRoute;
@@ -40,6 +42,7 @@ namespace Aldermark
         {
             Instance = this;
             Registre.InscrireSauvegarde(this);
+            explore = new bool[Grille * Grille];
             Brouillard = new Texture2D(Grille, Grille, TextureFormat.RGBA32, false) { name = "Brouillard", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
             brouillardSale = true;
             AppliquerBrouillard();
@@ -187,6 +190,39 @@ namespace Aldermark
                 noeuds.Add(p);
                 return noeuds.Count - 1;
             }
+            if (Geo.Actif)
+            {
+                // Les routes du grand monde : un nœud tous les ~70 m, les bouts soudés aux carrefours et aux villes
+                var grille = new Dictionary<Vector2Int, List<int>>();
+                int NoeudGeo(Vector2 p, float soudure)
+                {
+                    var c = new Vector2Int(Mathf.FloorToInt(p.x / 20f), Mathf.FloorToInt(p.y / 20f));
+                    if (soudure > 0f)
+                        for (int dj = -1; dj <= 1; dj++)
+                            for (int di = -1; di <= 1; di++)
+                                if (grille.TryGetValue(new Vector2Int(c.x + di, c.y + dj), out var l))
+                                    foreach (int k in l) if (Vector2.Distance(noeuds[k], p) < soudure) return k;
+                    noeuds.Add(p);
+                    if (!grille.TryGetValue(c, out var liste)) grille[c] = liste = new List<int>();
+                    liste.Add(noeuds.Count - 1);
+                    return noeuds.Count - 1;
+                }
+                foreach (var r in Geo.Routes)
+                {
+                    var pts = r.points;
+                    if (pts == null || pts.Length < 2) continue;
+                    int prec = NoeudGeo(pts[0], 14f);
+                    for (int k = 8; k < pts.Length; k += 8)
+                    {
+                        int n = NoeudGeo(pts[k], 12f);
+                        if (n != prec) aretes.Add((prec, n));
+                        prec = n;
+                    }
+                    int fin = NoeudGeo(pts[pts.Length - 1], 14f);
+                    if (fin != prec) aretes.Add((prec, fin));
+                }
+                return;
+            }
             foreach (var r in Monde.Routes)
                 for (int k = 0; k < r.Length - 1; k++) aretes.Add((Noeud(r[k]), Noeud(r[k + 1])));
             // Le pont relie les deux rives
@@ -218,7 +254,7 @@ namespace Aldermark
             if (noeuds == null) ConstruireReseau();
             var (sa, pa) = PlusProche(depart);
             var (sb, pb) = PlusProche(arrivee);
-            if (direct < 70f || sa < 0 || sb < 0 || Vector2.Distance(depart, pa) + Vector2.Distance(arrivee, pb) > direct * .85f)
+            if (direct < (Geo.Actif ? 150f : 70f) || sa < 0 || sb < 0 || Vector2.Distance(depart, pa) + Vector2.Distance(arrivee, pb) > direct * .85f)
             {
                 route.Add(arrivee);
                 return;
@@ -273,6 +309,15 @@ namespace Aldermark
 
         IEnumerator Peindre()
         {
+            // Le grand monde : la carte a été peinte à la génération
+            if (Geo.Actif && GrandMonde.Instance != null && GrandMonde.Instance.carte != null)
+            {
+                Peinture = GrandMonde.Instance.carte;
+                Avancement = 1f;
+                Prete = true;
+                Version++;
+                yield break;
+            }
             const int N = Resolution;
             float cellule = Taille / N;
             var h = new float[N * N];

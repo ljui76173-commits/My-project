@@ -24,7 +24,8 @@ namespace Aldermark
         }
 
         public static string Dossier => Path.Combine(Application.persistentDataPath, "Sauvegardes");
-        public static string Chemin => Path.Combine(Dossier, "partie.json");
+        /// <summary>Une partie par monde : celle de la vallée ne se charge pas dans le grand monde (les positions n'y ont aucun sens).</summary>
+        public static string Chemin => Path.Combine(Dossier, Geo.Actif ? "partie-grand-monde.json" : "partie.json");
         public static bool Existe => File.Exists(Chemin);
         public static string DerniereErreur { get; private set; }
         public static string DateDerniere { get; private set; }
