@@ -6,7 +6,7 @@ namespace Aldermark
 {
     /// <summary>
     /// Interface du mode RPG : barres de vie, mana et endurance, niveau et XP, horloge du monde,
-    /// petites notifications, fenêtre de Statut (C) et console de debug (²).
+    /// petites notifications, fenêtre de Statut (C) et console de debug (F1 ou ²).
     /// </summary>
     public partial class HUD
     {
@@ -60,7 +60,7 @@ namespace Aldermark
             if (aide != null)
             {
                 aide.GetComponent<UnityEngine.UI.Text>().text =
-                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · 1-4 sorts · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · K compétences · M carte · C Statut · V vue · Échap réglages · ² console";
+                    "ZQSD marcher · Maj courir · Espace sauter · Clic G frapper (maintenu : lourd) · Clic D garde · Alt roulade · 1-4 sorts · Molette cibler · H ranger l'arme · E ramasser · F parler · I inventaire · K compétences · M carte · C Statut · V vue · Échap réglages · F1 console";
                 ((RectTransform)aide.parent).sizeDelta = new Vector2(1780, 38);
             }
 
