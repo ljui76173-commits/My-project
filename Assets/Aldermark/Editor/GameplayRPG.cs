@@ -53,8 +53,7 @@ namespace Aldermark.Editeur
             monde.joueur = aldric.GetComponent<JoueurAldric>();
 
             var reveil = ConstruireHameau(racine);
-            if (Geo.Actif) ConstruireSites(racine);
-            else ConstruireBourg(racine);
+            if (!Geo.Actif) ConstruireBourg(racine);   // le grand monde : les villes sont posées par le générateur
             monde.reveil = reveil;
             aldric.transform.SetPositionAndRotation(reveil.position + Vector3.up * .1f, reveil.rotation);
             if (!Geo.Actif) NommerHabitantsDeVarenne();
@@ -83,7 +82,7 @@ namespace Aldermark.Editeur
             // Quatre maisons de voisins, portes vers le puits
             string[] murs = { "#e2d3b4", "#d9c9a8", "#eadfc6", "#c9b48f" }, toits = { "#7a4a33", "#94403a", "#4f6b8f", "#6b5a3a" };
             var places = new[] { new Vector2(10f, -7f), new Vector2(11f, 8f), new Vector2(-8f, 11f), new Vector2(3f, -16f) };
-            for (int i = 0; i < places.Length; i++)
+            for (int i = 0; i < places.Length && !Geo.Actif; i++)   // le grand monde : les maisons du kit (GenerateurVallee.VoisinsDuHameau)
             {
                 var p = H + places[i];
                 var b = Batiment(hameau, "MaisonVoisin" + (i + 1), p, H - p, new Vector3(5f + i % 2, 3.2f, 4.5f), murs[i], toits[i], 2.2f);
@@ -258,42 +257,6 @@ namespace Aldermark.Editeur
             bourg.transform.SetParent(racine, false);
             bourg.transform.position = new Vector3(Monde.Village.x, Sol(Monde.Village.x, Monde.Village.y), Monde.Village.y);
             MarquerLieu(bourg.transform, "Varenne", TypeLieu.Village, true);
-        }
-
-        // ---------- les villes du grand monde ----------
-
-        /// <summary>
-        /// Chaque ville, port, village et hameau du grand monde figure sur la carte (le bourg voisin et ta capitale sont connus d'emblée).
-        /// Leurs bâtiments arrivent avec le kit de construction (étape suivante).
-        /// </summary>
-        static void ConstruireSites(Transform racine)
-        {
-            var groupe = new GameObject("Villes").transform;
-            groupe.SetParent(racine, false);
-            var voisin = Geo.SitePlusProche(Monde.Hameau, s => s.type == TypeSite.Village);
-            foreach (var s in Geo.Sites)
-            {
-                if (s.type == TypeSite.Depart) continue;
-                var go = new GameObject(s.nom);
-                go.transform.SetParent(groupe, false);
-                go.transform.position = new Vector3(s.position.x, Sol(s.position.x, s.position.y), s.position.y);
-                go.AddComponent<Entite>().id = "ville-" + Identifiant(s.nom);
-                TypeLieu t = s.type == TypeSite.Capitale ? TypeLieu.Capitale : s.type == TypeSite.Ville ? TypeLieu.Ville :
-                             s.type == TypeSite.Port ? TypeLieu.Port : s.type == TypeSite.Village ? TypeLieu.Village : TypeLieu.Hameau;
-                bool connu = s == voisin || (s.type == TypeSite.Capitale && s.royaume == 0);
-                MarquerLieu(go.transform, s.nom, t, connu);
-            }
-        }
-
-        static string Identifiant(string nom)
-        {
-            var sb = new System.Text.StringBuilder();
-            foreach (char c in nom.Normalize(System.Text.NormalizationForm.FormD))
-            {
-                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
-                sb.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-');
-            }
-            return sb.ToString();
         }
 
         static void MarquerLieu(Transform t, string nom, TypeLieu type, bool connu)

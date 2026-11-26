@@ -59,13 +59,17 @@ namespace Aldermark.Editeur
                 Geo.Sols = (x, z) => (TypeSol)g.sol[GrillesMonde.Indice(x, z)];
                 Geo.Eaux = (x, z) => g.eau[GrillesMonde.Indice(x, z)];
 
+                Progres("Villes, villages et hameaux : les plans", .31f);
+                var villes = PlansDesVilles(plan);
                 var terrains = TerrainsDuGrandMonde(g);
-                ArbresDuGrandMonde(g, terrains);
+                ArbresDuGrandMonde(g, terrains, villes);
                 Progres("Mer, lacs et rivières", .72f);
                 EauxDuGrandMonde(plan);
                 PontsDuGrandMonde(plan);
                 Progres("Carte du monde et données du jeu", .78f);
-                DonneesCuites(plan, g, terrains);
+                DonneesCuites(plan, g, terrains, villes);
+                Progres("Villes : murs, lieux de la carte", .88f);
+                VillesDuGrandMonde(villes);
 
                 Progres("Aldric", .9f);
                 var joueur = Joueur(out var cam, out var rendu);
@@ -181,7 +185,7 @@ namespace Aldermark.Editeur
 
         // ---------- forêts, bosquets, rochers ----------
 
-        static void ArbresDuGrandMonde(GrillesMonde g, UnityEngine.Terrain[] terrains)
+        static void ArbresDuGrandMonde(GrillesMonde g, UnityEngine.Terrain[] terrains, List<(Site site, PlanVille plan)> villes)
         {
             Progres("Forêts, bosquets et rochers", .58f);
             var protos = ProtosArbres();
@@ -190,7 +194,27 @@ namespace Aldermark.Editeur
             int T = Geo.Tuiles;
             var listes = new List<TreeInstance>[T * T];
             for (int k = 0; k < listes.Length; k++) listes[k] = new List<TreeInstance>();
-            var plantes = g.Plantes(f => Progres("Forêts, bosquets et rochers", .58f + .1f * f));
+            // Pas d'arbre sur une ferme, une maison de faubourg, un rempart
+            var grille = new Dictionary<long, List<Emprise>>();
+            long Cle(int i, int j) => ((long)i << 32) ^ (uint)j;
+            foreach (var (_, pv) in villes)
+                foreach (var e in pv.emprises)
+                {
+                    float r = e.hx + e.hz + 3f;
+                    for (int j = Mathf.FloorToInt((e.c.y - r) / 32f); j <= Mathf.FloorToInt((e.c.y + r) / 32f); j++)
+                        for (int i = Mathf.FloorToInt((e.c.x - r) / 32f); i <= Mathf.FloorToInt((e.c.x + r) / 32f); i++)
+                        {
+                            if (!grille.TryGetValue(Cle(i, j), out var l)) grille[Cle(i, j)] = l = new List<Emprise>();
+                            l.Add(e);
+                        }
+                }
+            bool Libre(float x, float z)
+            {
+                if (!grille.TryGetValue(Cle(Mathf.FloorToInt(x / 32f), Mathf.FloorToInt(z / 32f)), out var l)) return true;
+                foreach (var e in l) if (e.Contient(new Vector2(x, z), 2.5f)) return false;
+                return true;
+            }
+            var plantes = g.Plantes(Libre, f => Progres("Forêts, bosquets et rochers", .58f + .1f * f));
             int arbres = 0;
             foreach (var p in plantes)
             {
@@ -212,6 +236,162 @@ namespace Aldermark.Editeur
                 EditorUtility.SetDirty(td);
             }
             Debug.Log($"Aldermark : {arbres} arbres, {plantes.Count - arbres} buissons et rochers.");
+        }
+
+        // ---------- les villes ----------
+
+        static int GraineStable(string s)
+        {
+            unchecked { int h = 17; foreach (char c in s) h = h * 31 + c; return h & 0x7fffffff; }
+        }
+
+        /// <summary>Le plan de chaque ville, port, village, hameau ; plus les maisons des voisins du hameau de départ.</summary>
+        static List<(Site site, PlanVille plan)> PlansDesVilles(PlanDuMonde plan)
+        {
+            var liste = new List<(Site, PlanVille)>();
+            foreach (var s in plan.sites)
+                if (s.type != TypeSite.Depart) liste.Add((s, PlanVille.Tracer(s, GraineStable(s.nom))));
+            return liste;
+        }
+
+        /// <summary>Les maisons des voisins du hameau de départ (le hameau lui-même est posé par GameplayPont).</summary>
+        public static readonly Vector2[] VoisinsDuHameau = { new Vector2(11f, -8f), new Vector2(12f, 8f), new Vector2(-9f, 12f), new Vector2(3f, -17f) };
+
+        static VilleCuite HameauDeDepart()
+        {
+            var depart = Geo.SitePlusProche(Monde.Hameau, s => s.type == TypeSite.Depart);
+            var H = Monde.Hameau;
+            var v = new VilleCuite { nom = depart != null ? depart.nom : "Hameau", centre = new Vector3(H.x, Monde.Hauteur(H.x, H.y), H.y) };
+            for (int i = 0; i < VoisinsDuHameau.Length; i++)
+            {
+                var p = H + VoisinsDuHameau[i];
+                var t = new Tirage(4100 + i);
+                var o = new OptionsMaison { largeur = t.Entre(6.2f, 7.5f), profondeur = t.Entre(5.2f, 6f), etages = 1 + i % 2, style = i % 2 == 0 ? StyleMur.Colombage : StyleMur.Pierre, toiture = i == 2 ? Toiture.Chaume : Toiture.Tuiles, graine = 4100 + i };
+                KitBatiment.Varier(o, t, false);
+                var d = (H - p).normalized;
+                float y = Mathf.Min(Monde.Hauteur(p.x, p.y), Mathf.Min(Monde.Hauteur(p.x + 3f, p.y + 3f), Monde.Hauteur(p.x - 3f, p.y - 3f)));
+                v.commandes.Add(new Commande { type = Gabarit.Maison, position = new Vector3(p.x, y, p.y), lacet = Mathf.Atan2(d.x, d.y) * Mathf.Rad2Deg, maison = o, graine = 4100 + i });
+            }
+            return v;
+        }
+
+        /// <summary>
+        /// Les villes dans la scène : leurs plans (JSON, bâtis au lancement par <see cref="VillesDuMonde"/>), leurs murs
+        /// (collisions), et leurs lieux sur la carte (la ville, ses auberges, forges, églises, halles, moulins).
+        /// </summary>
+        static void VillesDuGrandMonde(List<(Site site, PlanVille plan)> villes)
+        {
+            var donnees = new DonneesVilles();
+            var racine = Racine("Villes");
+            var depart = HameauDeDepart();
+            donnees.villes.Add(depart);
+            var voisin = Geo.SitePlusProche(Monde.Hameau, s => s.type == TypeSite.Village);
+            var scratch = new Maillage();
+            var volumes = new List<Volume>();
+
+            void Murs(Transform parent, List<Commande> commandes)
+            {
+                var murs = new GameObject("Murs").transform;
+                murs.SetParent(parent, false);
+                foreach (var k in commandes)
+                {
+                    scratch.Vider();
+                    volumes.Clear();
+                    KitBatiment.Construire(scratch, k, volumes);
+                    foreach (var vo in volumes)
+                    {
+                        var go = new GameObject("Mur");
+                        go.transform.SetParent(murs, false);
+                        go.transform.SetPositionAndRotation(vo.centre, Quaternion.Euler(0f, vo.lacet, 0f));
+                        go.AddComponent<BoxCollider>().size = vo.taille;
+                    }
+                }
+            }
+
+            var hameau = new GameObject(depart.nom).transform;
+            hameau.SetParent(racine, false);
+            hameau.position = depart.centre;
+            Murs(hameau, depart.commandes);
+
+            int numero = 0;
+            foreach (var (s, pv) in villes)
+            {
+                var v = new VilleCuite { nom = s.nom, centre = new Vector3(s.position.x, s.altitude, s.position.y), commandes = pv.commandes };
+                donnees.villes.Add(v);
+                var go = new GameObject(s.nom).transform;
+                go.SetParent(racine, false);
+                go.position = new Vector3(s.position.x, Monde.Hauteur(s.position.x, s.position.y), s.position.y);
+                string id = Identifiant(s.nom);
+                go.gameObject.AddComponent<Entite>().id = "ville-" + id;
+                var lieu = go.gameObject.AddComponent<Lieu>();
+                lieu.nom = s.nom;
+                lieu.type = s.type == TypeSite.Capitale ? TypeLieu.Capitale : s.type == TypeSite.Ville ? TypeLieu.Ville :
+                            s.type == TypeSite.Port ? TypeLieu.Port : s.type == TypeSite.Village ? TypeLieu.Village : TypeLieu.Hameau;
+                lieu.connu = s == voisin || (s.type == TypeSite.Capitale && s.royaume == 0);
+                Murs(go, pv.commandes);
+                foreach (var k in pv.commandes)
+                {
+                    if (!k.lieu) continue;
+                    TypeLieu t = k.type == Gabarit.Auberge ? TypeLieu.Auberge : k.type == Gabarit.Forge ? TypeLieu.Forge : k.type == Gabarit.Halle ? TypeLieu.Marche :
+                                 k.type == Gabarit.MoulinAVent ? TypeLieu.Moulin : TypeLieu.Chapelle;
+                    var l = new GameObject(k.nom);
+                    l.transform.SetParent(go, false);
+                    l.transform.position = k.position;
+                    l.AddComponent<Entite>().id = $"lieu-{id}-{k.type.ToString().ToLower()}-{++numero}";
+                    var li = l.AddComponent<Lieu>();
+                    li.nom = k.type == Gabarit.Halle || k.type == Gabarit.MoulinAVent ? k.nom : $"{k.nom} ({s.nom})";
+                    li.type = t;
+                }
+            }
+
+            string chemin = Dossier + "/Monde/Villes.json";
+            File.WriteAllText(chemin, JsonUtility.ToJson(donnees));
+            AssetDatabase.ImportAsset(chemin);
+            var vd = racine.gameObject.AddComponent<VillesDuMonde>();
+            vd.donnees = AssetDatabase.LoadAssetAtPath<TextAsset>(chemin);
+            var shader = Shader.Find("Aldermark/Bati");
+            if (shader == null)
+            {
+                Debug.LogError("Aldermark : le shader Aldermark/Bati est introuvable (Assets/Aldermark/Shaders/Bati.shader). Les maisons seront blanches.");
+                shader = Shader.Find("Universal Render Pipeline/Particles/Simple Lit");
+            }
+            vd.materiau = Sauver(new Material(shader) { enableInstancing = false }, "Materiaux/Bati.mat");
+            int n = 0; foreach (var v in donnees.villes) n += v.commandes.Count;
+            Debug.Log($"Aldermark : {donnees.villes.Count} villes et villages, {n} bâtiments (bâtis au lancement).");
+        }
+
+        /// <summary>Les toits des villes sur la carte : chaque bâtiment, vu d'en haut, avec son ombre et son contour.</summary>
+        static void PeindreBatiments(Color32[] px, List<(Site site, PlanVille plan)> villes)
+        {
+            Color32[] toits = { new Color32(168, 92, 66, 255), new Color32(150, 84, 62, 255), new Color32(110, 116, 136, 255), new Color32(176, 150, 96, 255) };
+            var contour = new Color32(70, 52, 44, 255);
+            foreach (var (_, pv) in villes)
+                foreach (var e in pv.emprises)
+                {
+                    float r = e.hx + e.hz;
+                    int i0 = Mathf.FloorToInt((e.c.x - r + Geo.Demi) / GrillesMonde.Pas), i1 = Mathf.CeilToInt((e.c.x + r + Geo.Demi) / GrillesMonde.Pas);
+                    int j0 = Mathf.FloorToInt((e.c.y - r + Geo.Demi) / GrillesMonde.Pas), j1 = Mathf.CeilToInt((e.c.y + r + Geo.Demi) / GrillesMonde.Pas);
+                    var toit = toits[(int)(Geo.Hasard(e.c.x, e.c.y, 5) * toits.Length) % toits.Length];
+                    bool mur = e.hx < 2f || e.hz < 2f;
+                    for (int j = Mathf.Max(0, j0); j <= Mathf.Min(G - 1, j1); j++)
+                        for (int i = Mathf.Max(0, i0); i <= Mathf.Min(G - 1, i1); i++)
+                        {
+                            var p = new Vector2(-Geo.Demi + (i + .5f) * GrillesMonde.Pas, -Geo.Demi + (j + .5f) * GrillesMonde.Pas);
+                            if (!e.Contient(p, 0f)) continue;
+                            px[j * G + i] = mur ? new Color32(150, 144, 132, 255) : e.Contient(p, -1.6f) ? toit : contour;
+                        }
+                }
+        }
+
+        static string Identifiant(string nom)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in nom.Normalize(System.Text.NormalizationForm.FormD))
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                sb.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-');
+            }
+            return sb.ToString();
         }
 
         // ---------- la mer, les lacs, les rivières ----------
@@ -346,7 +526,7 @@ namespace Aldermark.Editeur
 
         // ---------- ce que le jeu lit : sols, eaux, carte ----------
 
-        static void DonneesCuites(PlanDuMonde plan, GrillesMonde g, UnityEngine.Terrain[] terrains)
+        static void DonneesCuites(PlanDuMonde plan, GrillesMonde g, UnityEngine.Terrain[] terrains, List<(Site site, PlanVille plan)> villes)
         {
             int R = GrandMonde.Resolution, f = G / R;
             var sols = new byte[R * R];
@@ -367,7 +547,9 @@ namespace Aldermark.Editeur
             File.WriteAllBytes(dossier + "/Eaux.bytes", eaux);
             Progres("Carte du monde : peinture", .8f);
             var tex = new Texture2D(G, G, TextureFormat.RGBA32, false);
-            tex.SetPixels32(g.PeindreCarte(plan));
+            var px = g.PeindreCarte(plan);
+            PeindreBatiments(px, villes);
+            tex.SetPixels32(px);
             tex.Apply(false);
             Progres("Carte du monde : enregistrement", .86f);
             File.WriteAllBytes(dossier + "/Carte.png", tex.EncodeToPNG());
