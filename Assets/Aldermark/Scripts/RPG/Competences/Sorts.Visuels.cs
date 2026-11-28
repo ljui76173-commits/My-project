@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Aldermark
@@ -318,6 +319,8 @@ namespace Aldermark
         Transform visuel, satellites, halo;
         ParticleSystem trainee;
         bool fini;
+        /// <summary>Ce qu'un projectile perçant a déjà traversé.</summary>
+        HashSet<ICible> traverses;
 
         public static void Creer(Incantation s)
         {
@@ -335,15 +338,19 @@ namespace Aldermark
 
             // Les couleurs : le feu blanchit puis bleuit au cœur en montant ; la glace devient cristal
             Color ext = d.couleur, coeurC = new Color(1f, .97f, .9f, .95f);
-            bool eclat = d.element == Element.Glace;
+            // Allongé (éclat, lance, javelot) ; une lame plate pour le vent
+            bool eclat = d.element == Element.Glace || d.perce;
+            bool lame = d.element == Element.Vent;
+            if (d.perce) p.traverses = new HashSet<ICible>();
             if (d.element == Element.Feu && pal >= 3) ext = new Color(1f, .66f, .22f);
             if (d.element == Element.Feu && pal >= 4) coeurC = new Color(.7f, .85f, 1f, .95f);
             if (eclat && pal >= 4) ext = new Color(.5f, .85f, 1f);
 
             // Le cœur : une sphère lumineuse (allongée en éclat pour la glace) et un noyau clair
             var coeur = Piece(go.transform, eclat ? PrimitiveType.Cube : PrimitiveType.Sphere, new Color(ext.r, ext.g, ext.b, .8f));
-            coeur.localScale = eclat ? new Vector3(p.taille * .7f, p.taille * .7f, p.taille * 3.2f) : Vector3.one * p.taille * 2f;
-            if (eclat) coeur.localRotation = Quaternion.Euler(0, 0, 45f);
+            coeur.localScale = lame ? new Vector3(p.taille * 3.2f, p.taille * .15f, p.taille * 1.1f)
+                : eclat ? new Vector3(p.taille * .7f, p.taille * .7f, p.taille * (d.perce ? 4.5f : 3.2f)) : Vector3.one * p.taille * 2f;
+            if (eclat && !lame) coeur.localRotation = Quaternion.Euler(0, 0, 45f);
             var noyau = Piece(go.transform, PrimitiveType.Sphere, coeurC);
             noyau.localScale = Vector3.one * p.taille * (eclat ? .6f : 1.1f);
             p.visuel = coeur;
@@ -354,7 +361,8 @@ namespace Aldermark
                 p.satellites = new GameObject("Satellites").transform;
                 p.satellites.SetParent(go.transform, false);
                 int n = Mathf.Min(pal - 1, 6);
-                Color cs = eclat ? new Color(.85f, .96f, 1f, .9f) : new Color(1f, .85f, .35f, .9f);
+                Color cs = d.element == Element.Glace ? new Color(.85f, .96f, 1f, .9f) : d.element == Element.Feu ? new Color(1f, .85f, .35f, .9f)
+                    : new Color(Mathf.Lerp(ext.r, 1f, .5f), Mathf.Lerp(ext.g, 1f, .5f), Mathf.Lerp(ext.b, 1f, .5f), .9f);
                 for (int k = 0; k < n; k++)
                 {
                     float ang = k * Mathf.PI * 2f / n;
@@ -397,7 +405,8 @@ namespace Aldermark
             tg.GetComponent<ParticleSystemRenderer>().sharedMaterial = Effets.Particules();
             ps.Play();
             p.trainee = ps;
-            Sons.JouerA(eclat ? "sortGlace" : "sortFeu", s.origine, .72f + .02f * kn, (eclat ? 1.4f : 1.15f) - .02f * kn);
+            bool glace = d.element == Element.Glace;
+            Sons.JouerA(glace ? "sortGlace" : lame ? "sortVent" : "sortFeu", s.origine, .72f + .02f * kn, (glace ? 1.4f : lame ? 1.5f : d.perce ? 1.3f : 1.15f) - .02f * kn);
         }
 
         static Transform Piece(Transform parent, PrimitiveType type, Color c)
@@ -427,19 +436,30 @@ namespace Aldermark
             }
             Vector3 pas = vitesse * dt;
             float l = pas.magnitude;
-            if (Sorts.Premier(s, transform.position, pas / l, l, taille * .7f, out var c, out var point))
+            if (Sorts.Premier(s, transform.position, pas / l, l, taille * .7f, out var c, out var point, traverses))
             {
-                transform.position = point;
-                Finir(c);
-                return;
+                // Un projectile perçant traverse les créatures et ne s'arrête que sur un obstacle
+                if (c != null && traverses != null)
+                {
+                    traverses.Add(c);
+                    Sorts.Deflagration(d.element, point, vitesse.normalized, s.Visuel, s.camp);
+                    Sorts.Toucher(s, c, vitesse.normalized);
+                }
+                else
+                {
+                    transform.position = point;
+                    Finir(c);
+                    return;
+                }
             }
             transform.position += pas;
             transform.rotation = Quaternion.LookRotation(vitesse);
             if (visuel != null && d.element == Element.Glace) visuel.Rotate(0, 0, 720f * dt, Space.Self);
+            if (visuel != null && d.element == Element.Vent) visuel.Rotate(0, 0, 900f * dt, Space.Self);
             if (satellites != null) satellites.Rotate(0, 0, 540f * dt, Space.Self);
             if (halo != null) halo.localScale = Vector3.one * taille * 3.4f * (1f + .12f * Mathf.Sin(t * 14f));
             parcouru += l;
-            if (parcouru >= d.portee) Finir(null, false);
+            if (parcouru >= (s.portee > 0f ? s.portee : d.portee)) Finir(null, s.portee > 0f);
         }
 
         void Finir(ICible c, bool impact = true)
@@ -449,6 +469,18 @@ namespace Aldermark
             if (c != null) Sorts.Toucher(s, c, vitesse.normalized);
             else if (impact) Sorts.Impact(s.def.element, transform.position, vitesse.normalized, s.Visuel);
             else Effets.Eclat(transform.position, s.def.couleur, 6, 1f, .1f, 0f, .3f);
+            // Un météore éclabousse autour de son point d'impact
+            if (s.eclaboussure > 0f && (c != null || impact))
+            {
+                Vector3 p = transform.position;
+                foreach (var x in Combattant.Tous.ToArray())
+                    if (!ReferenceEquals(x, c) && Sorts.Valide(s, x) && Vector3.Distance(x.Centre, p) <= s.eclaboussure + .5f)
+                        Sorts.Toucher(s, x, Vector3.ProjectOnPlane(x.Centre - p, Vector3.up).normalized, .6);
+                var h = CombatHeros.Instance;
+                if (h != null && !ReferenceEquals(h, c) && Sorts.Valide(s, h) && Vector3.Distance(h.Centre, p) <= s.eclaboussure + .5f)
+                    Sorts.Toucher(s, h, (h.Centre - p).normalized, .6);
+                Effets.Sillon(p, vitesse, .5f + s.eclaboussure * .3f, .5f + s.eclaboussure * .3f, 14f);
+            }
             // La traînée finit de se dissiper seule
             if (trainee != null)
             {

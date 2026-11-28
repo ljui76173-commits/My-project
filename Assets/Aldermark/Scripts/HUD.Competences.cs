@@ -223,7 +223,7 @@ namespace Aldermark
             if (kb == null || comp == null) return;
             if (toucheK == null) toucheK = kb.FindKeyOnCurrentKeyboardLayout("k") ?? kb.kKey;
             if (!autreMenu && toucheK.wasPressedThisFrame) OuvrirCompetences(!competencesOuvertes);
-            else if (competencesOuvertes && kb.escapeKey.wasPressedThisFrame) OuvrirCompetences(false);
+            else if (competencesOuvertes && kb.escapeKey.wasPressedThisFrame) { if (ModaleOuverte) FermerModale(); else OuvrirCompetences(false); }
             if (competencesOuvertes) MettreAJourFenetreCompetences(comp, kb);
         }
 
@@ -263,6 +263,7 @@ namespace Aldermark
 
         void OuvrirCompetences(bool ouvrir)
         {
+            if (!ouvrir) FermerModale();
             competencesOuvertes = ouvrir;
             panneauCompetences.gameObject.SetActive(ouvrir);
             Cursor.lockState = ouvrir ? CursorLockMode.None : CursorLockMode.Locked;
@@ -288,15 +289,18 @@ namespace Aldermark
             foreach (var l in lignesComp) Destroy(l.fond.gameObject);
             lignesComp.Clear();
             float y = 118;
+            int nLignes = 0;
+            foreach (var id0 in voulu) if (!string.IsNullOrEmpty(id0)) nLignes++;
+            float hLigne = Mathf.Clamp((512f - 78f) / Mathf.Max(1, nLignes), 24f, 38f);
             for (int i = 0; i < voulu.Count; i++)
             {
                 string id = voulu[i];
                 var l = new LigneCompetence { id = id };
                 bool titre = string.IsNullOrEmpty(id);
-                float hauteur = titre ? 34 : 38;
+                float hauteur = titre ? 34 : hLigne;
                 if (titre && i > 0) y += 10;
                 l.fond = Panneau("Ligne", panneauCompetences, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(40, -y), new Vector2(480, hauteur - 4), new Color(1, 1, 1, titre ? 0f : .04f));
-                l.nom = Texte("Nom", l.fond, "", titre ? 16 : 20, titre ? Pale : Color.white, TextAnchor.MiddleLeft);
+                l.nom = Texte("Nom", l.fond, "", titre ? 16 : hLigne >= 34f ? 20 : 17, titre ? Pale : Color.white, TextAnchor.MiddleLeft);
                 Etirer((RectTransform)l.nom.transform, new Vector2(titre ? 2 : 14, 0), new Vector2(-90, 0));
                 if (titre)
                 {
@@ -322,6 +326,9 @@ namespace Aldermark
             var souris = Mouse.current;
             Vector2 pos = souris != null ? souris.position.ReadValue() : Vector2.zero;
             bool clic = souris != null && souris.leftButton.wasPressedThisFrame;
+            // L'écran d'évolution / de fusion, par-dessus : il prend la main
+            if (ModaleOuverte) { MettreAJourModale(comp, pos, clic); return; }
+            if (MettreAJourBoutonsEvolution(comp, CatalogueCompetences.Get(compChoisie), pos, clic)) return;
 
             // Choisir : clic ou flèches
             var ids = new List<string>();
@@ -382,20 +389,32 @@ namespace Aldermark
             var sb = new System.Text.StringBuilder();
             if (d.EstSort)
             {
-                string forme = d.forme == FormeSort.Projectile ? "projectile" : d.forme == FormeSort.Trait ? "trait instantané" : d.forme == FormeSort.Cone ? "cône devant toi" : d.forme == FormeSort.Zone ? "zone autour de toi" : "sur toi";
-                compType.text = $"Sort  ·  {CatalogueCompetences.NomElement(d.element)}  ·  {forme}";
-                if (d.forme == FormeSort.Soin) sb.AppendLine($"Soin  <b>{Nombres.Court(comp.Soin(d))}</b> vie   <size=14><color=#a9a6c4>(Esprit et Intelligence)</color></size>");
-                else sb.AppendLine($"Puissance  <b>{Nombres.Court(comp.AttaqueMagique(d))}</b>   <size=14><color=#a9a6c4>(Intelligence, un peu d'Esprit ; la défense compte à moitié)</color></size>");
+                string origine = d.EstFusion ? $"fusion {CatalogueCompetences.NomElement(d.fusionDe[0])} + {CatalogueCompetences.NomElement(d.fusionDe[1])}"
+                    : d.EstEvolution ? $"évolution de {CatalogueCompetences.Get(d.evolutionDe)?.nom}" : CatalogueCompetences.NomElement(d.element);
+                compType.text = $"Sort  ·  {origine}  ·  {NomForme(d)}";
+                if (d.forme == FormeSort.Soin) sb.AppendLine($"Soin  <b>{Nombres.Court(comp.Soin(d))}</b> vie" + (d.regen > 0 ? $"  + <b>{Nombres.Court(comp.Soin(d) * d.regen)}</b> sur 8 s" : "") + "");
+                else if (d.forme == FormeSort.Sanctuaire && d.element == Element.Lumiere)
+                    sb.AppendLine($"Soin  <b>{Nombres.Court(comp.Soin(d) * .12)}</b> et dégâts  <b>{Nombres.Court(comp.AttaqueMagique(d))}</b> toutes les ½ s, {d.duree:0} s");
+                else if (d.forme == FormeSort.Tornade || d.forme == FormeSort.Sanctuaire)
+                    sb.AppendLine($"Puissance  <b>{Nombres.Court(comp.AttaqueMagique(d))}</b> par coup, pendant {d.duree:0.#} s" + (d.eruption > 0 ? $"  ·  éruption <b>{Nombres.Court(comp.AttaqueMagique(d) * d.eruption / d.puissance)}</b>" : ""));
+                else sb.AppendLine($"Puissance  <b>{Nombres.Court(comp.AttaqueMagique(d))}</b>" + (d.nombre > 1 ? $" × {d.nombre}" : ""));
                 sb.AppendLine($"Mana  <color=#7ab4ff><b>{comp.Cout(d):0.#}</b></color>      Recharge  <b>{comp.Recharge(d):0.#} s</b>      Incantation  <b>{d.incantation:0.##} s</b>");
-                if (d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait) sb.AppendLine($"Portée  {d.portee:0} m");
-                else if (d.forme == FormeSort.Cone) sb.AppendLine($"Portée  {d.portee:0} m, sur {d.angle:0}°");
-                else if (d.forme == FormeSort.Zone) sb.AppendLine($"Rayon  {comp.Rayon(d):0.#} m");
+                if (d.forme == FormeSort.Cone) sb.AppendLine($"Portée  {d.portee:0} m, sur {d.angle:0}°");
+                else if (d.forme == FormeSort.Zone && !d.aDistance) sb.AppendLine($"Rayon  {comp.Rayon(d):0.#} m");
+                else if (d.rayon > 0 && d.forme != FormeSort.Soin) sb.AppendLine($"Portée  {d.portee:0} m  ·  rayon  {d.rayon:0.#} m");
+                else if (d.forme != FormeSort.Soin) sb.AppendLine($"Portée  {d.portee:0} m");
                 if (d.effet != Effet.Aucun)
                 {
                     string chance = d.chanceEffet < 1f ? $"{d.chanceEffet * 100f:0} % de chances : " : "";
                     string quoi = d.effet == Effet.Brulure ? $"brûle pendant {d.dureeEffet:0} s" : d.effet == Effet.Gel ? $"ralentit {d.dureeEffet:0} s ; 3 de suite : gelé net" :
-                                  d.effet == Effet.Choc ? $"étourdit {d.dureeEffet:0.#} s" : "repousse fort";
+                                  d.effet == Effet.GelNet ? $"gèle net {d.dureeEffet:0.#} s" : d.effet == Effet.Choc ? $"étourdit {d.dureeEffet:0.#} s" : "repousse fort";
                     sb.AppendLine($"Effet  {CatalogueCompetences.NomEffet(d.effet)} : {chance}{quoi}");
+                }
+                // Les évolutions possibles
+                if (d.evolutions != null && d.evolutions.Length == 2)
+                {
+                    string a0 = CatalogueCompetences.Get(d.evolutions[0])?.nom, a1 = CatalogueCompetences.Get(d.evolutions[1])?.nom;
+                    sb.AppendLine(comp.PeutEvoluer(d.id) ? $"<color=#ffd27a>Peut évoluer : {a0} ou {a1} (bouton Évoluer)</color>" : $"<color=#a9a6c4>Au niveau 10, évolue en {a0} ou {a1}</color>");
                 }
                 // L'aspect : ce que le niveau a déjà changé, et le prochain palier
                 {

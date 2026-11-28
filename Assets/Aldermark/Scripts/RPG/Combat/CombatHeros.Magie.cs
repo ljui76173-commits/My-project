@@ -15,7 +15,7 @@ namespace Aldermark
 
         Competences comp;
         DefCompetence sortEnCours;
-        CercleMagique cercleMain, cercleSol, cercleCiel;
+        CercleMagique cercleMain, cercleSol, cercleCiel, cercleCible;
         float prochaineRune, prochaineConvergence, prochainArretTemps;
         Transform orbe;
         Light lumiereOrbe;
@@ -91,7 +91,8 @@ namespace Aldermark
             if (cercleMain != null) cercleMain.Liberer();
             if (cercleSol != null) cercleSol.Liberer();
             if (cercleCiel != null) cercleCiel.Liberer();
-            cercleMain = cercleSol = cercleCiel = null;
+            if (cercleCible != null) cercleCible.Liberer();
+            cercleMain = cercleSol = cercleCiel = cercleCible = null;
             DetruireOrbe();
             comp.Declencher(d);
             int niveau = comp.Niveau(d.id);
@@ -104,7 +105,9 @@ namespace Aldermark
             {
                 def = d, auteur = this, camp = Camp.Heros, niveau = niveau, niveauVisuel = visuel,
                 attaque = d.forme == FormeSort.Soin ? comp.Soin(d) : comp.AttaqueMagique(d),
+                soin = d.forme == FormeSort.Sanctuaire && d.element == Element.Lumiere ? comp.Soin(d) * .12 : 0,
                 origine = origine, direction = vise - origine, cible = cible,
+                point = AVise(d) ? PointViseSol(d) : vise,
                 rayon = comp.Rayon(d),
                 poussee = d.forme == FormeSort.Cone ? d.poussee * (float)Competences.Progression(niveau) : d.poussee * Sorts.Ampleur(niveau),
                 touche = (c, tue) =>
@@ -158,7 +161,7 @@ namespace Aldermark
             }
 
             // Le recul
-            if (d.forme != FormeSort.Soin && d.forme != FormeSort.Zone)
+            if (d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone || d.forme == FormeSort.Tornade || d.forme == FormeSort.Ligne)
             {
                 if (puissance >= 1.25f && j.AuSol) CommencerGlissade(-avant, puissance * 1.3f, false, true);
                 else if (puissance >= .5f) j.Elan(-avant * puissance * 4f, .2f, puissance * 20f);
@@ -182,7 +185,11 @@ namespace Aldermark
             int niveau = comp != null ? comp.NiveauVisuel(d.id) : 1;
             float a = Sorts.Ampleur(niveau);
             int pal = Sorts.Palier(niveau);
-            bool devant = d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone;
+            bool devant = d.forme == FormeSort.Projectile || d.forme == FormeSort.Trait || d.forme == FormeSort.Cone || d.forme == FormeSort.Tornade || d.forme == FormeSort.Ligne;
+            // Là où le sort va tomber (pluie, éclair du ciel, prison, magma) : un cercle au sol qui suit la visée
+            if (AVise(d))
+                cercleCible = CercleMagique.Creer(PointViseSol(d) + Vector3.up * .06f, Quaternion.LookRotation(Vector3.down, Vector3.forward),
+                    (d.vagues > 1 ? d.rayon * .6f : d.rayon) * (1f + .3f * (a - 1f)), d.couleur, d.element, pal, false);
             // Devant la main (face à la visée) pour ce qui part au loin
             if (devant)
                 cercleMain = CercleMagique.Creer(VersMonde(mainG), Quaternion.LookRotation(DirectionVisee()),
@@ -196,6 +203,18 @@ namespace Aldermark
             // Céleste : un cercle immense s'ouvre dans le ciel, au-dessus de ce que tu vises
             if (pal >= 6)
                 cercleCiel = CercleMagique.Creer(PositionCiel(), Quaternion.LookRotation(Vector3.down, transform.forward), 6f * a, d.couleur, d.element, pal, true);
+        }
+
+        /// <summary>Les sorts qui tombent là où l'on vise (et non devant ou autour de soi).</summary>
+        static bool AVise(DefCompetence d) => d.aDistance || d.forme == FormeSort.Pluie || d.forme == FormeSort.Ciel;
+
+        /// <summary>Le point visé au sol, ramené à la portée du sort.</summary>
+        Vector3 PointViseSol(DefCompetence d)
+        {
+            Vector3 p = Cibles.Existe(verrou) && verrou.Vivant ? verrou.Centre : PointVise();
+            Vector3 v = Vector3.ProjectOnPlane(p - transform.position, Vector3.up);
+            if (v.magnitude > d.portee) p = transform.position + v.normalized * d.portee;
+            return new Vector3(p.x, Monde.Hauteur(p.x, p.z), p.z);
         }
 
         Vector3 PositionCiel()
@@ -225,7 +244,8 @@ namespace Aldermark
             if (cercleMain != null) cercleMain.Annuler();
             if (cercleSol != null) cercleSol.Annuler();
             if (cercleCiel != null) cercleCiel.Annuler();
-            cercleMain = cercleSol = cercleCiel = null;
+            if (cercleCible != null) cercleCible.Annuler();
+            cercleMain = cercleSol = cercleCiel = cercleCible = null;
         }
 
         /// <summary>Ce que vise le centre de l'écran (on traverse son propre corps et les zones invisibles).</summary>
@@ -290,6 +310,11 @@ namespace Aldermark
                 Vector3 dir = DirectionVisee();
                 cercleMain.transform.SetPositionAndRotation(VersMonde(mainG) + dir * (j.troisiemePersonne ? .25f : .12f), Quaternion.LookRotation(dir));
                 cercleMain.Progres = u;
+            }
+            if (cercleCible != null)
+            {
+                cercleCible.transform.position = Vector3.Lerp(cercleCible.transform.position, PointViseSol(sortEnCours) + Vector3.up * .06f, 1f - Mathf.Exp(-Time.deltaTime * 12f));
+                cercleCible.Progres = u;
             }
             if (cercleCiel != null)
             {
@@ -358,6 +383,12 @@ namespace Aldermark
                     if (etat != Etat.Projete && etat != Etat.Glissade) Sonner(c.dureeEffet * .7f);
                     HUD.ChiffreTexte(SurSoi() + Vector3.up * .2f, "Étourdi", new Color(1f, .95f, .5f));
                     break;
+                case Effet.GelNet:
+                    Alterations.GelerNet(c.dureeEffet * .6f);
+                    if (etat != Etat.Projete && etat != Etat.Glissade) Sonner(c.dureeEffet * .6f);
+                    HUD.ChiffreTexte(SurSoi() + Vector3.up * .2f, "Gelé !", new Color(.65f, .9f, 1f));
+                    HUD.EclairCombat(new Color(.6f, .85f, 1f, .4f), .6f, true);
+                    break;
                 case Effet.Brulure:
                 case Effet.Gel:
                     if (Alterations.Appliquer(c.effet, c.degats * .5, c.dureeEffet, c.auteur))
@@ -371,8 +402,36 @@ namespace Aldermark
             }
         }
 
+        // ---------- la régénération ----------
+        float regenParSeconde, finRegen, prochaineLueurRegen;
+        Color couleurRegen = Color.green;
+
+        /// <summary>La vie remonte toute seule pendant un moment (sort de Régénération).</summary>
+        public void Regenerer(double total, float duree, Color couleur)
+        {
+            float reste = Mathf.Max(0f, finRegen - Time.time) * regenParSeconde;
+            finRegen = Time.time + duree;
+            regenParSeconde = (reste + (float)total) / duree;
+            couleurRegen = couleur;
+        }
+
+        void MettreAJourRegeneration(float dt)
+        {
+            if (finRegen <= 0f || stats == null) return;
+            if (Time.time >= finRegen || mort) { finRegen = 0f; regenParSeconde = 0f; return; }
+            stats.Rendre(regenParSeconde * dt);
+            if (Time.time >= prochaineLueurRegen)
+            {
+                prochaineLueurRegen = Time.time + .3f;
+                Vector3 p = j.troisiemePersonne ? transform.position + Vector3.up * Random.Range(.2f, 1.6f) + Random.insideUnitSphere * .35f
+                                                 : j.cam.transform.TransformPoint(new Vector3(Random.Range(-.5f, .5f), -.5f, .7f));
+                Effets.Eclat(p, couleurRegen, 2, .5f, j.troisiemePersonne ? .1f : .05f, -.8f, .9f);
+            }
+        }
+
         void MettreAJourAlterations(float dt)
         {
+            MettreAJourRegeneration(dt);
             if (!Alterations.Actif) return;
             if (j.Nage && Alterations.Brulure > 0f) Alterations.Eteindre();
             double brule = Alterations.Avancer(dt);

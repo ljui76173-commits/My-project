@@ -128,8 +128,12 @@ namespace Aldermark
             string aspect = nouveauPalier ? Sorts.DescriptionPalier(d, pal) : "";
             if (m.niveau == CatalogueCompetences.NiveauMaitrise)
             {
-                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10. Et ça continue : il n'y a pas de plafond." + (aspect != "" ? $"\n\nSon aspect : {aspect}." : ""), 5.5f);
+                string evo = d.evolutions != null && d.evolutions.Length == 2
+                    ? $"\n\nElle peut évoluer : <b>{CatalogueCompetences.Get(d.evolutions[0])?.nom}</b> ou <b>{CatalogueCompetences.Get(d.evolutions[1])?.nom}</b>. Ouvre tes Compétences (K)."
+                    : "";
+                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10. Et ça continue : il n'y a pas de plafond." + evo + (aspect != "" && evo == "" ? $"\n\nSon aspect : {aspect}." : ""), 7f);
                 Sons.Fanfare("niveau");
+                VerifierFusions(true);
             }
             else if (nouveauPalier && pal >= 5)
             {
@@ -155,6 +159,7 @@ namespace Aldermark
             if (m == null) return;
             m.niveau = Mathf.Clamp(niveau, 1, CatalogueCompetences.NiveauLimite);
             m.xp = 0;
+            VerifierFusions(true);
         }
 
         // ---------- raccourcis ----------
@@ -209,8 +214,10 @@ namespace Aldermark
         public static double Progression(int niveau) => 1 + .12 * (Mathf.Max(1, niveau) - 1);
 
         // Le coût et la recharge baissent à chaque niveau sans jamais atteindre zéro ; le rayon suit la taille du sort
-        public float Cout(DefCompetence d) => d.cout / (1f + .035f * (Mathf.Max(1, Niveau(d.id)) - 1));
-        public float Recharge(DefCompetence d) => d.recharge / (1f + .045f * (Mathf.Max(1, Niveau(d.id)) - 1));
+        public float Cout(DefCompetence d) => Cout(d, Niveau(d.id));
+        public float Recharge(DefCompetence d) => Recharge(d, Niveau(d.id));
+        public static float Cout(DefCompetence d, int niveau) => d.cout / (1f + .035f * (Mathf.Max(1, niveau) - 1));
+        public static float Recharge(DefCompetence d, int niveau) => d.recharge / (1f + .045f * (Mathf.Max(1, niveau) - 1));
         public float Rayon(DefCompetence d) => d.rayon * (1f + .4f * (Sorts.Ampleur(Niveau(d.id)) - 1f));
 
         /// <summary>Les niveaux utiles d'un bonus qui ralentit après la maîtrise (pleine pente jusqu'au 10, un quart ensuite).</summary>
@@ -232,10 +239,12 @@ namespace Aldermark
         double Valeur(Stat s) => stats != null ? stats.Valeur(s) : 5;
 
         /// <summary>L'attaque magique d'un sort : l'Intelligence surtout, un peu d'Esprit, et le niveau du sort.</summary>
-        public double AttaqueMagique(DefCompetence d) => (Valeur(Stat.INT) + .4 * Valeur(Stat.ESP)) * d.puissance * Progression(Niveau(d.id));
+        public double AttaqueMagique(DefCompetence d) => AttaqueMagique(d, Niveau(d.id));
+        public double AttaqueMagique(DefCompetence d, int niveau) => (Valeur(Stat.INT) + .4 * Valeur(Stat.ESP)) * d.puissance * Progression(niveau);
 
         /// <summary>Ce que rend un soin : l'Esprit surtout, l'Intelligence aussi.</summary>
-        public double Soin(DefCompetence d) => (2 * Valeur(Stat.ESP) + Valeur(Stat.INT)) * d.puissance * Progression(Niveau(d.id));
+        public double Soin(DefCompetence d) => Soin(d, Niveau(d.id));
+        public double Soin(DefCompetence d, int niveau) => (2 * Valeur(Stat.ESP) + Valeur(Stat.INT)) * d.puissance * Progression(niveau);
 
         /// <summary>Le bonus de dégâts au corps à corps selon l'arme en main.</summary>
         public double BonusArme(DefObjet arme)
@@ -302,6 +311,8 @@ namespace Aldermark
             if (e.resistanceElements != null && e.resistanceValeurs != null)
                 for (int k = 0; k < e.resistanceElements.Count && k < e.resistanceValeurs.Count; k++)
                     resistances[(Element)e.resistanceElements[k]] = Mathf.Clamp(e.resistanceValeurs[k], 0f, ResistanceMax);
+            fusionsAnnoncees.Clear();
+            VerifierFusions(false);
         }
     }
 }
