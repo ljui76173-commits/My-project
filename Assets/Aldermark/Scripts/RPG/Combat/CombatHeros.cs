@@ -619,7 +619,13 @@ namespace Aldermark
                 if (force >= 2f) CommencerGlissade(recul, force * .6f, true);   // même parée, une masse énorme fait reculer
                 return;
             }
-            double reel = Degats.Calculer(c.degats, Defense);
+            // La magie ne compte qu'une demi-défense ; la résistance à l'élément (gagnée en encaissant) retranche sa part
+            double reel = Degats.Calculer(c.degats, c.magique ? Defense * .5 : Defense);
+            if (comp != null && !string.IsNullOrEmpty(c.sort))
+            {
+                reel *= 1 - comp.Resistance(c.element);
+                comp.Encaisser(c);
+            }
             if (garde && face)
             {
                 // Bras en croix : encaisse moitié moins bien qu'une lame

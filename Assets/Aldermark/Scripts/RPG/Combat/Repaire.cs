@@ -64,6 +64,13 @@ namespace Aldermark
             p.y = Mathf.Max(Monde.Hauteur(p.x, p.z), -1f) + .2f;
             int n = Random.Range(niveauMin, niveauMax + 1);
             if (espece == Espece.Gelee) Gelee.Prochaine = Random.value < .6f ? 1.25f : .62f;
+            // Des lanceurs de sorts : au moins un chaman par camp de gobelins, des gelées de givre, des trolls anciens
+            switch (espece)
+            {
+                case Espece.Gobelin: Monstre.LanceurProchain = !membres.Exists(x => x != null && x.Vivant && x.Lanceur) || Random.value < .2f; break;
+                case Espece.Gelee: Monstre.LanceurProchain = Random.value < .3f; break;
+                case Espece.Troll: Monstre.LanceurProchain = Random.value < .4f; break;
+            }
             var m = Creer(espece, p, n);
             m.repaire = this;
             m.origine = transform.position;

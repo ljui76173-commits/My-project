@@ -15,6 +15,11 @@ namespace Aldermark
         /// <summary>Pose du bras armé (angles) au sommet de la préparation, puis à la fin de la frappe.</summary>
         public Vector3 poseArmement = new Vector3(-200f, 15f, 0f), poseFrappe = new Vector3(-55f, 0f, 0f);
         [System.NonSerialized] public float prete;
+        /// <summary>Un sort (la même fiche que le héros) : la préparation devient l'incantation, avec son cercle ; la frappe lance le sort.</summary>
+        public DefCompetence sort;
+        public int niveauSort = 1;
+        /// <summary>N'est choisie que si cette condition est vraie (se soigner quand on est blessé…).</summary>
+        public System.Func<bool> condition;
     }
 
     /// <summary>
@@ -38,6 +43,13 @@ namespace Aldermark
         public bool croiseLeFer;
         [Tooltip("S'enfuit sous 30 % de vie.")]
         public bool fuyard;
+        [Tooltip("Lanceur de sorts : reste à cette distance de sa cible (0 : va au contact).")]
+        public float distanceDeTir;
+
+        /// <summary>La prochaine créature créée sera une variante qui lance des sorts (chaman, gelée de givre, troll ancien).</summary>
+        public static bool LanceurProchain;
+        public bool Lanceur { get; private set; }
+        CercleMagique cercleSort;
 
         public EtatMonstre Etat { get; private set; }
         public ICible Cible => cible;
@@ -81,6 +93,8 @@ namespace Aldermark
 
         protected override void Awake()
         {
+            Lanceur = LanceurProchain;
+            LanceurProchain = false;
             Configurer();
             base.Awake();
             hauteurCorps = Mathf.Max(hauteurCorps, rayonCorps * 2f + .05f);
@@ -121,6 +135,12 @@ namespace Aldermark
 
         protected void Changer(EtatMonstre e)
         {
+            // Le cercle d'incantation éclate si le sort part, se défait sinon
+            if (cercleSort != null && e != EtatMonstre.Preparation)
+            {
+                if (e == EtatMonstre.Frappe) cercleSort.Liberer(); else cercleSort.Annuler();
+                cercleSort = null;
+            }
             Etat = e;
             tEtat = 0f;
             if (e == EtatMonstre.Repos) { aPointRepos = false; attenteRepos = Random.Range(.5f, 2.5f); }
@@ -233,16 +253,37 @@ namespace Aldermark
         AttaqueMonstre ChoisirAttaque(float d)
         {
             float total = 0f;
-            foreach (var a in attaques) if (d >= a.porteeMin && d <= a.portee && Time.time >= a.prete) total += a.poids;
+            foreach (var a in attaques) if (Disponible(a, d)) total += a.poids;
             if (total <= 0f) return null;
             float r = Random.value * total;
             foreach (var a in attaques)
             {
-                if (d < a.porteeMin || d > a.portee || Time.time < a.prete) continue;
+                if (!Disponible(a, d)) continue;
                 r -= a.poids;
                 if (r <= 0f) return a;
             }
             return null;
+        }
+
+        bool Disponible(AttaqueMonstre a, float d)
+        {
+            if (d < a.porteeMin || d > a.portee || Time.time < a.prete) return false;
+            if (a.condition != null && !a.condition()) return false;
+            // Un sort qui part vers la cible a besoin de la voir
+            if (a.sort != null && a.sort.forme != FormeSort.Zone && a.sort.forme != FormeSort.Soin && !LigneDeVue()) return false;
+            return true;
+        }
+
+        /// <summary>D'où part un sort : devant la créature, à hauteur de main (un bâton, une gueule…).</summary>
+        public virtual Vector3 MainSort => Centre + transform.forward * (rayonCorps + .35f) + Vector3.up * .25f;
+
+        bool LigneDeVue()
+        {
+            if (cible == null || !Cibles.Existe(cible)) return false;
+            Vector3 de = MainSort, a = cible.Centre;
+            if (!Physics.Linecast(de, a, out var hit, ~0, QueryTriggerInteraction.Ignore)) return true;
+            var c = hit.collider.GetComponentInParent<ICible>();
+            return ReferenceEquals(c, cible) || ReferenceEquals(c, this);
         }
 
         float PorteeCourte()
@@ -280,6 +321,15 @@ namespace Aldermark
                 if (PeutAttaquer()) { Lancer(a); return; }
                 if (d < 7f) { Changer(EtatMonstre.Encerclement); return; }
             }
+            if (distanceDeTir > 0f)
+            {
+                // Un lanceur de sorts garde ses distances : il approche, recule, tourne autour en faisant face
+                Vector3 dir = d > .01f ? vers / d : transform.forward;
+                if (d > distanceDeTir) Aller(dir, vitesseCourse, dt);
+                else if (d < distanceDeTir * .55f) { vitesseVoulue = -dir * vitesseMarche * 1.3f; Tourner(dir, 400f, dt); }
+                else { vitesseVoulue = Vector3.Cross(Vector3.up, dir) * sensCercle * vitesseMarche * .7f; Tourner(dir, 400f, dt); }
+                return;
+            }
             if (d > PorteeCourte() * .8f) Aller(vers.normalized, vitesseCourse, dt);
             else Tourner(vers, 400f, dt);
         }
@@ -305,13 +355,76 @@ namespace Aldermark
             coupPorte = false;
             Changer(EtatMonstre.Preparation);
             SurPreparation(a);
+            if (a.sort != null) DebutIncantation(a);
+        }
+
+        // ---------- les sorts des créatures ----------
+
+        /// <summary>Le niveau d'un sort de créature : celui de la fiche, plus un tous les 3 niveaux de la créature.</summary>
+        int NiveauSort(AttaqueMonstre a) => a.niveauSort + (niveau - 1) / 3;
+
+        void DebutIncantation(AttaqueMonstre a)
+        {
+            var d = a.sort;
+            int pal = Sorts.Palier(NiveauSort(a));
+            float a0 = Sorts.Ampleur(NiveauSort(a));
+            if (d.forme == FormeSort.Zone || d.forme == FormeSort.Soin)
+                cercleSort = CercleMagique.Creer(transform.position + Vector3.up * .05f, Quaternion.LookRotation(Vector3.down, transform.forward),
+                    d.forme == FormeSort.Zone ? d.rayon * .8f : rayonCorps * 2.2f, d.couleur, d.element, pal, true);
+            else
+                cercleSort = CercleMagique.Creer(MainSort, transform.rotation, (.35f + rayonCorps * .4f) * a0, d.couleur, d.element, pal, true);
+            Sons.JouerA("incantation", Centre, .7f, .85f / Mathf.Max(.5f, enCours.preparation / .6f));
+            HUD.ChiffreTexte(Centre + Vector3.up * (hauteurTete - hauteurCentre + .5f), d.nom + "…", Color.Lerp(d.couleur, Color.white, .3f));
+        }
+
+        void SuivreIncantation()
+        {
+            if (cercleSort == null || enCours == null || enCours.sort == null) return;
+            var d = enCours.sort;
+            cercleSort.Progres = Mathf.Clamp01(tEtat / Mathf.Max(.01f, enCours.preparation));
+            if (d.forme == FormeSort.Zone || d.forme == FormeSort.Soin)
+                cercleSort.transform.position = transform.position + Vector3.up * .05f;
+            else
+            {
+                Vector3 vers = cible != null && Cibles.Existe(cible) ? cible.Centre - MainSort : transform.forward;
+                cercleSort.transform.SetPositionAndRotation(MainSort, Quaternion.LookRotation(vers.sqrMagnitude > .01f ? vers : transform.forward));
+            }
+        }
+
+        void LancerSort(AttaqueMonstre a)
+        {
+            var d = a.sort;
+            Vector3 origine = MainSort;
+            Vector3 vise = cible != null && Cibles.Existe(cible) ? cible.Centre : origine + transform.forward * 10f;
+            Sorts.Lancer(new Incantation
+            {
+                def = d, auteur = this, camp = camp, niveau = NiveauSort(a),
+                attaque = d.forme == FormeSort.Soin ? VieMax * .3 : Attaque * a.mult * d.puissance * .55,
+                origine = origine, direction = vise - origine, cible = cible,
+                rayon = d.rayon, poussee = d.poussee,
+            });
+            Effets.Eclat(origine, d.couleur, 10, 3f, .1f, 0f, .3f, vise - origine);
+        }
+
+        void InterrompreSort()
+        {
+            HUD.ChiffreTexte(Centre + Vector3.up * .9f, "Sort interrompu !", new Color(.8f, .85f, 1f));
+            Sons.JouerA("clic", Centre, .6f, .5f);
+            Changer(EtatMonstre.Recuperation);
         }
 
         void Preparer(float dt)
         {
             if (cible != null && tEtat < enCours.preparation - .15f) Tourner(Plat(cible.Centre - transform.position), rotationPreparation, dt);
+            SuivreIncantation();
             if (tEtat < enCours.preparation) return;
             Changer(EtatMonstre.Frappe);
+            if (enCours.sort != null)
+            {
+                coupPorte = true;
+                LancerSort(enCours);
+                return;
+            }
             elan = transform.forward * enCours.bond;
             if (enCours.sautVertical > 0f) vy = enCours.sautVertical;
             SurFrappe(enCours);
@@ -444,8 +557,11 @@ namespace Aldermark
                 if (nouveau) Alerter();
                 if (Etat == EtatMonstre.Repos || Etat == EtatMonstre.Retour || Etat == EtatMonstre.Encerclement) Changer(EtatMonstre.Poursuite);
             }
+            // Une incantation est interrompue par n'importe quel coup (par un coup lourd seulement pour les grosses créatures)
+            if (enPreparation && Etat == EtatMonstre.Preparation && enCours != null && enCours.sort != null && (stature < .5f || c.lourd || c.critique))
+                InterrompreSort();
             // Un coup lourd ou critique interrompt une attaque annoncée (sauf les grosses créatures)
-            if (enPreparation && (c.critique || c.lourd) && stature < .5f) Etourdir(.45f);
+            else if (enPreparation && (c.critique || c.lourd) && stature < .5f) Etourdir(.45f);
             if (fuyard && Vie < VieMax * .3 && Etat != EtatMonstre.Fuite)
             {
                 Changer(EtatMonstre.Fuite);
@@ -558,6 +674,12 @@ namespace Aldermark
     public abstract class MonstreBipede : Monstre
     {
         protected Pantin.Bipede b;
+        /// <summary>Le bout du bâton, s'il y en a un (le chaman) : c'est de là que partent ses sorts.</summary>
+        protected Transform bout;
+
+        public override Vector3 MainSort =>
+            bout != null ? bout.position + transform.forward * .15f
+            : b != null && b.mainD != null ? b.mainD.position + transform.forward * .3f : base.MainSort;
         protected float voute;   // dos courbé (troll)
         Quaternion brasD = Quaternion.identity, brasG = Quaternion.identity;
         protected Quaternion ReposBrasD = Quaternion.Euler(-28f, 0, 8f);

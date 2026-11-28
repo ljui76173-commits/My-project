@@ -242,7 +242,7 @@ namespace Aldermark
                     break;
                 case "creer":
                     {
-                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll [niveau]"); break; }
+                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll|chaman|givre|ancien [niveau]"); break; }
                         Repaire.Espece e;
                         switch (m[1])
                         {
@@ -250,7 +250,10 @@ namespace Aldermark
                             case "loup": e = Repaire.Espece.Loup; break;
                             case "gobelin": e = Repaire.Espece.Gobelin; break;
                             case "troll": e = Repaire.Espece.Troll; break;
-                            default: Ecrire("Espèces : gelee, loup, gobelin, troll"); e = (Repaire.Espece)(-1); break;
+                            case "chaman": e = Repaire.Espece.Gobelin; Monstre.LanceurProchain = true; break;
+                            case "givre": e = Repaire.Espece.Gelee; Monstre.LanceurProchain = true; break;
+                            case "ancien": e = Repaire.Espece.Troll; Monstre.LanceurProchain = true; break;
+                            default: Ecrire("Espèces : gelee, loup, gobelin, troll ; lanceurs de sorts : chaman, givre, ancien"); e = (Repaire.Espece)(-1); break;
                         }
                         if ((int)e < 0) break;
                         int niv = m.Length > 2 && Nombre(m[2], out var vn) ? (int)vn : 1;
