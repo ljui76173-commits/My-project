@@ -166,6 +166,14 @@ namespace Aldermark
                     Etourdir(c.dureeEffet * (1f - stature * .5f));
                     HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Étourdi", new Color(1f, .95f, .5f));
                     break;
+                case Effet.GelNet:
+                    if (invincible) break;
+                    float dg = c.dureeEffet * (stature >= 1f ? .5f : 1f);
+                    Alterations.GelerNet(dg);
+                    Etourdir(dg);
+                    HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Gelé !", new Color(.65f, .9f, 1f));
+                    Gangue(dg);
+                    break;
                 case Effet.Brulure:
                 case Effet.Gel:
                     if (invincible) break;

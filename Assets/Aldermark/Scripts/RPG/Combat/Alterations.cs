@@ -50,6 +50,14 @@ namespace Aldermark
             return false;
         }
 
+        /// <summary>Gelé net d'un coup (javelot de givre, prison de glace).</summary>
+        public void GelerNet(float duree)
+        {
+            Gele = Mathf.Max(Gele, duree);
+            Gel = Mathf.Max(Gel, duree + 1.5f);
+            Brulure = 0f; cumulsGel = 0;
+        }
+
         /// <summary>Le feu s'éteint (une roulade, de l'eau, le gel).</summary>
         public void Eteindre() { Brulure = 0f; reserve = 0; dps = 0; }
 

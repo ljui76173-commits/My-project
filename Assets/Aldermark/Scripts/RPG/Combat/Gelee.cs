@@ -5,6 +5,7 @@ namespace Aldermark
     /// <summary>
     /// La gelée : une boule molle qui avance par bonds et se jette sur toi.
     /// Une grosse gelée se divise en deux petites quand on la crève.
+    /// La gelée de givre, bleue et froide, crache des éclats de glace de loin ; le feu la fait fondre deux fois plus vite.
     /// </summary>
     public class Gelee : Monstre
     {
@@ -20,7 +21,7 @@ namespace Aldermark
             taille = Prochaine;
             Prochaine = 1.25f;
             bool grosse = taille > .9f;
-            nom = grosse ? "Grosse gelée" : "Gelée";
+            nom = Lanceur ? (grosse ? "Grosse gelée de givre" : "Gelée de givre") : grosse ? "Grosse gelée" : "Gelée";
             vieBase = grosse ? 22 : 11; attaqueBase = 5; defenseBase = 1; xpBase = 10;
             FixerAffinite(Element.Feu, 2f); FixerAffinite(Element.Foudre, 1.25f); FixerAffinite(Element.Glace, .5f);   // le feu la fait fondre, le froid la fige à peine
             resistanceRecul = .7f;
@@ -34,14 +35,35 @@ namespace Aldermark
                 nom = "Bond", portee = 3.4f, preparation = .65f, frappe = .5f, recuperation = .8f,
                 mult = 1f, poussee = .45f, cone = 70f, bond = 6.5f, sautVertical = 4.2f, recharge = 1.6f,
             });
+            if (Lanceur)
+            {
+                vieBase = grosse ? 26 : 13; xpBase = 16;
+                FixerAffinite(Element.Feu, 2.5f); FixerAffinite(Element.Glace, 0f); FixerAffinite(Element.Foudre, 1f);
+                perception = 16f; distanceDeTir = grosse ? 8f : 0f;
+                butin.Add(("gelee", .5f, 1, 1));
+                attaques.Add(new AttaqueMonstre
+                {
+                    nom = "Éclat de glace", sort = CatalogueCompetences.Get("glace"), niveauSort = 1,
+                    porteeMin = 3.5f, portee = 15f, preparation = 1f, frappe = .2f, recuperation = .6f, recharge = grosse ? 2.6f : 4f, poids = 2f,
+                });
+            }
         }
 
         protected override void Construire()
         {
             boule = Pantin.Os("Boule", corps, Vector3.zero);
-            var gel = Pantin.Mat("#5fb85a", .85f);
+            var gel = Pantin.Mat(Lanceur ? "#9fd6ec" : "#5fb85a", .85f);
             Pantin.Bloc(boule, PrimitiveType.Sphere, new Vector3(0, .4f * taille, 0), new Vector3(.95f, .78f, .95f) * taille, gel);
-            Pantin.Bloc(boule, PrimitiveType.Sphere, new Vector3(0, .32f * taille, 0), new Vector3(.55f, .4f, .55f) * taille, Pantin.Mat("#3f8f3c", .6f));
+            Pantin.Bloc(boule, PrimitiveType.Sphere, new Vector3(0, .32f * taille, 0), new Vector3(.55f, .4f, .55f) * taille, Lanceur ? Pantin.Lumineux("#6fc4ff") : Pantin.Mat("#3f8f3c", .6f));
+            if (Lanceur)
+                // Des pointes de givre sur le dessus
+                for (int k = 0; k < 6; k++)
+                {
+                    float ang = k * 60f;
+                    Vector3 dir = Quaternion.Euler(0, ang, 0) * Vector3.forward;
+                    Pantin.Bloc(boule, PrimitiveType.Cube, (new Vector3(0, .7f, 0) + dir * .22f) * taille, new Vector3(.06f, .18f, .06f) * taille,
+                        Pantin.Mat("#e6f6ff", .9f), new Vector3(dir.z * 30f, ang, -dir.x * 30f));
+                }
             var noir = Pantin.Mat("#14140f", .9f);
             var blanc = Pantin.Lumineux("#ffffff");
             foreach (float x in new[] { -.15f, .15f })
@@ -81,7 +103,7 @@ namespace Aldermark
         protected override void Mourir(Coup c)
         {
             base.Mourir(c);
-            Effets.Eclat(Centre, new Color(.4f, .78f, .38f), 18, 3.5f, .2f, 1.6f, .6f);
+            Effets.Eclat(Centre, Lanceur ? new Color(.7f, .9f, 1f) : new Color(.4f, .78f, .38f), 18, 3.5f, .2f, 1.6f, .6f);
             Sons.JouerA("gelee", Centre, 1f, .8f / taille);
             if (taille <= .9f) return;
             // La grosse gelée éclate en deux petites, projetées de part et d'autre (perpendiculaire au coup)
@@ -93,6 +115,7 @@ namespace Aldermark
             for (int k = -1; k <= 1; k += 2)
             {
                 Prochaine = .62f;
+                LanceurProchain = Lanceur;   // une gelée de givre se divise en gelées de givre
                 var g = Repaire.Creer(Repaire.Espece.Gelee, transform.position + cote * k * .7f + Vector3.up * .15f, Mathf.Max(1, niveau - 1));
                 g.origine = origine;
                 g.Proteger(.6f);
