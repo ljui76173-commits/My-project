@@ -188,6 +188,12 @@ namespace Aldermark
             });
             Ajouter(new DefCompetence
             {
+                id = "analyse", nom = "Analyse", abrege = "An", type = TypeCompetence.Technique,
+                description = "Comprendre un sort en le regardant. Monte à chaque sort ennemi observé, et deux fois plus en l'encaissant.",
+                parNiveau = "jauge d'analyse +10 % plus rapide par niveau, sans plafond",
+            });
+            Ajouter(new DefCompetence
+            {
                 id = "esquive", nom = "Esquive", abrege = "Es", type = TypeCompetence.Technique,
                 description = "Rouler sous les coups. Monte à chaque roulade, et surtout à chaque coup évité.",
                 parNiveau = "roulade plus longtemps invulnérable et moins chère, sans plafond",

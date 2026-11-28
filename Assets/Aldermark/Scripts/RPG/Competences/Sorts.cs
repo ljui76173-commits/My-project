@@ -147,6 +147,7 @@ namespace Aldermark
             {
                 degats = s.attaque * mult, direction = direction, poussee = s.poussee, lourd = d.lourd, magique = true,
                 auteur = s.auteur, nom = d.nom, element = d.element, effet = effet ? d.effet : Effet.Aucun, dureeEffet = d.dureeEffet,
+                sort = d.id,
             });
             s.touche?.Invoke(c, vivant && Cibles.Existe(c) && !c.Vivant);
             Impact(d.element, centre, direction, s.Visuel);

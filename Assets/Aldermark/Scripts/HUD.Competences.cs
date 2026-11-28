@@ -29,6 +29,21 @@ namespace Aldermark
         }
 
         bool competencesConstruites, competencesOuvertes;
+        // La jauge d'analyse sous le réticule
+        RectTransform barreAnalyse, remplAnalyse;
+        UnityEngine.UI.Text texteAnalyseSort;
+        DefCompetence analyseDef;
+        float analyseValeur, analyseAffichee, analyseFin;
+        bool analyseEncaisse;
+
+        /// <summary>La jauge d'analyse d'un sort vient de monter : elle s'affiche quelques secondes sous le réticule.</summary>
+        public static void AnalyseSort(DefCompetence d, float valeur, bool encaisse)
+        {
+            if (instance == null || d == null) return;
+            if (instance.analyseDef != d) instance.analyseAffichee = Mathf.Max(0f, valeur - .15f);
+            instance.analyseDef = d; instance.analyseValeur = valeur; instance.analyseEncaisse = encaisse;
+            instance.analyseFin = Time.unscaledTime + (valeur >= 1f ? 2.5f : 3.5f);
+        }
         UnityEngine.UI.Image voileBords, voileEcran;
         Color voileVoulu, voileActuel;
         float assombriVoulu, assombriActuel;
@@ -78,6 +93,18 @@ namespace Aldermark
             rt.anchorMin = new Vector2(.5f, 1); rt.anchorMax = new Vector2(.5f, 1); rt.pivot = new Vector2(.5f, 0);
             rt.anchoredPosition = new Vector2(0, 4); rt.sizeDelta = new Vector2(300, 22);
             barreIncantation.gameObject.SetActive(false);
+
+            // La jauge d'analyse, plus bas
+            barreAnalyse = Panneau("Analyse", toile, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(0, -128), new Vector2(300, 8), new Color(0, 0, 0, .55f));
+            var ca = barreAnalyse.gameObject.AddComponent<UnityEngine.UI.Outline>();
+            ca.effectColor = new Color(1f, 1f, 1f, .25f); ca.effectDistance = new Vector2(1, -1);
+            remplAnalyse = Panneau("Remplissage", barreAnalyse, Vector2.zero, new Vector2(0, 1), new Vector2(0, .5f), Vector2.zero, Vector2.zero, Color.white);
+            remplAnalyse.offsetMin = remplAnalyse.offsetMax = Vector2.zero;
+            texteAnalyseSort = Texte("Texte", barreAnalyse, "", 16, Color.white, TextAnchor.LowerCenter);
+            var rta = (RectTransform)texteAnalyseSort.transform;
+            rta.anchorMin = new Vector2(.5f, 1); rta.anchorMax = new Vector2(.5f, 1); rta.pivot = new Vector2(.5f, 0);
+            rta.anchoredPosition = new Vector2(0, 4); rta.sizeDelta = new Vector2(520, 22);
+            barreAnalyse.gameObject.SetActive(false);
 
             // La fenêtre
             panneauCompetences = Panneau("Competences", toile, new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(0, 10), new Vector2(1240, 700), new Color(.055f, .047f, .12f, .94f));
@@ -166,6 +193,20 @@ namespace Aldermark
             bool barre = comp != null && comp.ConnaitUnSort && !Dialogues.EnCours && !competencesOuvertes;
             if (barreRaccourcis.gameObject.activeSelf != barre) barreRaccourcis.gameObject.SetActive(barre);
             if (barre) for (int k = 0; k < Competences.Raccourcis; k++) RemplirCase(casesJeu[k], comp, k, false);
+
+            // La jauge d'analyse
+            bool analyse = analyseDef != null && Time.unscaledTime < analyseFin;
+            if (barreAnalyse.gameObject.activeSelf != analyse) barreAnalyse.gameObject.SetActive(analyse);
+            if (analyse)
+            {
+                analyseAffichee = Mathf.MoveTowards(analyseAffichee, analyseValeur, Time.unscaledDeltaTime * .8f);
+                remplAnalyse.anchorMax = new Vector2(analyseAffichee, 1);
+                Color ce = analyseDef.couleur;
+                remplAnalyse.GetComponent<UnityEngine.UI.Image>().color = Color.Lerp(ce, Color.white, .5f + .5f * Mathf.Sin(Time.unscaledTime * 8f) * (analyseValeur >= 1f ? 1f : 0f));
+                string nomC = $"<color=#{ColorUtility.ToHtmlStringRGB(Color.Lerp(ce, Color.white, .35f))}>{analyseDef.nom}</color>";
+                texteAnalyseSort.text = analyseValeur >= 1f ? $"<b>COMPRIS :</b> {nomC}"
+                    : $"<color=#a9a6c4>ANALYSE</color>  {nomC}  <b>{analyseAffichee * 100f:0} %</b>" + (analyseEncaisse ? "  <size=13><color=#ffb08a>encaissé ×2</color></size>" : "");
+            }
 
             // L'incantation en cours
             var sort = h != null ? h.SortEnCours : null;
@@ -324,7 +365,9 @@ namespace Aldermark
 
             int nSorts = 0, nTech = 0;
             foreach (var m in comp.Connues) { if (m.Def.EstSort) nSorts++; else nTech++; }
-            compSousTitre.text = $"{nSorts} sort{(nSorts > 1 ? "s" : "")}  ·  {nTech} techniques  ·  elles montent en s'en servant, jusqu'au niveau 10";
+            int nAnalyses = 0;
+            foreach (var kv in comp.Analyses) nAnalyses++;
+            compSousTitre.text = $"{nSorts} sort{(nSorts > 1 ? "s" : "")}  ·  {nTech} techniques" + (nAnalyses > 0 ? $"  ·  {nAnalyses} sort{(nAnalyses > 1 ? "s" : "")} en cours d'analyse" : "") + "  ·  elles montent en s'en servant, sans plafond";
             compBas.text = "Clic ou ↑ ↓ : choisir   ·   1 à 4 ou clic sur une case : placer le sort   ·   Suppr : le retirer   ·   K ou Échap : fermer";
             Detail(comp, choisieDef);
         }
@@ -380,10 +423,31 @@ namespace Aldermark
                     case "mains": p = .07 * (n - 1); quoi = "dégâts à mains nues"; break;
                     case "parade": p = comp.FacteurParade - 1f; quoi = "fenêtre de parade parfaite"; break;
                     case "esquive": p = comp.FacteurEsquive - 1f; quoi = "invulnérabilité de la roulade"; break;
+                    case "analyse": p = .1 * (n - 1); quoi = "vitesse d'analyse"; break;
                 }
                 sb.AppendLine($"Bonus actuel  <b>+{p * 100:0} %</b> {quoi}");
                 if (d.id == "parade") sb.AppendLine($"Coût de la garde  <b>−{(1f - comp.FacteurCoutGarde) * 100f:0} %</b>");
                 if (d.id == "esquive") sb.AppendLine($"Coût de la roulade  <b>−{(1f - comp.FacteurCoutRoulade) * 100f:0} %</b>");
+                if (d.id == "analyse")
+                {
+                    var enCours = new System.Text.StringBuilder();
+                    foreach (var kv in comp.Analyses)
+                    {
+                        var ds = CatalogueCompetences.Get(kv.Key);
+                        if (ds == null) continue;
+                        if (enCours.Length > 0) enCours.Append("  ·  ");
+                        enCours.Append($"<color=#{ColorUtility.ToHtmlStringRGB(Color.Lerp(ds.couleur, Color.white, .4f))}>{ds.nom}</color> {kv.Value * 100f:0} %");
+                    }
+                    sb.AppendLine(enCours.Length > 0 ? $"En cours  {enCours}" : "<color=#a9a6c4>Aucun sort en cours d'analyse : regarde une créature lancer un sort que tu ne connais pas.</color>");
+                    var res = new System.Text.StringBuilder();
+                    foreach (var kv in comp.Resistances)
+                    {
+                        if (kv.Value <= 0f) continue;
+                        if (res.Length > 0) res.Append("  ·  ");
+                        res.Append($"{CatalogueCompetences.NomElement(kv.Key)} {kv.Value * 100f:0} %");
+                    }
+                    sb.AppendLine(res.Length > 0 ? $"Résistances  {res}" : "<color=#a9a6c4>Résistances : aucune encore (elles viennent en encaissant des sorts, jusqu'à 50 %)</color>");
+                }
             }
             compChiffres.text = sb.ToString();
             int palAspect = d.EstSort ? Sorts.Palier(comp.NiveauVisuel(d.id)) : 1;

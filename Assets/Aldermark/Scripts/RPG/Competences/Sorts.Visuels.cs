@@ -422,7 +422,8 @@ namespace Aldermark
             if (Sorts.Valide(s, s.cible))
             {
                 Vector3 voulu = (s.cible.Centre - transform.position).normalized * d.vitesse;
-                vitesse = Vector3.RotateTowards(vitesse, voulu, 2.2f * dt, 0f);
+                // Les tiens s'incurvent franchement ; ceux des créatures à peine (on peut les esquiver)
+                vitesse = Vector3.RotateTowards(vitesse, voulu, (s.camp == Camp.Heros ? 2.2f : .45f) * dt, 0f);
             }
             Vector3 pas = vitesse * dt;
             float l = pas.magnitude;
