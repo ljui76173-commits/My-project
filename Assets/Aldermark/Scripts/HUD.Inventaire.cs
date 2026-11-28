@@ -171,7 +171,7 @@ namespace Aldermark
                 int c0 = 1;
                 if (categorie) cellules[c0++].text = d != null ? Objets.NomCategorie(d.categorie) : "";
                 cellules[c0++].text = d != null ? $"{d.poids * p.n:0.##} kg" : "";
-                cellules[c0].text = d != null ? $"{d.valeur * p.n} p." : "";
+                cellules[c0].text = d != null ? (Competences.Instance != null ? Competences.Instance.TexteValeur(d, p.n) : $"{d.valeur * p.n}") + " p." : "";
             }
             return survole;
         }
@@ -237,7 +237,11 @@ namespace Aldermark
             }
             if (d.categorie == Categorie.Nourriture) sb.Append($"Rend  {d.soin * 100:0} % de la vie\n\n");
             sb.Append($"Poids  {d.poids:0.##} kg" + (pile.n > 1 ? $"  (pile : {d.poids * pile.n:0.##} kg)" : "") + "\n");
-            sb.Append($"Valeur estimée  {d.valeur} pièce{(d.valeur > 1 ? "s" : "")}" + (pile.n > 1 ? $"  (pile : {d.valeur * pile.n})" : "") + "\n\n");
+            var ev = Competences.Instance;
+            if (ev != null) ev.EvaluerObjet(pile.id);
+            string val1 = ev != null ? ev.TexteValeur(d, 1) : d.valeur.ToString(), valPile = ev != null ? ev.TexteValeur(d, pile.n) : (d.valeur * pile.n).ToString();
+            sb.Append($"Valeur estimée  {val1} pièce{(d.valeur > 1 ? "s" : "")}" + (pile.n > 1 ? $"  (pile : {valPile})" : "")
+                + (ev != null && !ev.EvaluationExacte && d.categorie != Categorie.Monnaie ? $"  <size=14><color=#a9a6c4>Évaluation niv. {ev.NiveauEvaluation}</color></size>" : "") + "\n\n");
             string action = d.categorie == Categorie.Arme ? (pile.id == inv.ArmeId ? "retirer" : "équiper") : d.categorie == Categorie.Nourriture ? "manger" : "—";
             sb.Append($"<color=#a9a6c4>E / clic droit : {action}   ·   X : jeter</color>");
             invDetail.text = sb.ToString();

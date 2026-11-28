@@ -141,7 +141,7 @@ namespace Aldermark
             }
         }
         public double Defense => stats != null ? stats.Valeur(Stat.END) * .6 : 2;
-        public double ChanceCritique => stats == null ? .05 : Mathf.Clamp(.05f + .02f * Mathf.Log(Mathf.Max(1f, (float)(stats.Valeur(Stat.AGI) / stats.baseStat))) + (ArmeEnMain != null ? ArmeEnMain.critique : 0f), 0f, .5f);
+        public double ChanceCritique => stats == null ? .05 : Mathf.Clamp(.05f + .02f * Mathf.Log(Mathf.Max(1f, (float)(stats.Valeur(Stat.AGI) / stats.baseStat))) + (ArmeEnMain != null ? ArmeEnMain.critique : 0f) + Exploits.Bonus(TypeBonus.Critique), 0f, .55f);
 
         Mouvement[] Combo => MainsNues ? Poings : Enchainement;
         Mouvement MvLourd => MainsNues ? CoupDePied : Lourde;
@@ -170,6 +170,7 @@ namespace Aldermark
             if (inv == null && stats != null) inv = gameObject.AddComponent<Inventaire>();
             comp = GetComponent<Competences>();
             if (comp == null && stats != null) comp = gameObject.AddComponent<Competences>();
+            if (stats != null && GetComponent<Exploits>() == null) gameObject.AddComponent<Exploits>();
         }
 
         void Start()
@@ -480,6 +481,7 @@ namespace Aldermark
             Sons.JouerA(bois ? "impactBois" : "impactChair", cible.Centre, .9f, Random.Range(.9f, 1.1f) * (MainsNues ? 1.2f : 1f));
             Effets.Eclat(cible.Centre, bois ? new Color(.75f, .6f, .4f) : new Color(1f, .9f, .75f), critique ? 14 : 7, 3.5f, .1f, 1f, .35f, direction);
             if (a.critiqueSur) HUD.ChiffreTexte(cible.Centre + Vector3.up * .9f, a.nom + " !", new Color(1f, .85f, .4f));
+            if ((a == CoupDeGrace || a == GraceMainsNues) && cible is Combattant cg && !cg.invincible) Exploits.Compter("graces");
             stats.Exercer(Stat.FOR, (a.lourde ? 2 : 1) * (MainsNues ? .8 : 1));
             if (comp != null) comp.Exercer(Competences.IdArme(ArmeEnMain), critique || a.lourde ? 1.5 : 1);
             if (MainsNues) stats.Exercer(Stat.AGI, .3);
@@ -586,6 +588,7 @@ namespace Aldermark
                 HUD.ChiffreTexte(SurSoi(), "Esquive", new Color(.7f, .95f, 1f));
                 stats.Exercer(Stat.AGI, 1);
                 if (comp != null) comp.Exercer("esquive", 3);
+                Exploits.Compter("esquives");
                 return;
             }
             if (etat == Etat.Incantation) AnnulerSort();
@@ -599,6 +602,7 @@ namespace Aldermark
                 // Parade parfaite : aucun dégât, l'attaquant est sonné (pas un lanceur de sort au loin), le temps ralentit, la riposte est prête
                 if (cb != null && !c.magique) cb.Etourdir(1.4f);
                 if (comp != null) comp.Exercer("parade", 3);
+                Exploits.Compter("parades");
                 if (MainsNues)
                 {
                     Sons.Jouer("impactChair", 1f, 1.4f);
@@ -619,7 +623,13 @@ namespace Aldermark
                 if (force >= 2f) CommencerGlissade(recul, force * .6f, true);   // même parée, une masse énorme fait reculer
                 return;
             }
-            double reel = Degats.Calculer(c.degats, Defense);
+            // La magie ne compte qu'une demi-défense ; la résistance à l'élément (gagnée en encaissant) retranche sa part
+            double reel = Degats.Calculer(c.degats, c.magique ? Defense * .5 : Defense);
+            if (comp != null && !string.IsNullOrEmpty(c.sort))
+            {
+                reel *= 1 - comp.Resistance(c.element);
+                comp.Encaisser(c);
+            }
             if (garde && face)
             {
                 // Bras en croix : encaisse moitié moins bien qu'une lame

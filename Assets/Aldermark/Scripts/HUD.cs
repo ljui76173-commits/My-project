@@ -53,6 +53,9 @@ namespace Aldermark
             instance.minuteurFenetre = duree;
         }
 
+        /// <summary>Un message est à l'écran (on attend qu'il parte pour en afficher un autre).</summary>
+        public static bool MessageAffiche => instance != null && instance.minuteurFenetre > 0f;
+
         public static void Invite(string texte)
         {
             if (instance == null) return;

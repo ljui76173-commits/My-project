@@ -22,7 +22,7 @@ namespace Aldermark
 
         bool combatConstruit;
         RectTransform calqueChiffres, panneauCible, remplCible, traineeCible, marqueVerrou;
-        UnityEngine.UI.Text texteCibleNom, texteCibleInfo;
+        UnityEngine.UI.Text texteCibleNom, texteCibleInfo, texteCibleDetail;
         UnityEngine.UI.Image eclairPlein, eclairBords;
         readonly List<Chiffre> chiffres = new List<Chiffre>();
         readonly Stack<Chiffre> chiffresLibres = new Stack<Chiffre>();
@@ -89,6 +89,11 @@ namespace Aldermark
             var ri = (RectTransform)texteCibleInfo.transform;
             ri.anchorMin = ri.anchorMax = ri.pivot = new Vector2(.5f, 0);
             ri.anchoredPosition = new Vector2(0, -8); ri.sizeDelta = new Vector2(460, 20);
+            // Ce que l'Évaluation laisse voir : faiblesses, résistances, attaque et défense
+            texteCibleDetail = Texte("Detail", panneauCible, "", 14, new Color(.8f, .78f, .9f), TextAnchor.UpperCenter);
+            var rd = (RectTransform)texteCibleDetail.transform;
+            rd.anchorMin = rd.anchorMax = rd.pivot = new Vector2(.5f, 0);
+            rd.anchoredPosition = new Vector2(0, -30); rd.sizeDelta = new Vector2(620, 20);
             panneauCible.gameObject.SetActive(false);
 
             // Losange au-dessus de la cible verrouillée
@@ -200,11 +205,16 @@ namespace Aldermark
             if (panneauCible.gameObject.activeSelf != montrer) panneauCible.gameObject.SetActive(montrer);
             if (montrer)
             {
-                if (!ReferenceEquals(cible, cibleAffichee)) { cibleAffichee = cible; trainee = 1f; }
+                var eval = Competences.Instance;
+                if (!ReferenceEquals(cible, cibleAffichee)) { cibleAffichee = cible; trainee = 1f; if (eval != null) eval.Evaluer(cible); }
                 var s = StatsHeros.Instance;
                 int ecart = s != null ? cible.NiveauAffiche - s.Niveau : 0;
+                // La couleur dit le danger qu'on sent ; le chiffre, ce que l'Évaluation permet d'estimer
                 string couleurNiveau = ecart >= 10 ? "#ff6a5a" : ecart >= 4 ? "#ffb35a" : ecart <= -10 ? "#9a98b0" : "#ffffff";
-                texteCibleNom.text = $"<b>{cible.NomAffiche}</b>   <color={couleurNiveau}>Niv. {cible.NiveauAffiche}</color>";
+                int graine = cible.Corps != null ? cible.Corps.GetInstanceID() : 0;
+                string niv = eval != null ? eval.EstimerNiveau(cible.NiveauAffiche, graine) : cible.NiveauAffiche.ToString();
+                texteCibleNom.text = $"<b>{cible.NomAffiche}</b>   <color={couleurNiveau}>Niv. {niv}</color>";
+                texteCibleDetail.text = eval != null && cible is Combattant cd && !cd.invincible ? eval.TexteDetail(cd, graine) : "";
                 if (cible is Combattant cb && cb.invincible)
                 {
                     remplCible.anchorMax = new Vector2(1, 1);
@@ -217,7 +227,8 @@ namespace Aldermark
                     remplCible.anchorMax = new Vector2(f, 1);
                     trainee = trainee > f ? Mathf.MoveTowards(trainee, f, dt * .6f) : f;
                     var cc = cible as Combattant;
-                    texteCibleInfo.text = $"{Nombres.Court(cible.VieActuelle)} / {Nombres.Court(cible.VieMaximale)}" + (cc != null && cc.Etourdi > 0 ? "   ·   <color=#ffd27a>sonné</color>" : "");
+                    string vie = eval != null ? eval.TexteVie(cible.VieActuelle, cible.VieMaximale, graine) : $"{Nombres.Court(cible.VieActuelle)} / {Nombres.Court(cible.VieMaximale)}";
+                    texteCibleInfo.text = vie + (cc != null && cc.Etourdi > 0 ? "   ·   <color=#ffd27a>sonné</color>" : "");
                 }
                 traineeCible.anchorMax = new Vector2(trainee, 1);
             }

@@ -134,6 +134,7 @@ namespace Aldermark
             if (Protege) return;
             DernierCoup = Time.time;
             if (c.auteur != null) dernierAuteur = c.auteur;
+            if (c.auteur is CombatHeros) c.degats *= Exploits.FacteurDegats(c);
             // Le coup arrive brut, la défense s'applique ici (à moitié contre la magie), puis la faiblesse ou la résistance à l'élément
             float aff = Affinite(c.element);
             double reel = Degats.Calculer(c.degats, c.magique ? Defense * .5 : Defense) * aff;
@@ -166,10 +167,21 @@ namespace Aldermark
                     Etourdir(c.dureeEffet * (1f - stature * .5f));
                     HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Étourdi", new Color(1f, .95f, .5f));
                     break;
+                case Effet.GelNet:
+                    if (invincible) break;
+                    float dg = c.dureeEffet * (stature >= 1f ? .5f : 1f);
+                    Alterations.GelerNet(dg);
+                    if (c.auteur is CombatHeros) Exploits.Compter("gels");
+                    Etourdir(dg);
+                    HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Gelé !", new Color(.65f, .9f, 1f));
+                    Gangue(dg);
+                    break;
                 case Effet.Brulure:
                 case Effet.Gel:
                     if (invincible) break;
-                    if (Alterations.Appliquer(c.effet, c.degats, c.dureeEffet, c.auteur))
+                    bool gele = Alterations.Appliquer(c.effet, c.degats, c.dureeEffet, c.auteur);
+                    if (c.auteur is CombatHeros) Exploits.Compter(c.effet == Effet.Brulure ? "brulures" : gele ? "gels" : "givres");
+                    if (gele)
                     {
                         Etourdir(Alterations.Gele);
                         HUD.ChiffreTexte(Centre + Vector3.up * 1.3f, "Gelé !", new Color(.65f, .9f, 1f));
@@ -232,6 +244,12 @@ namespace Aldermark
             Mort?.Invoke(c);
             if (c.auteur != null && c.auteur.Camp == Camp.Heros && StatsHeros.Instance != null)
                 StatsHeros.Instance.GagnerXP(xpBase * Math.Pow(1.13, niveau), nom);
+            if (c.auteur is CombatHeros)
+            {
+                Exploits.Compter("tues");
+                Exploits.Compter("tues:" + this.GetType().Name);
+                if (this is Monstre mo && mo.Lanceur) Exploits.Compter("tues:lanceur");
+            }
         }
 
         void Eclairer(bool blanc)

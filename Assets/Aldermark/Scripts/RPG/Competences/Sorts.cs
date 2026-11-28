@@ -23,6 +23,14 @@ namespace Aldermark
         public float rayon, poussee;
         /// <summary>Appelé à chaque cible touchée (vrai si le coup l'a achevée).</summary>
         public Action<ICible, bool> touche;
+        /// <summary>Le point visé (pour une pluie, un éclair du ciel, une zone à distance).</summary>
+        public Vector3 point;
+        /// <summary>Soin par impulsion d'un sanctuaire (0 : aucun).</summary>
+        public double soin;
+        /// <summary>Portée imposée (un météore qui tombe de haut) ; 0 : celle de la fiche.</summary>
+        public float portee;
+        /// <summary>Dégâts autour du point d'impact d'un projectile (rayon en mètres) ; 0 : aucun.</summary>
+        public float eclaboussure;
     }
 
     /// <summary>
@@ -95,6 +103,9 @@ namespace Aldermark
             if (d.paliers != null && palier - 2 < d.paliers.Length) return d.paliers[palier - 2];
             switch (palier)
             {
+                case 2: return "plus grand, plus vif, des anneaux d'onde à l'impact";
+                case 3: return "un second anneau, des cercles en orbite autour de l'incantation";
+                case 4: return "maîtrisé : un halo, une explosion plus vaste";
                 case 5: return "chaque impact creuse un cratère, et une colonne d'énergie tombe du ciel";
                 case 6: return "le jour s'assombrit pendant l'incantation, et un cercle immense s'ouvre dans le ciel";
                 case 7: return "le temps s'arrête au lancer ; triple onde de choc, cratère géant";
@@ -125,13 +136,25 @@ namespace Aldermark
             s.direction.Normalize();
             if (s.niveau < 1) s.niveau = 1;
             Lance?.Invoke(s);
+            if (s.point == Vector3.zero) s.point = s.origine + s.direction * Mathf.Min(s.def.portee, 20f);
             switch (s.def.forme)
             {
-                case FormeSort.Projectile: ProjectileSort.Creer(s); break;
+                case FormeSort.Projectile:
+                    if (s.def.nombre > 1) Eventail(s);
+                    else ProjectileSort.Creer(s);
+                    break;
                 case FormeSort.Trait: Trait(s); break;
                 case FormeSort.Cone: Cone(s); break;
-                case FormeSort.Zone: Zone(s); break;
+                case FormeSort.Zone:
+                    if (s.def.vagues > 1) Seisme(s);
+                    else Zone(s);
+                    break;
                 case FormeSort.Soin: Soin(s); break;
+                case FormeSort.Pluie: Pluie(s); break;
+                case FormeSort.Ciel: Ciel(s); break;
+                case FormeSort.Tornade: TornadeSort.Creer(s); break;
+                case FormeSort.Ligne: Ligne(s); break;
+                case FormeSort.Sanctuaire: SanctuaireSort.Creer(s); break;
             }
         }
 
@@ -147,6 +170,7 @@ namespace Aldermark
             {
                 degats = s.attaque * mult, direction = direction, poussee = s.poussee, lourd = d.lourd, magique = true,
                 auteur = s.auteur, nom = d.nom, element = d.element, effet = effet ? d.effet : Effet.Aucun, dureeEffet = d.dureeEffet,
+                sort = d.id,
             });
             s.touche?.Invoke(c, vivant && Cibles.Existe(c) && !c.Vivant);
             Impact(d.element, centre, direction, s.Visuel);
@@ -229,19 +253,29 @@ namespace Aldermark
             Deflagration(d.element, fin, s.direction, s.Visuel, s.camp);
             if (touchee == null) { Impact(d.element, fin, s.direction, s.Visuel); return; }
             Toucher(s, touchee, (fin - s.origine).normalized);
-            if (s.niveau < 5) return;
-            // Le rebond : sur l'ennemi le plus proche de la première cible
-            Combattant suivant = null;
-            float best = 7f;
-            foreach (var cb in Combattant.Tous)
+            // Les rebonds : un au niveau 5 ; la Foudre en chaîne en a quatre, de plus en plus faibles
+            int rebonds = d.rebonds > 0 ? d.rebonds : s.niveau >= 5 ? 1 : 0;
+            var dejaTouches = new HashSet<ICible> { touchee };
+            Vector3 depuis = fin;
+            double mult = d.rebonds > 0 ? .8 : .6;
+            for (int k = 0; k < rebonds; k++)
             {
-                if (ReferenceEquals(cb, touchee) || !Valide(s, cb)) continue;
-                float dist = Vector3.Distance(cb.Centre, fin);
-                if (dist < best) { best = dist; suivant = cb; }
+                Combattant suivant = null;
+                float best = d.rebonds > 0 ? 9f : 7f;
+                foreach (var cb in Combattant.Tous)
+                {
+                    if (dejaTouches.Contains(cb) || !Valide(s, cb)) continue;
+                    float dist = Vector3.Distance(cb.Centre, depuis);
+                    if (dist < best) { best = dist; suivant = cb; }
+                }
+                if (suivant == null) return;
+                Eclair(depuis, suivant.Centre, d.couleur, s.Visuel);
+                Sons.JouerA("sortFoudre", suivant.Centre, .6f, 1.15f + .05f * k, 60f);
+                Toucher(s, suivant, (suivant.Centre - depuis).normalized, mult);
+                dejaTouches.Add(suivant);
+                depuis = suivant.Centre;
+                mult *= .85;
             }
-            if (suivant == null) return;
-            Eclair(fin, suivant.Centre, d.couleur, s.Visuel);
-            Toucher(s, suivant, (suivant.Centre - fin).normalized, .6);
         }
 
         /// <summary>Le vent : tout ce qui est devant, dans le cône, est frappé et repoussé.</summary>
@@ -298,9 +332,15 @@ namespace Aldermark
         {
             float a = Ampleur(s.Visuel);
             int pal = Palier(s.Visuel);
-            Vector3 centre = s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
+            // Autour de soi, ou là où l'on vise (prison de glace)
+            Vector3 centre = s.def.aDistance ? s.point : s.auteur != null && Cibles.Existe(s.auteur) ? s.auteur.Corps.position : s.origine;
             centre.y = Monde.Hauteur(centre.x, centre.z);
             float rayon = s.rayon > 0f ? s.rayon : s.def.rayon;
+            if (s.def.element != Element.Terre)
+            {
+                ZoneElementaire(s, centre, rayon);
+                return;
+            }
             Effets.OndeDeChoc(centre, rayon, new Color(.85f, .72f, .5f, .85f));
             Deflagration(Element.Terre, centre + Vector3.up * .4f, Vector3.up, s.Visuel, s.camp);
             int gerbes = Mathf.Min(40, 10 + Mathf.RoundToInt(2 * (a - 1f) * 10f));
@@ -356,6 +396,8 @@ namespace Aldermark
             if (c is CombatHeros && StatsHeros.Instance != null) StatsHeros.Instance.Rendre(s.attaque);
             else if (c is Combattant cb) cb.Rendre(s.attaque);
             double rendu = c.VieActuelle - avant;
+            // La régénération : la vie continue de remonter pendant 8 secondes
+            if (s.def.regen > 0 && c is CombatHeros h) h.Regenerer(s.attaque * s.def.regen, 8f, s.def.couleur);
             Vector3 p = c.Corps.position;
             int n = 6 + 2 * (pal - 1);
             for (int k = 0; k < n; k++)
@@ -395,7 +437,7 @@ namespace Aldermark
         /// Ce qu'un sort rencontre en premier sur sa trajectoire : une cible hostile (c), ou un obstacle (c nul, point d'impact).
         /// Les alliés, le lanceur et les zones invisibles sont traversés.
         /// </summary>
-        public static bool Premier(Incantation s, Vector3 depuis, Vector3 dir, float distance, float rayon, out ICible c, out Vector3 point)
+        public static bool Premier(Incantation s, Vector3 depuis, Vector3 dir, float distance, float rayon, out ICible c, out Vector3 point, HashSet<ICible> ignorer = null)
         {
             c = null;
             point = depuis + dir * distance;
@@ -406,7 +448,7 @@ namespace Aldermark
                 var cible = hit.collider.GetComponentInParent<ICible>();
                 if (cible != null)
                 {
-                    if (ReferenceEquals(cible, s.auteur) || !cible.Vivant) continue;
+                    if (ReferenceEquals(cible, s.auteur) || !cible.Vivant || (ignorer != null && ignorer.Contains(cible))) continue;
                     if (!Hostile(s.camp, cible.Camp)) continue;
                     c = cible;
                     point = hit.distance > 0f ? hit.point : depuis;

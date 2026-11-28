@@ -138,7 +138,8 @@ namespace Aldermark
                     Ecrire(Geo.Actif ? "tp hameau · tp quintaine · tp <ville> (varenne, aldenne, valdor…) · tp gelees|loups|gobelins|troll (le plus proche) · tp X Z"
                                      : "tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
                     Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
-                    Ecrire("sorts · apprendre <sort>|tout · competence <id>|tout <niveau> · mana");
+                    Ecrire("sorts · apprendre <sort>|tout · competence <id>|tout <niveau> · evoluer <sort> 1|2 · fusions · fusionner <sort> · mana");
+                    Ecrire("titres · titre <id> (obtenir et porter) · exploit <compteur> N (ex. exploit tues:Loup 25)");
                     break;
                 case "sorts":
                 case "competences":
@@ -155,10 +156,12 @@ namespace Aldermark
                         var c = Competences.Instance;
                         if (c == null) { Ecrire("Pas de héros RPG."); break; }
                         if (m.Length < 2) { Ecrire("Usage : apprendre flamme (ou : apprendre tout) · « sorts » pour la liste"); break; }
-                        if (m[1] == "tout")
+                        if (m[1] == "tout" || m[1] == "tout+")
                         {
+                            // « tout » : les sorts de base ; « tout+ » : aussi les évolutions et les fusions
                             int n = 0;
-                            foreach (var d in CatalogueCompetences.Ordre) if (c.Apprendre(d.id, false)) n++;
+                            foreach (var d in CatalogueCompetences.Ordre)
+                                if ((m[1] == "tout+" || (!d.EstEvolution && !d.EstFusion)) && c.Apprendre(d.id, false)) n++;
                             Ecrire($"{n} compétence(s) apprise(s).");
                             break;
                         }
@@ -183,8 +186,56 @@ namespace Aldermark
                         Ecrire($"{def.nom} : niveau {c.Niveau(def.id)}");
                     }
                     break;
+                case "evoluer":
+                    {
+                        var c = Competences.Instance;
+                        var def = m.Length > 1 ? TrouverCompetence(m[1]) : null;
+                        if (c == null || def == null || def.evolutions == null) { Ecrire("Usage : evoluer flamme 1|2 (le sort doit être au niveau 10 : competence flamme 10)"); break; }
+                        int b = m.Length > 2 && m[2] == "2" ? 1 : 0;
+                        if (!c.Connait(def.id)) c.Apprendre(def.id, false);
+                        if (c.Niveau(def.id) < CatalogueCompetences.NiveauMaitrise) c.FixerNiveau(def.id, CatalogueCompetences.NiveauMaitrise);
+                        Ecrire(c.Evoluer(def.id, def.evolutions[b]) ? $"{def.nom} → {CatalogueCompetences.Get(def.evolutions[b]).nom}" : "Impossible (déjà connue ?).");
+                    }
+                    break;
+                case "fusions":
+                    {
+                        var c = Competences.Instance;
+                        if (c == null) break;
+                        var l = c.FusionsPossibles();
+                        Ecrire(l.Count == 0 ? "Aucune fusion possible. Il faut un sort de chaque élément au niveau 10 (feu+vent, feu+terre, glace+foudre)." : "Possibles : " + string.Join(", ", l.ConvertAll(x => x.id)));
+                    }
+                    break;
+                case "fusionner":
+                    {
+                        var c = Competences.Instance;
+                        var def = m.Length > 1 ? TrouverCompetence(m[1]) : null;
+                        if (c == null || def == null) { Ecrire("Usage : fusionner tempete|magma|orage"); break; }
+                        Ecrire(c.Fusionner(def.id) ? $"{def.nom} !" : "Pas encore possible : tape « fusions ».");
+                    }
+                    break;
                 case "mana":
                     if (j != null) { j.FixerMana(j.manaMax); Ecrire("Mana au maximum."); }
+                    break;
+                case "titres":
+                    {
+                        var x = Exploits.Instance;
+                        if (x == null) { Ecrire("Pas de héros RPG."); break; }
+                        foreach (var t in CatalogueTitres.Tous)
+                            Ecrire($"{(x.Porte == t.id ? "◆" : x.Possede(t.id) ? "✓" : "·")} {t.id} : {t.nom} — {t.condition} ({Nombres.Court(System.Math.Min(x.Valeur(t.cle), t.objectif))}/{Nombres.Court(t.objectif)}) — {t.TexteBonus}");
+                    }
+                    break;
+                case "titre":
+                    {
+                        var x = Exploits.Instance;
+                        var t = m.Length > 1 ? CatalogueTitres.Get(m[1]) : null;
+                        if (x == null || t == null) { Ecrire("Usage : titre louvetier · « titres » pour la liste"); break; }
+                        if (!x.Possede(t.id) && !t.cle.StartsWith("@")) Exploits.Compter(t.cle, System.Math.Max(0, t.objectif - x.Valeur(t.cle)));
+                        Ecrire(x.Possede(t.id) || x.Valeur(t.cle) >= t.objectif ? $"« {t.nom} » obtenu (il se porte depuis K → Titres)." : "Ce titre dépend du niveau, des zones ou des maîtrises : utilise niveau N ou competence tout 10.");
+                    }
+                    break;
+                case "exploit":
+                    if (m.Length > 2 && Nombre(m[2], out v)) { Exploits.Compter(m[1], v); Ecrire($"{m[1]} +{v}"); }
+                    else Ecrire("Usage : exploit tues:Loup 25 (compteurs : tues, tues:Loup|Gobelin|Gelee|Troll|lanceur, sorts, observes, evolutions, fusions, brulures, gels, parades, esquives, graces)");
                     break;
                 case "xp":
                     if (s != null && m.Length > 1 && Nombre(m[1], out v)) { s.GagnerXP(v, "console"); Ecrire($"+{Nombres.Court(v)} XP"); }
@@ -242,7 +293,7 @@ namespace Aldermark
                     break;
                 case "creer":
                     {
-                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll [niveau]"); break; }
+                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll|chaman|sorcier|givre|orage|ancien [niveau]"); break; }
                         Repaire.Espece e;
                         switch (m[1])
                         {
@@ -250,7 +301,12 @@ namespace Aldermark
                             case "loup": e = Repaire.Espece.Loup; break;
                             case "gobelin": e = Repaire.Espece.Gobelin; break;
                             case "troll": e = Repaire.Espece.Troll; break;
-                            default: Ecrire("Espèces : gelee, loup, gobelin, troll"); e = (Repaire.Espece)(-1); break;
+                            case "chaman": e = Repaire.Espece.Gobelin; Monstre.LanceurProchain = true; break;
+                            case "givre": e = Repaire.Espece.Gelee; Monstre.LanceurProchain = true; break;
+                            case "ancien": e = Repaire.Espece.Troll; Monstre.LanceurProchain = true; break;
+                            case "sorcier": e = Repaire.Espece.Gobelin; Monstre.LanceurProchain = true; Gobelin.VentProchain = true; break;
+                            case "orage": e = Repaire.Espece.Loup; Monstre.LanceurProchain = true; break;
+                            default: Ecrire("Espèces : gelee, loup, gobelin, troll ; lanceurs de sorts : chaman (feu, soin), sorcier (vent), givre (glace), orage (foudre), ancien (terre)"); e = (Repaire.Espece)(-1); break;
                         }
                         if ((int)e < 0) break;
                         int niv = m.Length > 2 && Nombre(m[2], out var vn) ? (int)vn : 1;

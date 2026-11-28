@@ -6,6 +6,8 @@ namespace Aldermark
     /// Le troll des cavernes : énorme, lent, presque impossible à ébranler. Sa massue projette,
     /// son balayage fauche large, son piétinement fait une onde de choc. Chaque pas fait trembler le sol.
     /// Trop fort pour un héros de niveau 1 : on le contourne, ou on revient plus tard.
+    /// Le troll ancien, gris et moussu, des runes de pierre sur le torse : il frappe le sol et l'onde de terre jaillit autour de lui.
+    /// Seul un coup lourd ou critique interrompt son incantation.
     /// </summary>
     public class Troll : MonstreBipede
     {
@@ -13,8 +15,8 @@ namespace Aldermark
 
         protected override void Configurer()
         {
-            nom = "Troll des cavernes";
-            vieBase = 230; attaqueBase = 20; defenseBase = 8; xpBase = 70;
+            nom = Lanceur ? "Troll ancien" : "Troll des cavernes";
+            vieBase = Lanceur ? 300 : 230; attaqueBase = 20; defenseBase = Lanceur ? 10 : 8; xpBase = Lanceur ? 100 : 70;
             FixerAffinite(Element.Feu, 1.75f); FixerAffinite(Element.Terre, .5f); FixerAffinite(Element.Glace, .75f);   // les trolls craignent le feu ; la roche, c'est chez eux
             resistanceRecul = 6f; stature = 1f;
             vitesseMarche = 1.4f; vitesseCourse = 3.6f; perception = 14f; laisse = 28f; rayonRepos = 6f;
@@ -41,14 +43,34 @@ namespace Aldermark
                 mult = .9f, poussee = 2.2f, rayonZone = 4.5f, recharge = 6f, poids = .6f, lourde = true,
                 poseArmement = new Vector3(-150f, 10f, 0f), poseFrappe = new Vector3(-20f, 0f, 0f),
             });
+            if (Lanceur)
+                attaques.Add(new AttaqueMonstre
+                {
+                    nom = "Onde de terre", sort = CatalogueCompetences.Get("terre"), niveauSort = 2,
+                    porteeMin = 0f, portee = 5.5f, preparation = 1.6f, frappe = .2f, recuperation = 1.1f, recharge = 8f, poids = 1.4f, lourde = true,
+                    poseArmement = new Vector3(-200f, 0f, 0f), poseFrappe = new Vector3(-30f, 0f, 0f),
+                });
         }
 
         protected override void Construire()
         {
-            var peau = Pantin.Mat("#6f7a5c", .1f);
+            var peau = Pantin.Mat(Lanceur ? "#7d837c" : "#6f7a5c", .1f);
             var pagne = Pantin.Mat("#5a4530", .05f);
-            var pieds = Pantin.Mat("#59614a", .1f);
-            b = Pantin.ConstruireBipede(corps, 1.62f, peau, peau, pagne, pieds, tete: .9f, carrure: 1.45f, bras: 1.35f);
+            var pieds = Pantin.Mat(Lanceur ? "#5f655e" : "#59614a", .1f);
+            b = Pantin.ConstruireBipede(corps, Lanceur ? 1.75f : 1.62f, peau, peau, pagne, pieds, tete: .9f, carrure: 1.45f, bras: 1.35f);
+            if (Lanceur)
+            {
+                // De la mousse sur les épaules et le crâne, des runes de pierre qui luisent sur le torse
+                var mousse = Pantin.Mat("#4f6b33", .05f);
+                foreach (float x in new[] { -1f, 1f })
+                    Pantin.Bloc(b.torse, PrimitiveType.Sphere, new Vector3(x * .42f, .5f, -.05f), new Vector3(.38f, .16f, .36f), mousse);
+                Pantin.Bloc(b.tete, PrimitiveType.Sphere, new Vector3(0, .2f, -.04f), new Vector3(.3f, .1f, .3f), mousse);
+                var rune = Pantin.Lumineux("#d9a85a");
+                Pantin.Bloc(b.torse, PrimitiveType.Cube, new Vector3(0, .22f, .36f), new Vector3(.05f, .28f, .03f), rune);
+                Pantin.Bloc(b.torse, PrimitiveType.Cube, new Vector3(0, .3f, .36f), new Vector3(.2f, .04f, .03f), rune);
+                Pantin.Bloc(b.torse, PrimitiveType.Cube, new Vector3(-.08f, .14f, .36f), new Vector3(.04f, .12f, .03f), rune, new Vector3(0, 0, 35f));
+                Pantin.Bloc(b.torse, PrimitiveType.Cube, new Vector3(.08f, .14f, .36f), new Vector3(.04f, .12f, .03f), rune, new Vector3(0, 0, -35f));
+            }
             Pantin.Bloc(b.torse, PrimitiveType.Sphere, new Vector3(0, .3f, .1f), new Vector3(.66f, .55f, .4f), peau);   // ventre
             Pantin.Bloc(b.tete, PrimitiveType.Cube, new Vector3(0, .05f, .14f), new Vector3(.3f, .1f, .08f), peau);    // mâchoire
             foreach (float x in new[] { -.08f, .08f })
@@ -65,12 +87,12 @@ namespace Aldermark
         {
             Sons.JouerA("rugissement", Centre, 1f, Random.Range(.9f, 1f));
             if (CombatHeros.Instance != null) CombatHeros.Instance.Secousse(.08f);
-            HUD.Toast("Un troll des cavernes t'a repéré !");
+            HUD.Toast(Lanceur ? "Un troll ancien t'a repéré ! Il fait trembler la terre." : "Un troll des cavernes t'a repéré !");
         }
 
         protected override void SurPreparation(AttaqueMonstre a) => Sons.JouerA("rugissement", Centre, .45f, 1.3f);
         protected override void SurTouche(ICible c, AttaqueMonstre a) => Sons.JouerA("impactChair", c.Centre, 1f, .6f);
-        protected override void CriDeMort() { Sons.JouerA("rugissement", Centre, 1f, .7f); HUD.Toast("Le troll des cavernes s'effondre !"); }
+        protected override void CriDeMort() { Sons.JouerA("rugissement", Centre, 1f, .7f); HUD.Toast(Lanceur ? "Le troll ancien s'effondre !" : "Le troll des cavernes s'effondre !"); }
 
         protected override void Animer(float dt)
         {

@@ -9,7 +9,7 @@ namespace Aldermark
     /// la recharge des sorts, et les 4 raccourcis (touches 1 à 4).
     /// Chaque niveau rend la compétence plus forte : dégâts, coût, recharge, ou le bonus propre à une technique.
     /// </summary>
-    public class Competences : MonoBehaviour, ISauvegardable
+    public partial class Competences : MonoBehaviour, ISauvegardable
     {
         public static Competences Instance { get; private set; }
 
@@ -25,7 +25,7 @@ namespace Aldermark
 
         public const int Raccourcis = 4;
         /// <summary>Les techniques qu'on a dès le départ : elles montent en se battant.</summary>
-        static readonly string[] DeDepart = { "epee", "masse", "mains", "parade", "esquive" };
+        static readonly string[] DeDepart = { "epee", "masse", "mains", "parade", "esquive", "analyse", "evaluation" };
 
         readonly List<Maitrise> connues = new List<Maitrise>();
         readonly Dictionary<string, Maitrise> parId = new Dictionary<string, Maitrise>();
@@ -39,7 +39,7 @@ namespace Aldermark
         public string IdSauvegarde => "competences";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Reinitialiser() { Instance = null; Apprise = null; }
+        static void Reinitialiser() { Instance = null; Apprise = null; AnalyseProgresse = null; }
 
         void Awake()
         {
@@ -71,7 +71,9 @@ namespace Aldermark
         }
 
         /// <summary>Apprend une compétence (un sort se range dans le premier raccourci libre).</summary>
-        public bool Apprendre(string id, bool annoncer)
+        public bool Apprendre(string id, bool annoncer) => Apprendre(id, annoncer, null);
+
+        public bool Apprendre(string id, bool annoncer, string comment)
         {
             var d = CatalogueCompetences.Get(id);
             if (d == null || Connait(id)) return false;
@@ -84,7 +86,7 @@ namespace Aldermark
                     if (string.IsNullOrEmpty(raccourcis[k])) { raccourcis[k] = id; break; }
             if (annoncer)
             {
-                HUD.Message("NOUVELLE COMPÉTENCE", $"{d.nom}\n\n{d.description}" + (d.EstSort ? $"\n\nTouche {Touche(id)} · fenêtre Compétences (K)" : ""), 6f);
+                HUD.Message("NOUVELLE COMPÉTENCE", (comment != null ? comment + "\n\n" : "") + $"{d.nom}\n\n{d.description}" + (d.EstSort ? $"\n\nTouche {Touche(id)} · fenêtre Compétences (K)" : ""), 6.5f);
                 Sons.Jouer("decouverte", .8f, 1f);
                 Effets.Eclat(transform.position + Vector3.up, d.couleur, 36, 3.5f, .14f, -.3f, 1.3f);
             }
@@ -126,8 +128,12 @@ namespace Aldermark
             string aspect = nouveauPalier ? Sorts.DescriptionPalier(d, pal) : "";
             if (m.niveau == CatalogueCompetences.NiveauMaitrise)
             {
-                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10. Et ça continue : il n'y a pas de plafond." + (aspect != "" ? $"\n\nSon aspect : {aspect}." : ""), 5.5f);
+                string evo = d.evolutions != null && d.evolutions.Length == 2
+                    ? $"\n\nElle peut évoluer : <b>{CatalogueCompetences.Get(d.evolutions[0])?.nom}</b> ou <b>{CatalogueCompetences.Get(d.evolutions[1])?.nom}</b>. Ouvre tes Compétences (K)."
+                    : "";
+                HUD.Message($"{d.nom.ToUpper()} MAÎTRISÉE", "Niveau 10. Et ça continue : il n'y a pas de plafond." + evo + (aspect != "" && evo == "" ? $"\n\nSon aspect : {aspect}." : ""), 7f);
                 Sons.Fanfare("niveau");
+                VerifierFusions(true);
             }
             else if (nouveauPalier && pal >= 5)
             {
@@ -153,6 +159,7 @@ namespace Aldermark
             if (m == null) return;
             m.niveau = Mathf.Clamp(niveau, 1, CatalogueCompetences.NiveauLimite);
             m.xp = 0;
+            VerifierFusions(true);
         }
 
         // ---------- raccourcis ----------
@@ -207,8 +214,10 @@ namespace Aldermark
         public static double Progression(int niveau) => 1 + .12 * (Mathf.Max(1, niveau) - 1);
 
         // Le coût et la recharge baissent à chaque niveau sans jamais atteindre zéro ; le rayon suit la taille du sort
-        public float Cout(DefCompetence d) => d.cout / (1f + .035f * (Mathf.Max(1, Niveau(d.id)) - 1));
-        public float Recharge(DefCompetence d) => d.recharge / (1f + .045f * (Mathf.Max(1, Niveau(d.id)) - 1));
+        public float Cout(DefCompetence d) => Cout(d, Niveau(d.id));
+        public float Recharge(DefCompetence d) => Recharge(d, Niveau(d.id));
+        public static float Cout(DefCompetence d, int niveau) => d.cout / (1f + .035f * (Mathf.Max(1, niveau) - 1));
+        public static float Recharge(DefCompetence d, int niveau) => d.recharge / (1f + .045f * (Mathf.Max(1, niveau) - 1));
         public float Rayon(DefCompetence d) => d.rayon * (1f + .4f * (Sorts.Ampleur(Niveau(d.id)) - 1f));
 
         /// <summary>Les niveaux utiles d'un bonus qui ralentit après la maîtrise (pleine pente jusqu'au 10, un quart ensuite).</summary>
@@ -230,10 +239,12 @@ namespace Aldermark
         double Valeur(Stat s) => stats != null ? stats.Valeur(s) : 5;
 
         /// <summary>L'attaque magique d'un sort : l'Intelligence surtout, un peu d'Esprit, et le niveau du sort.</summary>
-        public double AttaqueMagique(DefCompetence d) => (Valeur(Stat.INT) + .4 * Valeur(Stat.ESP)) * d.puissance * Progression(Niveau(d.id));
+        public double AttaqueMagique(DefCompetence d) => AttaqueMagique(d, Niveau(d.id));
+        public double AttaqueMagique(DefCompetence d, int niveau) => (Valeur(Stat.INT) + .4 * Valeur(Stat.ESP)) * d.puissance * Progression(niveau);
 
         /// <summary>Ce que rend un soin : l'Esprit surtout, l'Intelligence aussi.</summary>
-        public double Soin(DefCompetence d) => (2 * Valeur(Stat.ESP) + Valeur(Stat.INT)) * d.puissance * Progression(Niveau(d.id));
+        public double Soin(DefCompetence d) => Soin(d, Niveau(d.id));
+        public double Soin(DefCompetence d, int niveau) => (2 * Valeur(Stat.ESP) + Valeur(Stat.INT)) * d.puissance * Progression(niveau);
 
         /// <summary>Le bonus de dégâts au corps à corps selon l'arme en main.</summary>
         public double BonusArme(DefObjet arme)
@@ -245,10 +256,10 @@ namespace Aldermark
 
         public static string IdArme(DefObjet arme) => arme == null ? "mains" : arme.forme == FormeArme.Gourdin ? "masse" : "epee";
 
-        public float FacteurParade => 1f + .06f * Pente(Mathf.Max(1, Niveau("parade")));
+        public float FacteurParade => (1f + .06f * Pente(Mathf.Max(1, Niveau("parade")))) * (1f + Exploits.Bonus(TypeBonus.Parade));
         public float FacteurCoutGarde => 1f / (1f + .045f * (Mathf.Max(1, Niveau("parade")) - 1));
         public float FacteurEsquive => 1f + .04f * Pente(Mathf.Max(1, Niveau("esquive")));
-        public float FacteurCoutRoulade => 1f / (1f + .045f * (Mathf.Max(1, Niveau("esquive")) - 1));
+        public float FacteurCoutRoulade => 1f / (1f + .045f * (Mathf.Max(1, Niveau("esquive")) - 1)) * (1f - Exploits.Bonus(TypeBonus.Roulade));
 
         // ---------- sauvegarde ----------
 
@@ -257,9 +268,23 @@ namespace Aldermark
         {
             public List<Maitrise> connues;
             public string[] raccourcis;
+            public List<string> analyseIds = new List<string>();
+            public List<float> analyseValeurs = new List<float>();
+            public List<int> resistanceElements = new List<int>();
+            public List<float> resistanceValeurs = new List<float>();
+            public List<string> especesEvaluees = new List<string>();
+            public List<string> objetsEvalues = new List<string>();
         }
 
-        public string Ecrire() => JsonUtility.ToJson(new Etat { connues = new List<Maitrise>(connues), raccourcis = (string[])raccourcis.Clone() });
+        public string Ecrire()
+        {
+            var e = new Etat { connues = new List<Maitrise>(connues), raccourcis = (string[])raccourcis.Clone() };
+            foreach (var kv in analyses) { e.analyseIds.Add(kv.Key); e.analyseValeurs.Add(kv.Value); }
+            foreach (var kv in resistances) { e.resistanceElements.Add((int)kv.Key); e.resistanceValeurs.Add(kv.Value); }
+            e.especesEvaluees.AddRange(especesEvaluees);
+            e.objetsEvalues.AddRange(objetsEvalues);
+            return JsonUtility.ToJson(e);
+        }
 
         public void Lire(string json)
         {
@@ -282,6 +307,20 @@ namespace Aldermark
             Trier();
             for (int k = 0; k < Raccourcis; k++)
                 raccourcis[k] = e.raccourcis != null && k < e.raccourcis.Length && Connait(e.raccourcis[k]) ? e.raccourcis[k] : null;
+            analyses.Clear();
+            if (e.analyseIds != null && e.analyseValeurs != null)
+                for (int k = 0; k < e.analyseIds.Count && k < e.analyseValeurs.Count; k++)
+                    if (CatalogueCompetences.Get(e.analyseIds[k]) != null && !Connait(e.analyseIds[k])) analyses[e.analyseIds[k]] = Mathf.Clamp01(e.analyseValeurs[k]);
+            resistances.Clear();
+            if (e.resistanceElements != null && e.resistanceValeurs != null)
+                for (int k = 0; k < e.resistanceElements.Count && k < e.resistanceValeurs.Count; k++)
+                    resistances[(Element)e.resistanceElements[k]] = Mathf.Clamp(e.resistanceValeurs[k], 0f, ResistanceMax);
+            especesEvaluees.Clear();
+            if (e.especesEvaluees != null) foreach (var x in e.especesEvaluees) especesEvaluees.Add(x);
+            objetsEvalues.Clear();
+            if (e.objetsEvalues != null) foreach (var x in e.objetsEvalues) objetsEvalues.Add(x);
+            fusionsAnnoncees.Clear();
+            VerifierFusions(false);
         }
     }
 }

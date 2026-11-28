@@ -32,6 +32,8 @@ namespace Aldermark
         public Element element;
         public Effet effet;
         public float dureeEffet;
+        /// <summary>Le sort qui a porté ce coup (son identifiant), s'il y en a un : l'encaisser aide à le comprendre.</summary>
+        public string sort;
     }
 
     public static class Degats
