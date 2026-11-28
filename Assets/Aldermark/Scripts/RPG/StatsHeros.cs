@@ -214,8 +214,9 @@ namespace Aldermark
             Effets.Eclat(transform.position + Vector3.up, new Color(1f, .85f, .45f), 40, 4f, .16f, -.35f, 1.4f);
             HUD.EclairCombat(new Color(1f, .85f, .45f, .22f), .9f, false);
             Sons.Fanfare("niveau");
+            string magie = Competences.Instance != null ? Competences.Instance.AnnonceNiveauHeros(Niveau - gagnes, Niveau) : "";
             HUD.Message($"NIVEAU {Niveau}",
-                $"Toutes tes stats {Nombres.Facteur(Math.Pow(Croissance, gagnes))}\n+{PointsParNiveau * gagnes} points à répartir : ouvre ton Statut (C)\n\nVie, mana et endurance restaurés.", 6f);
+                $"Toutes tes stats {Nombres.Facteur(Math.Pow(Croissance, gagnes))}\n+{PointsParNiveau * gagnes} points à répartir : ouvre ton Statut (C)\n\nVie, mana et endurance restaurés." + magie, magie != "" ? 8f : 6f);
             if (Niveau >= 5 && Titre == "Nouveau venu") Titre = "Aventurier en herbe";
         }
 

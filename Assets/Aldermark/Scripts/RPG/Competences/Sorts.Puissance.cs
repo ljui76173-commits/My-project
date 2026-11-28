@@ -12,6 +12,7 @@ namespace Aldermark
         static readonly Color Roche = new Color(.42f, .36f, .3f);
         static readonly Color TerreRetournee = new Color(.33f, .25f, .17f);
         static Material matTrou;
+        static float prochainBlanc;
 
         /// <summary>L'explosion d'un sort à l'impact (projectile, foudre, onde), à l'échelle de son niveau.</summary>
         public static void Deflagration(Element e, Vector3 p, Vector3 direction, int niveau, Camp camp)
@@ -32,7 +33,7 @@ namespace Aldermark
             if (h != null)
             {
                 float dist = Vector3.Distance(h.transform.position, p);
-                h.Secousse(Mathf.Clamp01(1f - dist / (30f + 12f * a)) * (.03f + .022f * pal) * a);
+                h.Secousse(Mathf.Clamp01(1f - dist / (30f + 12f * a)) * Mathf.Min(.3f, (.03f + .022f * pal) * a));
                 if (camp == Camp.Heros && pal >= 2) h.ArretSurImage(Mathf.Min(.03f + .012f * pal, .12f));
             }
 
@@ -58,9 +59,23 @@ namespace Aldermark
                     Retard.Lancer(.15f, () => Effets.OndeDeChoc(sol, 5f * a, new Color(c.r, c.g, c.b, .7f)));
                     Retard.Lancer(.3f, () => Effets.OndeDeChoc(sol, 7.5f * a, new Color(1f, 1f, 1f, .5f)));
                 }
-                HUD.EclairCombat(new Color(1f, 1f, 1f, .3f), .35f, false);
+                // L'écran blanchit, mais pas à chaque coup (on ne veut pas un stroboscope)
+                if (Time.unscaledTime >= prochainBlanc)
+                {
+                    prochainBlanc = Time.unscaledTime + 1.5f;
+                    HUD.EclairCombat(new Color(1f, 1f, 1f, pal >= 9 ? .4f : .22f), .4f, false);
+                }
             }
-            if (pal >= 9) HUD.EclairCombat(new Color(1f, 1f, 1f, .65f), .55f, false);
+            if (pal >= 10 && presDuSol)
+            {
+                // Mythique : trois colonnes autour de l'impact, un gouffre
+                for (int k = 0; k < 3; k++)
+                {
+                    float ang = k * Mathf.PI * 2f / 3f;
+                    Colonne(sol + new Vector3(Mathf.Cos(ang), 0, Mathf.Sin(ang)) * 2.5f * a, .3f * a, 40f, new Color(c.r, c.g, c.b, .35f));
+                }
+                Trou(sol, 2.2f * a, 40f);
+            }
         }
 
         /// <summary>Une boule de lumière qui gonfle et s'efface en un éclair.</summary>

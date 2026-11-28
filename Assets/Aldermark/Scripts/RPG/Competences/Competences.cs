@@ -116,12 +116,13 @@ namespace Aldermark
         {
             var d = m.Def;
             // Le niveau se voit sur le héros : une gerbe de la couleur du sort, d'autant plus grande qu'il est haut
-            float a = Sorts.Ampleur(m.niveau);
+            int visuel = m.niveau + BonusAspect;
+            float a = Sorts.Ampleur(visuel);
             Vector3 p = transform.position + Vector3.up;
             Effets.Eclat(p, d.couleur, Mathf.RoundToInt(24 * a), 3f * a, .14f, -.4f, 1.2f);
             Sorts.Lueur(p, d.couleur, 6f * a, .5f);
-            int pal = Sorts.Palier(m.niveau);
-            bool nouveauPalier = d.EstSort && pal >= 2 && m.niveau == Sorts.DebutPalier(pal);
+            int pal = Sorts.Palier(visuel);
+            bool nouveauPalier = d.EstSort && pal >= 2 && pal > Sorts.Palier(visuel - 1);
             string aspect = nouveauPalier ? Sorts.DescriptionPalier(d, pal) : "";
             if (m.niveau == CatalogueCompetences.NiveauMaitrise)
             {
@@ -168,6 +169,38 @@ namespace Aldermark
         }
 
         public int Touche(string id) => Array.IndexOf(raccourcis, id) + 1;
+
+        // ---------- l'aspect des sorts : le héros surpuissant ----------
+
+        /// <summary>Chaque niveau de héros au-delà du premier ajoute 25 niveaux à l'ASPECT de tous ses sorts (pas à leurs dégâts) :
+        /// au niveau 5 du héros, ses sorts ont déjà l'allure d'un sort de niveau 100.</summary>
+        public const int AspectParNiveauHeros = 25;
+
+        public int BonusAspect => stats != null ? AspectParNiveauHeros * (stats.Niveau - 1) : 0;
+
+        /// <summary>Le niveau qui règle l'aspect d'un sort : le sien plus l'apport du niveau du héros.</summary>
+        public int NiveauVisuel(string id) => Mathf.Max(1, Niveau(id)) + BonusAspect;
+
+        /// <summary>
+        /// Appelé quand le héros monte de niveau : si ses sorts changent de palier d'aspect, une ligne pour le message de niveau.
+        /// </summary>
+        public string AnnonceNiveauHeros(int avant, int apres)
+        {
+            int meilleurAvant = 0, meilleurApres = 0;
+            DefCompetence exemple = null;
+            foreach (var m in connues)
+            {
+                var d = m.Def;
+                if (d == null || !d.EstSort) continue;
+                int pa = Sorts.Palier(m.niveau + AspectParNiveauHeros * (avant - 1));
+                int pb = Sorts.Palier(m.niveau + AspectParNiveauHeros * (apres - 1));
+                if (pa > meilleurAvant) meilleurAvant = pa;
+                if (pb > meilleurApres) { meilleurApres = pb; exemple = d; }
+            }
+            if (exemple == null || meilleurApres <= meilleurAvant) return "";
+            string nom = Sorts.NomPalier(meilleurApres);
+            return $"\n\nTa magie s'élève : tes sorts deviennent « {nom} ».\nDésormais : {Sorts.DescriptionPalier(exemple, meilleurApres)}.";
+        }
 
         // ---------- ce que chaque niveau apporte ----------
 
