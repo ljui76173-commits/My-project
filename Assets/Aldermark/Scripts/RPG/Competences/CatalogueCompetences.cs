@@ -365,6 +365,12 @@ namespace Aldermark
             });
             Ajouter(new DefCompetence
             {
+                id = "evaluation", nom = "Évaluation", abrege = "Év", type = TypeCompetence.Technique,
+                description = "Jauger une créature ou un objet d'un coup d'œil. Monte à chaque créature croisée (bien plus pour une espèce inconnue) et à chaque objet examiné.",
+                parNiveau = "estimations plus justes ; faiblesses (niv. 2), résistances (4), attaque et défense (5), immunités (6), chiffres exacts au niveau 10",
+            });
+            Ajouter(new DefCompetence
+            {
                 id = "esquive", nom = "Esquive", abrege = "Es", type = TypeCompetence.Technique,
                 description = "Rouler sous les coups. Monte à chaque roulade, et surtout à chaque coup évité.",
                 parNiveau = "roulade plus longtemps invulnérable et moins chère, sans plafond",

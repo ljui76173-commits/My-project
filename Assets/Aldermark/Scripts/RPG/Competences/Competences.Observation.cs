@@ -71,6 +71,7 @@ namespace Aldermark
             float intel = stats != null ? (float)stats.Valeur(Stat.INT) : 5f;
             float f = (1f + .06f * (per - 5f)) * (1f + .04f * (intel - 5f));
             f *= 1f + .1f * (Mathf.Max(1, Niveau("analyse")) - 1);
+            f *= 1f + Exploits.Bonus(TypeBonus.Analyse);
             return Mathf.Max(.3f, f);
         }
 
@@ -108,6 +109,7 @@ namespace Aldermark
             HUD.AnalyseSort(d, apres, encaisse);
             if (apres < 1f) { Sons.Jouer("clic", .35f, 1.2f + apres); return; }
             analyses.Remove(d.id);
+            Exploits.Compter("observes");
             Apprendre(d.id, true, encaisse ? "Tu l'as encaissé assez souvent pour le comprendre." : "Tu l'as regardé assez longtemps pour le comprendre.");
         }
     }

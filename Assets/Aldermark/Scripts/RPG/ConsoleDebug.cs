@@ -139,6 +139,7 @@ namespace Aldermark
                                      : "tp hameau · tp quintaine · tp gelees · tp loups · tp gobelins · tp troll · tp varenne · tp X Z");
                     Ecrire("creer gelee|loup|gobelin|troll [niveau] · tuer · donner <objet> [n] · objets · sauver · charger · nouvelle · infos");
                     Ecrire("sorts · apprendre <sort>|tout · competence <id>|tout <niveau> · evoluer <sort> 1|2 · fusions · fusionner <sort> · mana");
+                    Ecrire("titres · titre <id> (obtenir et porter) · exploit <compteur> N (ex. exploit tues:Loup 25)");
                     break;
                 case "sorts":
                 case "competences":
@@ -215,6 +216,27 @@ namespace Aldermark
                 case "mana":
                     if (j != null) { j.FixerMana(j.manaMax); Ecrire("Mana au maximum."); }
                     break;
+                case "titres":
+                    {
+                        var x = Exploits.Instance;
+                        if (x == null) { Ecrire("Pas de héros RPG."); break; }
+                        foreach (var t in CatalogueTitres.Tous)
+                            Ecrire($"{(x.Porte == t.id ? "◆" : x.Possede(t.id) ? "✓" : "·")} {t.id} : {t.nom} — {t.condition} ({Nombres.Court(System.Math.Min(x.Valeur(t.cle), t.objectif))}/{Nombres.Court(t.objectif)}) — {t.TexteBonus}");
+                    }
+                    break;
+                case "titre":
+                    {
+                        var x = Exploits.Instance;
+                        var t = m.Length > 1 ? CatalogueTitres.Get(m[1]) : null;
+                        if (x == null || t == null) { Ecrire("Usage : titre louvetier · « titres » pour la liste"); break; }
+                        if (!x.Possede(t.id) && !t.cle.StartsWith("@")) Exploits.Compter(t.cle, System.Math.Max(0, t.objectif - x.Valeur(t.cle)));
+                        Ecrire(x.Possede(t.id) || x.Valeur(t.cle) >= t.objectif ? $"« {t.nom} » obtenu (il se porte depuis K → Titres)." : "Ce titre dépend du niveau, des zones ou des maîtrises : utilise niveau N ou competence tout 10.");
+                    }
+                    break;
+                case "exploit":
+                    if (m.Length > 2 && Nombre(m[2], out v)) { Exploits.Compter(m[1], v); Ecrire($"{m[1]} +{v}"); }
+                    else Ecrire("Usage : exploit tues:Loup 25 (compteurs : tues, tues:Loup|Gobelin|Gelee|Troll|lanceur, sorts, observes, evolutions, fusions, brulures, gels, parades, esquives, graces)");
+                    break;
                 case "xp":
                     if (s != null && m.Length > 1 && Nombre(m[1], out v)) { s.GagnerXP(v, "console"); Ecrire($"+{Nombres.Court(v)} XP"); }
                     else Ecrire("Usage : xp 500");
@@ -271,7 +293,7 @@ namespace Aldermark
                     break;
                 case "creer":
                     {
-                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll|chaman|givre|ancien [niveau]"); break; }
+                        if (j == null || m.Length < 2) { Ecrire("Usage : creer gelee|loup|gobelin|troll|chaman|sorcier|givre|orage|ancien [niveau]"); break; }
                         Repaire.Espece e;
                         switch (m[1])
                         {
@@ -282,7 +304,9 @@ namespace Aldermark
                             case "chaman": e = Repaire.Espece.Gobelin; Monstre.LanceurProchain = true; break;
                             case "givre": e = Repaire.Espece.Gelee; Monstre.LanceurProchain = true; break;
                             case "ancien": e = Repaire.Espece.Troll; Monstre.LanceurProchain = true; break;
-                            default: Ecrire("Espèces : gelee, loup, gobelin, troll ; lanceurs de sorts : chaman, givre, ancien"); e = (Repaire.Espece)(-1); break;
+                            case "sorcier": e = Repaire.Espece.Gobelin; Monstre.LanceurProchain = true; Gobelin.VentProchain = true; break;
+                            case "orage": e = Repaire.Espece.Loup; Monstre.LanceurProchain = true; break;
+                            default: Ecrire("Espèces : gelee, loup, gobelin, troll ; lanceurs de sorts : chaman (feu, soin), sorcier (vent), givre (glace), orage (foudre), ancien (terre)"); e = (Repaire.Espece)(-1); break;
                         }
                         if ((int)e < 0) break;
                         int niv = m.Length > 2 && Nombre(m[2], out var vn) ? (int)vn : 1;

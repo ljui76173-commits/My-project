@@ -36,6 +36,7 @@ namespace Aldermark
             Sons.Fanfare("niveau");
             Celebrer(nd.couleur, Sorts.Ampleur(NiveauVisuel(vers)));
             Apprise?.Invoke(nd);
+            Exploits.Compter("evolutions");
             VerifierFusions(true);
             return true;
         }
@@ -68,6 +69,7 @@ namespace Aldermark
             HUD.Message("FUSION", $"{a} + {b} : <b>{d.nom}</b> !\n\n{d.description}\n\nTu gardes tes autres sorts. Touche {Touche(resultat)} · fenêtre Compétences (K)", 7f);
             Sons.Fanfare("niveau");
             Celebrer(d.couleur, 1.6f);
+            Exploits.Compter("fusions");
             VerifierFusions(true);
             return true;
         }

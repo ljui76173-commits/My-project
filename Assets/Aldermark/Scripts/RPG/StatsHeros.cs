@@ -63,7 +63,7 @@ namespace Aldermark
         // ---------- valeurs ----------
 
         public double Facteur => Math.Pow(Croissance, Niveau - 1);
-        public double Valeur(Stat s) => (baseStat + points[(int)s] + usage[(int)s]) * Facteur;
+        public double Valeur(Stat s) => (baseStat + points[(int)s] + usage[(int)s]) * Facteur * Exploits.FacteurStat(s);
         public double Points(Stat s) => points[(int)s];
         public double Usage(Stat s) => usage[(int)s];
         public double Progres(Stat s) => progres[(int)s];
@@ -195,6 +195,7 @@ namespace Aldermark
         public void GagnerXP(double q, string raison = null)
         {
             if (q <= 0) return;
+            q *= 1 + Exploits.Bonus(TypeBonus.XP);
             XP += q;
             if (!string.IsNullOrEmpty(raison)) HUD.Toast($"+{Nombres.Court(q)} XP · {raison}");
             int gagnes = 0;
@@ -217,8 +218,10 @@ namespace Aldermark
             string magie = Competences.Instance != null ? Competences.Instance.AnnonceNiveauHeros(Niveau - gagnes, Niveau) : "";
             HUD.Message($"NIVEAU {Niveau}",
                 $"Toutes tes stats {Nombres.Facteur(Math.Pow(Croissance, gagnes))}\n+{PointsParNiveau * gagnes} points à répartir : ouvre ton Statut (C)\n\nVie, mana et endurance restaurés." + magie, magie != "" ? 8f : 6f);
-            if (Niveau >= 5 && Titre == "Nouveau venu") Titre = "Aventurier en herbe";
         }
+
+        /// <summary>Le titre porté (choisi parmi ceux obtenus, voir Exploits).</summary>
+        public void FixerTitre(string titre) { if (!string.IsNullOrEmpty(titre)) Titre = titre; }
 
         public bool Repartir(Stat s)
         {

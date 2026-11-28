@@ -25,7 +25,7 @@ namespace Aldermark
 
         public const int Raccourcis = 4;
         /// <summary>Les techniques qu'on a dès le départ : elles montent en se battant.</summary>
-        static readonly string[] DeDepart = { "epee", "masse", "mains", "parade", "esquive", "analyse" };
+        static readonly string[] DeDepart = { "epee", "masse", "mains", "parade", "esquive", "analyse", "evaluation" };
 
         readonly List<Maitrise> connues = new List<Maitrise>();
         readonly Dictionary<string, Maitrise> parId = new Dictionary<string, Maitrise>();
@@ -256,10 +256,10 @@ namespace Aldermark
 
         public static string IdArme(DefObjet arme) => arme == null ? "mains" : arme.forme == FormeArme.Gourdin ? "masse" : "epee";
 
-        public float FacteurParade => 1f + .06f * Pente(Mathf.Max(1, Niveau("parade")));
+        public float FacteurParade => (1f + .06f * Pente(Mathf.Max(1, Niveau("parade")))) * (1f + Exploits.Bonus(TypeBonus.Parade));
         public float FacteurCoutGarde => 1f / (1f + .045f * (Mathf.Max(1, Niveau("parade")) - 1));
         public float FacteurEsquive => 1f + .04f * Pente(Mathf.Max(1, Niveau("esquive")));
-        public float FacteurCoutRoulade => 1f / (1f + .045f * (Mathf.Max(1, Niveau("esquive")) - 1));
+        public float FacteurCoutRoulade => 1f / (1f + .045f * (Mathf.Max(1, Niveau("esquive")) - 1)) * (1f - Exploits.Bonus(TypeBonus.Roulade));
 
         // ---------- sauvegarde ----------
 
@@ -272,6 +272,8 @@ namespace Aldermark
             public List<float> analyseValeurs = new List<float>();
             public List<int> resistanceElements = new List<int>();
             public List<float> resistanceValeurs = new List<float>();
+            public List<string> especesEvaluees = new List<string>();
+            public List<string> objetsEvalues = new List<string>();
         }
 
         public string Ecrire()
@@ -279,6 +281,8 @@ namespace Aldermark
             var e = new Etat { connues = new List<Maitrise>(connues), raccourcis = (string[])raccourcis.Clone() };
             foreach (var kv in analyses) { e.analyseIds.Add(kv.Key); e.analyseValeurs.Add(kv.Value); }
             foreach (var kv in resistances) { e.resistanceElements.Add((int)kv.Key); e.resistanceValeurs.Add(kv.Value); }
+            e.especesEvaluees.AddRange(especesEvaluees);
+            e.objetsEvalues.AddRange(objetsEvalues);
             return JsonUtility.ToJson(e);
         }
 
@@ -311,6 +315,10 @@ namespace Aldermark
             if (e.resistanceElements != null && e.resistanceValeurs != null)
                 for (int k = 0; k < e.resistanceElements.Count && k < e.resistanceValeurs.Count; k++)
                     resistances[(Element)e.resistanceElements[k]] = Mathf.Clamp(e.resistanceValeurs[k], 0f, ResistanceMax);
+            especesEvaluees.Clear();
+            if (e.especesEvaluees != null) foreach (var x in e.especesEvaluees) especesEvaluees.Add(x);
+            objetsEvalues.Clear();
+            if (e.objetsEvalues != null) foreach (var x in e.objetsEvalues) objetsEvalues.Add(x);
             fusionsAnnoncees.Clear();
             VerifierFusions(false);
         }

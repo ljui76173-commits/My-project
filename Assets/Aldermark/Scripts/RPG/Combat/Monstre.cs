@@ -244,7 +244,7 @@ namespace Aldermark
         {
             int n = 0;
             foreach (var m in Actifs)
-                if ((m.Etat == EtatMonstre.Preparation || m.Etat == EtatMonstre.Frappe) && ReferenceEquals(m.cible, c)) n++;
+                if ((m.Etat == EtatMonstre.Preparation || m.Etat == EtatMonstre.Frappe) && ReferenceEquals(m.cible, c) && (m.enCours == null || m.enCours.sort == null)) n++;
             return n;
         }
 
@@ -318,7 +318,8 @@ namespace Aldermark
             var a = ChoisirAttaque(d);
             if (a != null)
             {
-                if (PeutAttaquer()) { Lancer(a); return; }
+                // Un sort ne compte pas dans la limite d'attaquants (le loup d'orage tire pendant que la meute mord)
+                if (a.sort != null || PeutAttaquer()) { Lancer(a); return; }
                 if (d < 7f) { Changer(EtatMonstre.Encerclement); return; }
             }
             if (distanceDeTir > 0f)

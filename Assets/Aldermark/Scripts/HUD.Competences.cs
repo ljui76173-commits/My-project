@@ -223,7 +223,7 @@ namespace Aldermark
             if (kb == null || comp == null) return;
             if (toucheK == null) toucheK = kb.FindKeyOnCurrentKeyboardLayout("k") ?? kb.kKey;
             if (!autreMenu && toucheK.wasPressedThisFrame) OuvrirCompetences(!competencesOuvertes);
-            else if (competencesOuvertes && kb.escapeKey.wasPressedThisFrame) { if (ModaleOuverte) FermerModale(); else OuvrirCompetences(false); }
+            else if (competencesOuvertes && kb.escapeKey.wasPressedThisFrame) { if (ModaleOuverte) FermerModale(); else if (TitresOuverts) FermerTitres(); else OuvrirCompetences(false); }
             if (competencesOuvertes) MettreAJourFenetreCompetences(comp, kb);
         }
 
@@ -263,7 +263,7 @@ namespace Aldermark
 
         void OuvrirCompetences(bool ouvrir)
         {
-            if (!ouvrir) FermerModale();
+            if (!ouvrir) { FermerModale(); FermerTitres(); }
             competencesOuvertes = ouvrir;
             panneauCompetences.gameObject.SetActive(ouvrir);
             Cursor.lockState = ouvrir ? CursorLockMode.None : CursorLockMode.Locked;
@@ -327,7 +327,9 @@ namespace Aldermark
             Vector2 pos = souris != null ? souris.position.ReadValue() : Vector2.zero;
             bool clic = souris != null && souris.leftButton.wasPressedThisFrame;
             // L'écran d'évolution / de fusion, par-dessus : il prend la main
+            if (TitresOuverts) { MettreAJourTitres(pos, clic); return; }
             if (ModaleOuverte) { MettreAJourModale(comp, pos, clic); return; }
+            if (MettreAJourBoutonTitres(pos, clic)) return;
             if (MettreAJourBoutonsEvolution(comp, CatalogueCompetences.Get(compChoisie), pos, clic)) return;
 
             // Choisir : clic ou flèches

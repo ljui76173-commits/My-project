@@ -11,9 +11,13 @@ namespace Aldermark
     /// </summary>
     public class Gobelin : MonstreBipede
     {
+        /// <summary>Le prochain gobelin lanceur sera un sorcier du vent (et non un chaman du feu).</summary>
+        public static bool VentProchain;
+        bool vent;
         protected override void Configurer()
         {
             if (Lanceur) { ConfigurerChaman(); return; }
+            VentProchain = false;
             nom = "Gobelin";
             vieBase = 40; attaqueBase = 8; defenseBase = 3; xpBase = 20;
             FixerAffinite(Element.Foudre, 1.25f);
@@ -41,6 +45,9 @@ namespace Aldermark
 
         void ConfigurerChaman()
         {
+            vent = VentProchain;
+            VentProchain = false;
+            if (vent) { ConfigurerSorcierDuVent(); return; }
             nom = "Gobelin chaman";
             vieBase = 32; attaqueBase = 9; defenseBase = 2; xpBase = 32;
             FixerAffinite(Element.Foudre, 1.25f); FixerAffinite(Element.Feu, .6f);
@@ -72,6 +79,31 @@ namespace Aldermark
             });
         }
 
+        void ConfigurerSorcierDuVent()
+        {
+            nom = "Gobelin sorcier du vent";
+            vieBase = 30; attaqueBase = 9; defenseBase = 2; xpBase = 32;
+            FixerAffinite(Element.Foudre, 1.25f); FixerAffinite(Element.Vent, .4f);
+            resistanceRecul = 1.4f;
+            vitesseMarche = 1.9f; vitesseCourse = 4.8f; perception = 20f; laisse = 34f; rayonRepos = 6f;
+            rayonCorps = .32f; hauteurCorps = 1.3f; hauteurCentre = .75f; hauteurTete = 1.45f;
+            maxAttaquants = 2; distanceDeTir = 5.5f; frequencePas = 5f;
+            butin.Add((Objets.Pieces, .95f, 4, 14));
+            butin.Add(("oreille_gobelin", .6f, 1, 1));
+            attaques.Add(new AttaqueMonstre
+            {
+                nom = "Coup de bâton", portee = 2f, preparation = .55f, frappe = .18f, recuperation = .7f,
+                mult = .7f, poussee = .5f, cone = 80f, bond = 1.5f, recharge = 1.6f, poids = 1f,
+                poseArmement = new Vector3(-190f, 20f, 0f), poseFrappe = new Vector3(-55f, -10f, 0f),
+            });
+            attaques.Add(new AttaqueMonstre
+            {
+                nom = "Souffle de vent", sort = CatalogueCompetences.Get("vent"), niveauSort = 1,
+                porteeMin = 1.5f, portee = 7.5f, preparation = .95f, frappe = .2f, recuperation = .8f, recharge = 4.5f, poids = 3f,
+                poseArmement = new Vector3(-125f, 0f, 0f), poseFrappe = new Vector3(-85f, 0f, 0f),
+            });
+        }
+
         protected override void Construire()
         {
             if (Lanceur) { ConstruireChaman(); return; }
@@ -97,7 +129,7 @@ namespace Aldermark
         void ConstruireChaman()
         {
             var peau = Pantin.Mat("#6f8a46", .15f);
-            var robe = Pantin.Mat("#4b2f5e", .05f);
+            var robe = Pantin.Mat(vent ? "#3f5a6b" : "#4b2f5e", .05f);
             var cuir = Pantin.Mat("#3a2a1e", .1f);
             var corpsGob = Pantin.Os("Gabarit", corps, Vector3.zero);
             b = Pantin.ConstruireBipede(corpsGob, .74f, peau, robe, robe, cuir, tete: 1.35f, carrure: .9f, bras: 1.15f);
@@ -106,8 +138,8 @@ namespace Aldermark
             Pantin.Bloc(b.tete, PrimitiveType.Cube, new Vector3(0, .17f, .22f), new Vector3(.08f, .1f, .12f), peau, new Vector3(20f, 0, 0));
             // Des yeux qui brûlent, une coiffe de plumes, un collier d'os
             foreach (float x in new[] { -.08f, .08f })
-                Pantin.Bloc(b.tete, PrimitiveType.Cube, new Vector3(x, .25f, .19f), new Vector3(.06f, .04f, .02f), Pantin.Lumineux("#ff8a2a"));
-            var plume = Pantin.Mat("#c0402a", .1f);
+                Pantin.Bloc(b.tete, PrimitiveType.Cube, new Vector3(x, .25f, .19f), new Vector3(.06f, .04f, .02f), Pantin.Lumineux(vent ? "#bff5e0" : "#ff8a2a"));
+            var plume = Pantin.Mat(vent ? "#d9dde0" : "#c0402a", .1f);
             for (int k = -2; k <= 2; k++)
                 Pantin.Bloc(b.tete, PrimitiveType.Cube, new Vector3(k * .06f, .5f, -.05f), new Vector3(.035f, .26f, .015f), k % 2 == 0 ? plume : Pantin.Mat("#e8d6a8", .1f), new Vector3(-15f, 0, k * -14f));
             var os = Pantin.Mat("#e8dfc8", .3f);
@@ -118,7 +150,7 @@ namespace Aldermark
             var bois = Pantin.Mat("#5b3e26", .1f);
             Pantin.Bloc(baton, PrimitiveType.Cylinder, new Vector3(0, -.15f, 0), new Vector3(.045f, .62f, .045f), bois);
             Pantin.Bloc(baton, PrimitiveType.Cube, new Vector3(0, -.74f, 0), new Vector3(.12f, .06f, .12f), os, new Vector3(0, 45f, 0));
-            bout = Pantin.Bloc(baton, PrimitiveType.Sphere, new Vector3(0, -.86f, 0), Vector3.one * .13f, Pantin.Lumineux("#ff9a3a"));
+            bout = Pantin.Bloc(baton, PrimitiveType.Sphere, new Vector3(0, -.86f, 0), Vector3.one * .13f, Pantin.Lumineux(vent ? "#cfeee0" : "#ff9a3a"));
         }
 
         protected override void Alerter()

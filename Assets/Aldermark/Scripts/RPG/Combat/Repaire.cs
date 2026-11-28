@@ -67,7 +67,18 @@ namespace Aldermark
             // Des lanceurs de sorts : au moins un chaman par camp de gobelins, des gelées de givre, des trolls anciens
             switch (espece)
             {
-                case Espece.Gobelin: Monstre.LanceurProchain = !membres.Exists(x => x != null && x.Vivant && x.Lanceur) || Random.value < .2f; break;
+                case Espece.Gobelin:
+                    {
+                        // Le premier lanceur d'un camp est un chaman du feu ; les suivants, une fois sur deux, des sorciers du vent
+                        bool dejaUn = membres.Exists(x => x != null && x.Vivant && x.Lanceur);
+                        Monstre.LanceurProchain = !dejaUn || Random.value < .25f;
+                        Gobelin.VentProchain = Monstre.LanceurProchain && dejaUn && Random.value < .5f;
+                        break;
+                    }
+                case Espece.Loup:
+                    // Dans les montagnes, des loups d'orage
+                    Monstre.LanceurProchain = Random.value < (Monde.Hauteur(transform.position.x, transform.position.z) > 250f ? .4f : .12f);
+                    break;
                 case Espece.Gelee: Monstre.LanceurProchain = Random.value < .3f; break;
                 case Espece.Troll: Monstre.LanceurProchain = Random.value < .4f; break;
             }
